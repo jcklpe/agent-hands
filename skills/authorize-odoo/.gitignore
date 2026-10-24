@@ -1,0 +1,5 @@
+.env
+.env.*
+!.env.example
+/odoo-accounts.json
+/odoo-last-request

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+ODOO_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "${ODOO_AUTH_DIR}/scripts/client.sh"
+case "${1:-help}" in
+    help|--help|-h) printf '%s\n' 'authorize check ALIAS: check local routing/key presence only; no network request or key output'; exit 0 ;;
+    check) [ "$#" -eq 2 ] || { _odoo_error 'check requires exactly one account alias'; exit 1; } ;;
+    *) _odoo_error 'Unknown authorization command'; exit 1 ;;
+esac
+_odoo_load_env || exit 1
+_odoo_account_exists "$2" || { _odoo_error 'Account alias not found'; exit 1; }
+_odoo_base_url "$2" >/dev/null || exit 1
+_odoo_api_key "$2" >/dev/null || exit 1
+printf '%s\n' 'Local account configuration and key presence OK; service access is not verified.'
