@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPTS/../../authorize-microsoft/scripts/client.sh"
+source "$SCRIPTS/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) cat <<'HELP'
+files search ALIAS QUERY [--drive DRIVE_ID] [--json]
+files meta ALIAS ITEM_ID [--drive DRIVE_ID] [--json]
+files resolve-link ALIAS HTTPS_SHARING_URL [--json]
+files download ALIAS ITEM_ID --out PATH [--drive DRIVE_ID] [--force]
+files upload ALIAS LOCAL_FILE --parent FOLDER_ID [--drive DRIVE_ID] [--name NAME] [--execute]
+files replace ALIAS ITEM_ID --file LOCAL_FILE [--drive DRIVE_ID] [--execute]
+files create-folder ALIAS --parent FOLDER_ID --name NAME [--drive DRIVE_ID] [--execute]
+Writes preview by default and read current remote metadata. No delete or sharing changes.
+HELP
+        exit 0 ;;
+esac
+_m365_load_env
+command="$1"; shift
+case "$command" in
+    search|meta|download|upload|replace) "_m365_files_$command" "$@" ;;
+    resolve-link) _m365_files_resolve_link "$@" ;;
+    create-folder) _m365_files_create_folder "$@" ;;
+    *) _m365_error 'Unknown files command'; exit 1 ;;
+esac
