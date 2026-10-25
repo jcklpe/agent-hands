@@ -32,4 +32,4 @@ Run `bash skills/use-odoo-projects/tests/test-odoo-shell.sh` and `bash skills/au
 
 Slack offline checks: `python tests/test_slack_operations.py`, `python skills/use-slack-messages/tests/test_operations.py`, `python skills/use-slack-lists/tests/test_operations.py`, and `python skills/authorize-slack/tests/test_config.py`. The package-level smoke check exercises both domains; production entrypoints do not import one another. Local macOS isolation/uv execution passed; live Slack access and fresh Windows/Linux installation remain unverified.
 
-The intended public origin is `https://github.com/jcklpe/agent-hands`. Local preparation does not publish it; remote creation and collaborator cloning remain pending. Licensed under [AGPL-3.0-only](LICENSE), with retained [source notices](NOTICE.md). No unrelated source-repository history is included.
+The public repository is `https://github.com/jcklpe/agent-hands`. Clone it directly or adopt it as a submodule; select only the capabilities and authorization support you need. Licensed under [AGPL-3.0-only](LICENSE), with retained [source notices](NOTICE.md). No unrelated source-repository history is included.
