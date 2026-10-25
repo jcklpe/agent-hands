@@ -1,0 +1,13 @@
+{
+  "accounts": [
+    {
+      "alias": "example",
+      "auth_provider": "graph-powershell",
+      "tenant": "organizations",
+      "expected_account": "person@example.com",
+      "contacts": {
+        "enabled": true
+      }
+    }
+  ]
+}

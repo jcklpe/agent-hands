@@ -19,6 +19,8 @@ For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed
 
 For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-services](../setup-google-services/SKILL.md). Select the requested use skill and Google authorization; provider mixing and private workflow routing remain outside the capabilities.
 
+Microsoft provider setup is available through [setup-microsoft-services](../setup-microsoft-services/SKILL.md); follow the available-capability list while the use skills migrate. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
+
 ## Missing runtime approach
 When an implemented Python capability declares a pyproject.toml and lock, use that capability's environment only. Check for uv first. If absent, use an appropriate installation method from [uv's official installation guide](https://docs.astral.sh/uv/getting-started/installation/) within the user's setup authorization. Do not assume Python or a package manager is already present. uv can provision a compatible Python version; follow the capability's declared version rather than replacing system Python. See [Python provisioning](https://docs.astral.sh/uv/guides/install-python/). Never invent a manifest or claim a future capability is ready.
 

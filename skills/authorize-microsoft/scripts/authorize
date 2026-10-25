@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -eu
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/client.sh"
+case "${1:---help}" in
+    --help|-h|help) printf '%s\n' 'authorize check | accounts | scopes ALIAS | auth ALIAS [--no-browser] | profile ALIAS [--json]' 'check validates local configuration only; auth performs consent and caches private tokens.'; exit 0 ;;
+esac
+_m365_load_env
+command="$1"; shift
+case "$command" in
+    check) _m365_accounts_ready; printf '%s\n' 'Microsoft account configuration is valid (offline; access not checked).' ;;
+    accounts) _m365_accounts_list ;;
+    scopes) _m365_scopes "${1:?Expected ALIAS}" ;;
+    auth) _m365_auth "$@" ;;
+    profile) _m365_profile "$@" ;;
+    *) _m365_error 'Unknown authorization command'; exit 1 ;;
+esac

@@ -1,0 +1,38 @@
+{
+  "accounts": [
+    {
+      "alias": "example",
+      "auth_provider": "msal",
+      "client_id": "REPLACE_WITH_YOUR_PUBLIC_CLIENT_ID",
+      "tenant": "organizations",
+      "token_path": "m365-example-token.json",
+      "max_pages": 100,
+      "mail": {
+        "enabled": false,
+        "write_enabled": false,
+        "rules_enabled": false
+      },
+      "calendar": {
+        "enabled": false,
+        "calendar_ids": [
+          "primary"
+        ],
+        "writable_calendar_ids": [
+          "primary"
+        ]
+      },
+      "contacts": {
+        "enabled": false,
+        "max_results": 500
+      },
+      "files": {
+        "enabled": false,
+        "write_enabled": false
+      },
+      "planner": {
+        "enabled": false,
+        "write_enabled": false
+      }
+    }
+  ]
+}
