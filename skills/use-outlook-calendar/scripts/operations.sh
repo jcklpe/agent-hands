@@ -329,3 +329,30 @@ _m365_calendar_export() (
     _m365_python "$OUTLOOK_CALENDAR_DIR" "$M365_AUTH_DIR/scripts/publish.py" "$M365_WORK/export.md" "$out" replace || return 1
     _m365_say "Updated $out"
 )
+
+_m365_calendar_export_data() (
+    set -o pipefail
+    _m365_work_begin || return 1
+    local alias="${1:-}" from="" to="" out="" ids="" window
+    [ -n "$alias" ] || return 1
+    shift
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --output|--from|--to|--calendar)
+                [ -n "${2:-}" ] || { _m365_error 'Missing export-data value'; return 1; }
+                case "$1" in --output) out="$2" ;; --from) from="$2" ;; --to) to="$2" ;; --calendar) ids="$2" ;; esac
+                shift 2 ;;
+            *) _m365_error 'Unknown export-data option'; return 1 ;;
+        esac
+    done
+    [ -n "$out" ] && [ -n "$from" ] && [ -n "$to" ] || { _m365_error 'export-data requires --from INSTANT --to INSTANT --output FILE'; return 1; }
+    window="$(_m365_python "$OUTLOOK_CALENDAR_DIR" "$OUTLOOK_CALENDAR_DIR/scripts/window.py" instant-bounds "$from" "$to")" || return 1
+    from="$(printf '%s\n' "$window" | sed -n '1p')"; to="$(printf '%s\n' "$window" | sed -n '2p')"
+    _m365_require_enabled "$alias" calendar || return 1
+    [ -n "$ids" ] || ids="$(_m365_calendar_ids "$alias")" || return 1
+    [ -n "$ids" ] || { _m365_error 'No calendars selected'; return 1; }
+    M365_REQUIRE_COMPLETE=1 _m365_calendar_fetch "$alias" "$from" "$to" "$ids" "$M365_WORK/events.json" UTC || return 1
+    jq --arg source "$alias" --arg start "$from" --arg end "$to" '. + {schema_version: 1, provider: "microsoft", source: $source, start: $start, end: $end, timezone: "UTC", complete: true}' "$M365_WORK/events.json" > "$M365_WORK/export.json" || return 1
+    _m365_python "$OUTLOOK_CALENDAR_DIR" "$M365_AUTH_DIR/scripts/publish.py" "$M365_WORK/export.json" "$out" replace || return 1
+    _m365_say "Exported $out"
+)

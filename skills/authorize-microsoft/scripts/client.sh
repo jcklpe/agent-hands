@@ -424,7 +424,10 @@ _m365_get_paginated() (
         count="$(jq -s '[.[].value[]?] | length' "${pages[@]}")" || return 1
         next="$(jq -r '."@odata.nextLink" // empty' "$page")" || return 1
         if [ "$count" -ge "$max_results" ]; then
-            if [ "$count" -gt "$max_results" ] || [ -n "$next" ]; then printf 'WARN: Microsoft results truncated at configured max_results\n' >&2; fi
+            if [ "$count" -gt "$max_results" ] || [ -n "$next" ]; then
+                if [ "${M365_REQUIRE_COMPLETE:-0}" = 1 ]; then _m365_error 'Microsoft result limit reached; complete export refused'; return 1; fi
+                printf 'WARN: Microsoft results truncated at configured max_results\n' >&2
+            fi
             break
         fi
         [ -n "$next" ] || break

@@ -599,7 +599,7 @@ _calendar_list_fetch() (
 _calendar_export() (
     set -o pipefail
     _calendar_work_begin || return 1
-    local out="" from="" to="" ids="" compact=0 tz="" boundary="" window lower upper id encoded number=0
+    local data=0 out="" from="" to="" ids="" compact=0 tz="" boundary="" window lower upper id encoded number=0
     local render_args=()
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -608,14 +608,18 @@ _calendar_export() (
                 case "$1" in --output) out="$2" ;; --from) from="$2" ;; --to) to="$2" ;; --calendar) ids="$2" ;; --tz) tz="$2" ;; --start-at) boundary="$2" ;; esac
                 shift 2 ;;
             --compact) compact=1; shift ;;
+            --data) data=1; shift ;;
             *) _google_error 'Unknown calendar export option'; return 1 ;;
         esac
     done
     [ -n "$out" ] || { _google_error 'export requires --output FILE'; return 1; }
+    [ "$data" -eq 0 ] || { [ -n "$from" ] && [ -n "$to" ] && [ "$compact" -eq 0 ] || { _google_error 'export-data requires explicit instant bounds and no compact mode'; return 1; }; }
     _calendar_token_ready || return 1
     if [ -n "$from$to" ]; then
         [ -n "$from" ] && [ -n "$to" ] || { _google_error 'Supply both --from and --to'; return 1; }
-        window="$(_google_python "$GOOGLE_CALENDAR_DIR" "$GOOGLE_CALENDAR_DIR/scripts/window.py" bounds "$from" "$to")" || return 1
+        local bounds_mode=bounds
+        [ "$data" -eq 0 ] || bounds_mode=instant-bounds
+        window="$(_google_python "$GOOGLE_CALENDAR_DIR" "$GOOGLE_CALENDAR_DIR/scripts/window.py" "$bounds_mode" "$from" "$to")" || return 1
     else window="$(_calendar_window)" || return 1
     fi
     lower="$(printf '%s\n' "$window" | sed -n '1p')"; upper="$(printf '%s\n' "$window" | sed -n '2p')"
@@ -633,6 +637,18 @@ _calendar_export() (
         number=$((number + 1))
     done
     [ "$number" -gt 0 ] || { _google_error 'No calendar IDs selected'; return 1; }
+    if [ "$data" -eq 1 ]; then
+        local members=() member index=0
+        while [ "$index" -lt "$number" ]; do
+            member="$CALENDAR_WORK/member-$index.json"
+            jq -n --slurpfile calendar "$CALENDAR_WORK/calendar-$index.json" --slurpfile events "$CALENDAR_WORK/events-$index.json" '{calendar: $calendar[0], events: $events[0]}' > "$member" || return 1
+            members+=("$member"); index=$((index + 1))
+        done
+        jq -s --arg source "$GOOGLE_CALENDAR_ALIAS" --arg start "$lower" --arg end "$upper" '{schema_version: 1, provider: "google", source: $source, start: $start, end: $end, complete: true, calendars: .}' "${members[@]}" > "$CALENDAR_WORK/export.json" || return 1
+        _google_python "$GOOGLE_CALENDAR_DIR" "$GOOGLE_AUTH_DIR/scripts/publish.py" "$CALENDAR_WORK/export.json" "$out" replace || return 1
+        _google_say "Exported $out"
+        return 0
+    fi
     {
         printf '# Google Calendar\n\nWindow: %s to %s\n\n' "$lower" "$upper"
         if [ "$compact" -eq 1 ]; then _calendar_render_helper --compact --start-at "$boundary" --tz "$tz" "${render_args[@]}"

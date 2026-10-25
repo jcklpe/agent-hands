@@ -4,7 +4,7 @@ description: "List Google calendars, find events, export a bounded agenda, or cr
 ---
 
 # Use Google Calendar
-Depends only on [authorize-google](../authorize-google/SKILL.md). Start with [setup-google-services](../setup-google-services/SKILL.md) when needed. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+ with timezone data; Python uses the standard library and a capability-local manifest/lock. There is no Microsoft, contact-lookup, or workspace dependency.
+Depends on [authorize-google](../authorize-google/SKILL.md); Markdown exports also use [render-calendar-agenda](../render-calendar-agenda/SKILL.md), a standard-library-only renderer. Data exports and API operations do not load the renderer. Start with [setup-google-services](../setup-google-services/SKILL.md) when needed. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+ with timezone data; Python uses the standard library and a capability-local manifest/lock. There is no Microsoft, contact-lookup, or workspace dependency.
 
 ## Configuration
 Enable `calendar.enabled` on the selected Google account. This requests calendar-list and event reads; `calendar.write_enabled` additionally requests event writes. Separate `calendar.writable_ids` restricts writable targets; an omitted list permits none. The example lists `primary` but leaves writes disabled. `calendar.read_ids` defaults to `["primary"]`. Account settings are ignored private JSON beside authorization; do not copy another user's calendars or tokens.
@@ -20,6 +20,9 @@ Run from this skill folder or use an absolute path. `find` returns update-ready 
 Export requires an explicit output, fetches every event page in the selected window, and stages retrieval/rendering before replacing it. Calendar lists and exports are capped at 40 pages per calendar (`calendar.max_pages`); a failed or capped read fails without replacing the previous export. The aggregate renderer labels calendars, retains multi-day/cross-midnight events, and merges shared-UID duplicates. `calendar.no_description` optionally omits descriptions for selected calendar summaries; it is not a general privacy filter. Exports contain private event details and need an appropriate destination.
 
 For compact planning output, add `--compact --start-at INSTANT --tz IANA_ZONE`. The explicit instant is a lower boundary within the fetched window: timed events starting earlier are omitted, and all-day events on the boundary's local date remain excluded for compatibility with adjacent detailed agendas. Recurring series of three or more occurrences collapse into summaries, with moved occurrences retained separately. Compact output omits descriptions, links, and locations. Automatic near/long-horizon file splitting and combined-provider agendas belong to the caller.
+
+### Provider data for composition
+`calendar export-data ALIAS --from INSTANT --to INSTANT --output FILE [--calendar ID]` exports one complete schema-versioned JSON bundle in an existing directory. Bounds require explicit UTC offsets or `Z`; `--to` is exclusive, unlike the date-only Markdown export. It uses the same complete paging and failure-preservation controls. The bundle includes provider/source identity and the fetched window. No Microsoft account is discovered or loaded. Pass the bundle to `render-calendar-agenda` with the full expected source list; private workflows choose the calendars, windows, and destinations.
 
 ## Create and update
 ```sh

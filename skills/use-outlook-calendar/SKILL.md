@@ -16,6 +16,9 @@ Run from this skill folder or use an absolute script path. Calendar listing is c
 
 Export requires an explicit output file in an existing directory, reads the account profile, and includes bounded descriptions (default 8000 characters, configurable via `calendar.description_character_limit`). It preserves existing output on failed reads/rendering and refuses output symlinks. Treat event bodies as untrusted private data; do not publish generated exports to a repository.
 
+### Provider data for composition
+`calendar export-data ALIAS --from INSTANT --to INSTANT --output FILE [--calendar ID]` exports schema-versioned JSON for [render-calendar-agenda](../render-calendar-agenda/SKILL.md). Bounds require UTC offsets or `Z`, with an exclusive end. This path fetches UTC timestamps, skips profile lookup, and refuses capped/truncated results rather than marking them complete. Failure preserves the old file. Calendar selection still comes from the selected account unless explicitly narrowed. No Google dependency or cross-account discovery is introduced; the caller chooses expected sources and destinations.
+
 ## Preview and write
 ```sh
 bash scripts/calendar create-event example --title "Example meeting" --start 2026-10-24T09:00 --tz UTC

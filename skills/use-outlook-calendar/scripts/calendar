@@ -8,6 +8,7 @@ case "${1:---help}" in
 calendar list-calendars ALIAS
 calendar find ALIAS QUERY [--calendar ID] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--json]
 calendar export ALIAS --output PATH
+calendar export-data ALIAS --from INSTANT --to INSTANT --output FILE [--calendar ID]
 calendar create-event ALIAS --title TITLE --start DATE_OR_DATETIME [OPTIONS] [--execute]
 calendar update-event ALIAS --event ID [OPTIONS] [--execute]
 OPTIONS: --calendar ID, --title, --start, --end, --tz, --location, --desc, --desc-file,
@@ -20,6 +21,7 @@ _m365_load_env
 command="$1"; shift
 case "$command" in
     list-calendars) _m365_calendar_list "$@" ;;
+    export-data) _m365_calendar_export_data "$@" ;;
     find|export) "_m365_calendar_$command" "$@" ;;
     create-event) _m365_calendar_create "$@" ;;
     update-event) _m365_calendar_update "$@" ;;

@@ -25,8 +25,19 @@ def bounds(start, end):
     return 0
 
 
+def instant_bounds(start, end):
+    lower = datetime.fromisoformat(start.replace("Z", "+00:00"))
+    upper = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    if lower.tzinfo is None or upper.tzinfo is None or lower >= upper:
+        raise ValueError("Supply increasing ISO instants with offsets; --to is exclusive")
+    print(lower.isoformat())
+    print(upper.isoformat())
+
+
 if __name__ == "__main__":
     try:
+        if sys.argv[1:2] == ["instant-bounds"]:
+            raise SystemExit(instant_bounds(*sys.argv[2:]))
         if sys.argv[1:2] == ["bounds"]:
             raise SystemExit(bounds(*sys.argv[2:]))
         raise SystemExit(date_window(*sys.argv[1:]))

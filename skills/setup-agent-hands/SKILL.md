@@ -32,3 +32,5 @@ Inspect installer sources and side effects before running them, preserve existin
 
 ## Configure and verify
 Use tailored provider examples and verify the owning repository's ignores before any real config is written. Keep credentials local and preserve existing profiles. Run help and relevant offline checks, then one authorized read when appropriate. Live writes need their own actual target and scope. Report local readiness separately from remote account access and client discovery. Do not add global skill links or MCP connections unless that installation is requested or already authorized.
+
+For combined calendars, install [render-calendar-agenda](../render-calendar-agenda/SKILL.md) plus only the chosen provider skills and their authorization dependencies. The renderer uses Python 3.11+ with timezone data and has no authorization dependency. Google Calendar Markdown export also needs this renderer; provider JSON exports do not.

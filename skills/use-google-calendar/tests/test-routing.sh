@@ -57,5 +57,11 @@ GOOGLE_ACCOUNTS_PATH=enabled.json _calendar_create_event --title Example --start
 grep -F 'sendUpdates=none' "$WORK/transport" >/dev/null
 GOOGLE_ACCOUNTS_PATH=enabled.json _google_account_scopes example > "$WORK/scopes"
 grep -Fx 'https://www.googleapis.com/auth/calendar.events' "$WORK/scopes" >/dev/null
+_calendar_export --data --from 2030-01-01T00:00:00Z --to 2030-02-01T00:00:00Z --output "$WORK/google.json" > /dev/null
+jq -e '.schema_version == 1 and .provider == "google" and .source == "example" and .complete == true and .calendars[0].events.items[0].id == "example-event"' "$WORK/google.json" >/dev/null
+cp "$WORK/google.json" "$WORK/previous.json"
+RUNAWAY=1 expect_failure _calendar_export --data --from 2030-01-01T00:00:00Z --to 2030-02-01T00:00:00Z --output "$WORK/google.json"
+cmp "$WORK/google.json" "$WORK/previous.json"
+expect_failure _calendar_export --data --from 2030-01-01 --to 2030-02-01 --output "$WORK/google.json"
 for residual in "$WORK/temp"/google-calendar.* "$WORK"/.google-output-*; do [ ! -e "$residual" ] || exit 1; done
 printf '%s\n' 'Calendar scopes, paging, export preservation, write gates, and cleanup passed'

@@ -8,6 +8,7 @@ case "${1:---help}" in
 calendar list-calendars ALIAS
 calendar find ALIAS QUERY [--calendar ID] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--json]
 calendar export ALIAS --output FILE [--calendar ID] [--from YYYY-MM-DD --to YYYY-MM-DD] [--compact --start-at INSTANT --tz ZONE]
+calendar export-data ALIAS --from INSTANT --to INSTANT --output FILE [--calendar ID]
 calendar create-event ALIAS --title TEXT --start DATE_OR_DATETIME [options] [--execute]
 calendar update-event ALIAS --event ID [options] [--series] [--replace-attendees] [--execute]
 Event options: --calendar ID --end DATE_OR_DATETIME --tz IANA_ZONE --location TEXT --desc TEXT --desc-file FILE --attendee EMAIL (repeatable) --recurrence RULE (repeatable) --transparency transparent|opaque --popup-minutes 0..40320 --notify
@@ -22,6 +23,7 @@ case "$command" in
     list-calendars) _calendar_list_calendars "$@" ;;
     find) _calendar_find "$@" ;;
     export) _calendar_export "$@" ;;
+    export-data) _calendar_export --data "$@" ;;
     create-event) _calendar_create_event "$@" ;;
     update-event) _calendar_update_event "$@" ;;
     *) _google_error 'Unknown Calendar command'; exit 1 ;;

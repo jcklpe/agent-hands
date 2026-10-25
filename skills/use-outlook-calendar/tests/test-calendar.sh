@@ -40,5 +40,20 @@ grep -F 'Example workshop' "$WORK/calendar.md" >/dev/null
 cp "$WORK/calendar.md" "$WORK/previous.md"
 FAIL_READ=1 expect_failure _m365_calendar_export example --output "$WORK/calendar.md"
 cmp "$WORK/calendar.md" "$WORK/previous.md"
+_m365_calendar_export_data example --from 2030-01-01T00:00:00Z --to 2030-02-01T00:00:00Z --output "$WORK/microsoft.json" > /dev/null
+jq -e '.schema_version == 1 and .provider == "microsoft" and .source == "example" and .complete == true and .timezone == "UTC"' "$WORK/microsoft.json" >/dev/null
+cp "$WORK/microsoft.json" "$WORK/previous.json"
+FAIL_READ=1 expect_failure _m365_calendar_export_data example --from 2030-01-01T00:00:00Z --to 2030-02-01T00:00:00Z --output "$WORK/microsoft.json"
+cmp "$WORK/microsoft.json" "$WORK/previous.json"
+# A full page with a next link is a failed complete export, not a fresh incomplete agenda.
+_m365_get() {
+    case "$2" in
+        */calendarView) jq -n '{value: [range(1000) | {id:(tostring)}], "@odata.nextLink":"https://graph.microsoft.com/v1.0/me/calendar/calendarView?$skiptoken=example"}' ;;
+        *) printf '%s' '{"id":"calendar-1","name":"Calendar"}' ;;
+    esac
+}
+expect_failure _m365_calendar_export_data example --from 2030-01-01T00:00:00Z --to 2030-02-01T00:00:00Z --output "$WORK/microsoft.json"
+cmp "$WORK/microsoft.json" "$WORK/previous.json"
+grep -F 'complete export refused' "$WORK/error" >/dev/null
 for residual in "$WORK/temp"/microsoft-work.* "$WORK"/.microsoft-output-*; do [ ! -e "$residual" ] || exit 1; done
 printf '%s\n' 'Outlook Calendar preview, invitation, writable-calendar, Teams-body, empty-attendee, export, failure, and cleanup checks passed'
