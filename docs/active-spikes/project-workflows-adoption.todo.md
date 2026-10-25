@@ -15,10 +15,10 @@ Agent Hands owns `AGENTS.md`, `README.md`, `TODO.md`, the existing CLI feedback 
 Preserve existing feedback and unrelated work. Use the current setup/run-spike/commit procedures, keep source notices and complete supporting files, and commit each repository's coherent scope separately. Publish only the refs covered by the later explicit authorization; do not install client skills, change credentials, or implement CLI proposals. A local commit is not proof of collaborator availability.
 
 ## Current State Overview
-The initial local setup is complete. The follow-up renamed the workflow branch to `project/agent-hands`, adopted the accepted shared procedure improvements, preserved project configuration, and published the new workflow ref. Agent Hands consumer publication and fresh recursive-clone verification remain before completion of the Git handoff; client QA remains separate.
+The initial local setup is complete. The follow-up renamed the workflow branch to `project/agent-hands`, adopted the accepted shared procedure improvements, preserved project configuration, and published the new workflow ref. Agent Hands consumer publication and a fresh public recursive clone now verify the exact nested workflow pin; client QA remains separate.
 
 ## To Do
-- [ ] Publish the reviewed Agent Hands consumer checkpoint and verify a fresh remote recursive clone retrieves its exact nested workflow pin.
+No Git publication work remains in Agent Hands. Client QA and closure decisions remain separate.
 
 ## Ready for Human QA
 - Confirm the intended agent client follows `AGENTS.md` into the adopted workflow files. Local routing and Git clone checks do not establish client discovery or interaction behavior.
@@ -34,7 +34,9 @@ The initial local setup is complete. The follow-up renamed the workflow branch t
 
 - [x] Rename the workflow adaptation to `project/agent-hands` and reconcile the reusable upstream update. The original `codex/project-agent-hands` name in the initial Done entries is historical. The new branch includes accepted shared `main`, retains only project configuration divergence, and tracks the published matching remote ref. Metadata and current routing use the neutral name; no folder or remote branch was deleted.
 
+- [x] Publish the reviewed Agent Hands consumer checkpoint and verify a fresh remote recursive clone retrieves its exact nested workflow pin. Normal publication succeeded after full outgoing-range review. A fresh public recursive clone retrieved the recorded workflow commit, included accepted shared `main`, preserved feedback, and had clean parent/child status.
+
 ## Verification and Publication
 The initial setup checks above remain its dated record. For the reconciliation follow-up, shared `main` and `project/agent-hands` are remotely available, accepted-main ancestry is verified, and the only resulting difference from shared `main` is Agent Hands configuration. The CLI feedback concept remains unchanged; no runtime or provider operation was performed.
 
-The installed Python skill validator could not import PyYAML; direct YAML parsing and reference/TOML checks were used and the failure remains recorded in the coordinating workflow-reconciliation task. Consumer publication and fresh remote recursive retrieval are still pending. The outer configs pin will be updated locally; its unrelated existing unpublished commits are not part of this publication scope.
+The installed Python skill validator could not import PyYAML; direct YAML parsing and reference/TOML checks were used and the failure remains recorded in the coordinating workflow-reconciliation task. Consumer publication and fresh public recursive retrieval passed. Exact remote refs and the nested gitlink were verified; the final verification-record commit retains the same workflow pin. The outer configs pin will be updated locally; its unrelated existing unpublished commits are not part of this publication scope.
