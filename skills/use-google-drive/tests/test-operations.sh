@@ -68,6 +68,28 @@ _drive_export_index example --output "$WORK/index.md" --recent 0 > /dev/null
 grep -F 'no account-wide recent-file query was performed' "$WORK/index.md" >/dev/null
 grep -F 'Example Child' "$WORK/index.md" >/dev/null
 expect_failure _drive_export_index example --output "$WORK/index.md" --recent -1
+# Caller exclusions add to configured exclusions and prevent the child request itself.
+cp "$WORK/google-accounts.json" "$WORK/original.json"
+jq '.accounts[0].drive.index_exclude=["Configured Folder"]' "$WORK/original.json" > "$WORK/google-accounts.json"
+: > "$WORK/queries"
+_drive_export_index example --output "$WORK/index.md" --recent 0 --exclude-folder 'Unrelated Folder' --exclude-folder 'Example Folder' > /dev/null
+! grep -F "'folder-one' in parents" "$WORK/queries" >/dev/null
+! grep -F 'Example Child' "$WORK/index.md" >/dev/null
+jq '.accounts[0].drive.index_exclude=["Example Folder"]' "$WORK/original.json" > "$WORK/google-accounts.json"
+: > "$WORK/queries"
+_drive_export_index example --output "$WORK/index.md" --recent 0 --exclude-folder 'Other Folder' > /dev/null
+! grep -F "'folder-one' in parents" "$WORK/queries" >/dev/null
+cp "$WORK/index.md" "$WORK/previous-index.md"
+for invalid in '"invalid"' 'false' '{}' '["two\nlines"]' '[7]'; do
+    jq --argjson invalid "$invalid" '.accounts[0].drive.index_exclude=$invalid' "$WORK/original.json" > "$WORK/google-accounts.json"
+    : > "$WORK/queries"
+    expect_failure _drive_export_index example --output "$WORK/index.md" --exclude-folder 'Example Folder'
+    [ ! -s "$WORK/queries" ]
+    cmp "$WORK/index.md" "$WORK/previous-index.md"
+done
+cp "$WORK/original.json" "$WORK/google-accounts.json"
+expect_failure _drive_export_index example --output "$WORK/index.md" --exclude-folder
+expect_failure _drive_export_index example --output "$WORK/index.md" --exclude-folder $'two\nlines'
 expect_failure _drive_export_index example
 printf '%s' 'Example body' > "$WORK/body.md"
 : > "$WORK/curl-calls"

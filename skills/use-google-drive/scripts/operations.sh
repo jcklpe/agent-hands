@@ -365,7 +365,7 @@ _drive_days_ago() {
 
 _drive_sync_excludes() {
     local alias="$1"
-    _google_account_value "$alias" '(.drive.index_exclude // []) | join("\n")' 2>/dev/null || printf ''
+    _google_account_value "$alias" '(.drive.index_exclude | if . == null then [] else . end) | if type == "array" and all(.[]; type == "string" and length > 0 and (test("[\r\n]") | not)) then join("\n") else error("index_exclude must be an array of nonempty single-line names") end'
 }
 
 _drive_render_index() {
@@ -375,11 +375,16 @@ _drive_render_index() {
 _drive_export_index() (
     set -o pipefail
     _drive_work_begin || return 1
-    local alias="${1:-}" out="" max_folders=25 children=12 max_recent=30 recent_days=45 value
+    local alias="${1:-}" out="" max_folders=25 children=12 max_recent=30 recent_days=45 value extra_excludes=""
     [ -n "$alias" ] || { _google_error 'export-index requires ALIAS'; return 1; }
     shift
     while [ "$#" -gt 0 ]; do
         case "$1" in
+            --exclude-folder)
+                [ -n "${2:-}" ] || { _google_error '--exclude-folder requires NAME'; return 1; }
+                case "$2" in *$'\n'*|*$'\r'*) _google_error 'Excluded names must be single-line'; return 1 ;; esac
+                extra_excludes="${extra_excludes}${2}"$'\n'
+                shift 2 ;;
             --output|--folders|--recent|--recent-days)
                 [ -n "${2:-}" ] || { _google_error 'Missing export option value'; return 1; }
                 case "$1" in
@@ -401,7 +406,8 @@ _drive_export_index() (
     local email excludes folders_json recent_json enriched='[]' skipped='[]' row fid fname kids kid_count since payload result
     _google_account_exists "$alias" || { _google_error 'Unknown Google account'; return 1; }
     email="$(_google_account_email "$alias")"
-    excludes="$(_drive_sync_excludes "$alias")"
+    excludes="$(_drive_sync_excludes "$alias")" || { _google_error 'Cannot read configured folder exclusions'; return 1; }
+    excludes="${excludes}"$'\n'"${extra_excludes}"
     folders_json="$(_drive_index_list "$alias" "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false" name "$max_folders")" || return 1
     printf '%s' "$folders_json" | jq -c '.files[]' > "$DRIVE_WORK/folders.jsonl" || return 1
     while IFS= read -r row; do
