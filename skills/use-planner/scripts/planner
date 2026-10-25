@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPTS/../../authorize-microsoft/scripts/client.sh"
+source "$SCRIPTS/operations.sh"
+case "${1:---help}" in
+    help|--help|-h) cat <<'HELP'
+planner plans ALIAS [--json]
+planner buckets ALIAS --plan ID [--json]
+planner tasks ALIAS --plan ID [--bucket ID] [--mine] [--open] [--json]
+planner task ALIAS --task ID [--json]
+planner export ALIAS --output PATH
+planner create-task ALIAS --plan ID --bucket ID --title TEXT [--due DATE|none] [--progress STATUS] [--assign USER] [--desc TEXT|--desc-file FILE] [--execute]
+planner update-task ALIAS --task ID [--title TEXT] [--bucket ID] [--due DATE|none] [--progress STATUS] [--assign USER] [--unassign USER] [--desc TEXT|--desc-file FILE] [--execute]
+planner move-task ALIAS --task ID --plan ID --bucket ID [--execute]
+planner labels ALIAS --plan ID [--json]
+planner label|unlabel ALIAS --task ID --label NAME [--execute]
+planner comments ALIAS --task ID [--json]
+planner comment ALIAS --task ID --file FILE [--execute]
+Writes preview by default; existing plan allowlist/write opt-in and comment permission gates apply.
+HELP
+        exit 0 ;;
+esac
+_m365_load_env
+_m365_planner_dispatch "$@"
