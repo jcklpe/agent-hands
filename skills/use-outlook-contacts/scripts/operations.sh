@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-OUTLOOK_CONTACTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -n "${ZSH_VERSION:-}" ]; then _microsoft_source="${(%):-%x}"; else _microsoft_source="${BASH_SOURCE[0]}"; fi
+OUTLOOK_CONTACTS_DIR="$(cd "$(dirname "$_microsoft_source")/.." && pwd)"
+unset _microsoft_source
 _m365_contacts_write_helper() { _m365_python "$OUTLOOK_CONTACTS_DIR" "$OUTLOOK_CONTACTS_DIR/scripts/write.py" "$@"; }
 _m365_contacts_render_helper() { _m365_python "$OUTLOOK_CONTACTS_DIR" "$OUTLOOK_CONTACTS_DIR/scripts/render.py" "$@"; }
 

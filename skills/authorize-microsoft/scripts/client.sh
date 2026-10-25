@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 ##- Microsoft provider support; no private workspace dependency or generic request CLI.
-M365_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -n "${ZSH_VERSION:-}" ]; then _microsoft_source="${(%):-%x}"; else _microsoft_source="${BASH_SOURCE[0]}"; fi
+M365_AUTH_DIR="$(cd "$(dirname "$_microsoft_source")/.." && pwd)"
+unset _microsoft_source
 _m365_error() { printf 'ERROR: %s\n' "$*" >&2; }
 _m365_say() { printf '%s\n' "$*"; }
 _m365_check_command() { command -v "$1" >/dev/null 2>&1; }
@@ -35,7 +37,7 @@ _m365_load_env() {
         case "$line" in ''|\#*) continue ;; esac
         case "$line" in *=*) ;; *) _m365_error 'Invalid Microsoft env assignment'; return 1 ;; esac
         key="$(_m365_trim "${line%%=*}")"; value="$(_m365_trim "${line#*=}")"
-        case "$key" in M365_ACCOUNTS_PATH|M365_PYTHON|M365_PWSH_BIN|M365_FILES_AUDIT_LOG) ;; *) _m365_error 'Unsupported Microsoft configuration key'; return 1 ;; esac
+        case "$key" in M365_ACCOUNTS_PATH|M365_PYTHON|M365_PWSH_BIN|M365_FILES_AUDIT_LOG|M365_EXCEL_AUDIT_LOG) ;; *) _m365_error 'Unsupported Microsoft configuration key'; return 1 ;; esac
         case "$value" in
             \"*) case "$value" in *\") value="${value#\"}"; value="${value%\"}" ;; *) _m365_error 'Unclosed configuration quote'; return 1 ;; esac ;;
             \'*) case "$value" in *\') value="${value#\'}"; value="${value%\'}" ;; *) _m365_error 'Unclosed configuration quote'; return 1 ;; esac ;;
