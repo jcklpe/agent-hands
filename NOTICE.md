@@ -24,3 +24,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+The Markdown-to-PDF renderer is adapted from the same configs source. Its bundled résumé CSS also matches the AGPL-v3 upstream theme; see [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md).
