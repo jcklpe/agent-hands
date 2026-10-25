@@ -70,5 +70,5 @@ _drive_import_doc example "$WORK/body.md" --title 'Synthetic upload' --execute >
 grep -F 'created-doc' "$WORK/created" >/dev/null
 jq '.accounts[0].drive.write_enabled=false' "$WORK/google-accounts.json" > "$WORK/disabled.json"
 GOOGLE_ACCOUNTS_PATH=disabled.json expect_failure _drive_import_doc example "$WORK/body.md" --title Example --execute
-for residual in "$WORK/temp"/google-drive.* "$WORK"/.google-drive-*; do [ ! -e "$residual" ] || exit 1; done
+for residual in "$WORK/temp"/google-drive.* "$WORK"/.google-output-*; do [ ! -e "$residual" ] || exit 1; done
 printf '%s\n' 'Drive failure preservation, path safety, export bounds, import gates, and cleanup passed'

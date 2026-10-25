@@ -8,7 +8,7 @@ _drive_work_begin() {
     trap 'rm -rf "$DRIVE_WORK"' EXIT
     trap 'exit 130' HUP INT TERM
 }
-_drive_publish() { _google_python "$GOOGLE_DRIVE_DIR" "$GOOGLE_DRIVE_DIR/scripts/publish.py" "$@"; }
+_drive_publish() { _google_python "$GOOGLE_DRIVE_DIR" "$GOOGLE_AUTH_DIR/scripts/publish.py" "$@"; }
 
 _drive_accounts() {
     _google_accounts_ready || return 1

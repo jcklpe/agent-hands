@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../../authorize-google/scripts/client.sh"
+source "$SCRIPT_DIR/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) cat <<'EOF'
+gmail export ALIAS --output FILE [--query QUERY] [--max-results N]
+gmail labels ALIAS [--json]
+gmail list ALIAS [--label NAME_OR_ID] [--query QUERY] [--limit N] [--json]
+gmail spam ALIAS [--limit N] [--json]
+gmail archive|unarchive|not-spam ALIAS (--message ID|--thread ID|--ids-file FILE)... [--execute]
+gmail label|unlabel ALIAS --label NAME_OR_ID (--message ID|--thread ID|--ids-file FILE)... [--skip-inbox] [--execute]
+gmail create-label ALIAS --name NAME [--execute]
+gmail filters ALIAS [--json]
+gmail create-filter ALIAS [--from TEXT] [--to TEXT] [--subject TEXT] [--query QUERY] [--label NAME_OR_ID] [--skip-inbox] [--execute]
+gmail delete-filter ALIAS --filter ID [--execute]
+Writes preview by default and require account opt-ins. --skip-inbox applies only to label/create-filter. No send, trash, delete-message, mark-read, or report-spam commands.
+EOF
+    exit 0 ;;
+esac
+command="$1"; shift
+_google_load_env
+case "$command" in
+    export) _gmail_export "$@" ;;
+    labels) _gmail_labels "$@" ;;
+    list) _gmail_list "$@" ;;
+    spam) _gmail_spam "$@" ;;
+    archive) _gmail_archive "$@" ;;
+    unarchive) _gmail_unarchive "$@" ;;
+    label) _gmail_label "$@" ;;
+    unlabel) _gmail_unlabel "$@" ;;
+    not-spam) _gmail_not_spam "$@" ;;
+    create-label) _gmail_create_label "$@" ;;
+    filters) _gmail_filters "$@" ;;
+    create-filter) _gmail_create_filter "$@" ;;
+    delete-filter) _gmail_delete_filter "$@" ;;
+    *) _google_error 'Unknown Gmail command'; exit 1 ;;
+esac

@@ -1,4 +1,4 @@
-"""Publish a completed private download/index without truncating an existing destination."""
+"""Publish a completed private export/download without truncating an existing destination."""
 import os
 from pathlib import Path
 import shutil
@@ -14,7 +14,7 @@ def publish(source, destination, mode):
         raise ValueError("Refusing to replace a symlink")
     temporary = None
     try:
-        descriptor, temporary = tempfile.mkstemp(prefix=".google-drive-", dir=target.parent)
+        descriptor, temporary = tempfile.mkstemp(prefix=".google-output-", dir=target.parent)
         with os.fdopen(descriptor, "wb") as output, open(source, "rb") as incoming:
             shutil.copyfileobj(incoming, output)
         if mode == "replace":

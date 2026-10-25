@@ -24,7 +24,7 @@ _google_load_env() {
         case "$line" in ''|\#*) continue ;; esac
         case "$line" in *=*) ;; *) _google_error 'Invalid Google env assignment'; return 1 ;; esac
         key="$(_google_trim "${line%%=*}")"; value="$(_google_trim "${line#*=}")"
-        case "$key" in GOOGLE_ACCOUNTS_PATH|GOOGLE_PYTHON) ;; *) _google_error 'Unsupported Google configuration key'; return 1 ;; esac
+        case "$key" in GOOGLE_ACCOUNTS_PATH|GOOGLE_PYTHON|GOOGLE_GMAIL_AUDIT_LOG|GOOGLE_GMAIL_MAX_RETRIES) ;; *) _google_error 'Unsupported Google configuration key'; return 1 ;; esac
         case "$value" in
             \"*) case "$value" in *\") value="${value#\"}"; value="${value%\"}" ;; *) _google_error 'Unclosed configuration quote'; return 1 ;; esac ;;
             \'*) case "$value" in *\') value="${value#\'}"; value="${value%\'}" ;; *) _google_error 'Unclosed configuration quote'; return 1 ;; esac ;;
