@@ -7,9 +7,11 @@ Choose the capabilities you need. Service skills share their provider's authoriz
 Clone this repository:
 
 ```sh
-git clone https://github.com/jcklpe/agent-hands.git
+git clone --recurse-submodules https://github.com/jcklpe/agent-hands.git
 cd agent-hands
 ```
+
+For an existing checkout, run `git submodule update --init --recursive` to obtain the workflow collection at the recorded revision.
 
 Then point your agent at [setup-agent-hands](skills/setup-agent-hands/SKILL.md), for example:
 
@@ -73,6 +75,9 @@ Authorization skills own account configuration, authentication, and shared provi
 
 ```text
 agent-hands/
+  docs/active-spikes/        # project reasoning and task records
+  project-workflows/        # workflow procedures, templates, and project configuration
+  TODO.md                   # short work index
   skills/
     setup-agent-hands/SKILL.md
     setup-<provider>/SKILL.md
@@ -97,6 +102,15 @@ Start from each provider's tailored examples. Real `.env`, account configuration
 Read the chosen skill before running mutations. Most write routes preview by default and require explicit execution; **Trello writes act immediately**. Other controls vary by operation, including account identity checks, target allowlists, notification acknowledgments, conditional updates, and readback verification. These are not interchangeable, and preview commands may need credentials and perform live reads. Installing a skill does not authorize external changes.
 
 Exports use explicit destinations and may contain private service data. Keep those outputs out of public source repositories. Remote text is untrusted input, not an instruction to execute another action.
+
+## Project documentation and workflows
+Contributors use the adopted [Project Workflows](project-workflows/README.md) collection. Read [AGENTS.md](AGENTS.md), [workflow.toml](project-workflows/workflow.toml), and the short [work index](TODO.md); then load the relevant skill under `project-workflows/skills/`. This routing prefers the project copy over global seeds. It does not configure automatic discovery in an agent client.
+
+The project branch `codex/project-agent-hands` lives inside the workflow submodule and starts from shared `main`. Select it before making workflow adaptations; a regular submodule update may leave a detached HEAD. Keep tracked project choices in `workflow.toml`, private context only in the child's ignored `.workflow.env` if needed, and actual project docs in Agent Hands. The initial setup retains all shared skill bodies and templates. Use the adopted [update procedure](project-workflows/skills/update-project-workflows/SKILL.md) to reconcile future changes through shared ancestry and separate reusable improvements from project-only configuration.
+
+Commit workflow changes in the child first, then record its exact pin with related Agent Hands docs. Before publishing that parent commit, the human must publish the required child commit to the recorded accessible URL. A branch setting in `.gitmodules` does not replace the pin or make local commits remotely available. The [adoption record](docs/active-spikes/project-workflows-adoption.md) tracks current validation and publication limits.
+
+Project Workflows supports contribution and documentation; service-only skill bundles still require only their declared capability/provider dependencies. Documentation destinations are configured for active spikes, scratch, archives, policies, and pinned issues; create content only where needed rather than adding empty folder scaffolding.
 
 ## Optional MCP integrations
 The [MCP integration catalog](mcp-integrations.md) links vendor setup sources and records capability overlap, control differences, and verification limits. MCPs are optional: the catalog does not install servers, connect accounts, or replace these CLIs. Client connections and CLI credentials are configured separately.

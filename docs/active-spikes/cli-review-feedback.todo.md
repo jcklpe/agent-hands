@@ -13,6 +13,8 @@ The owning repository is Agent Hands. The current `run-project-spike`, `setup-pr
 
 Agent Hands had no existing spike docs, local workflow copy, or index. For this documentation-only request, use the minimal pair under `docs/active-spikes/` and root `TODO.md`. No workflow submodule adoption, scratch/archive scaffold, standing-rule edit, or parent pin update is part of the change.
 
+Current routing after the separately authorized [Project Workflows adoption](project-workflows-adoption.md): use Agent Hands' own `project-workflows/workflow.toml` and adopted skills. The paragraphs above describe the initial documentation-only checkpoint; the subsequent adoption preserves this pair and does not authorize its CLI proposals.
+
 ## General Principles
 Keep supplied live observations separate from local code evidence and proposals. Preserve useful successful-read evidence. Do not label environment friction or an abandoned unsupported-runtime attempt as a demonstrated refactor regression. Use synthetic examples and omit private review material.
 
