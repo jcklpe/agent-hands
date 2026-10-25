@@ -1,0 +1,14 @@
+{
+  "repos": [
+    {
+      "alias": "example",
+      "owner": "example-owner",
+      "repo": "example-project",
+      "issues": true,
+      "prs": true,
+      "discussions": false,
+      "project_owner": "example-organization",
+      "projects": [{"number": 1, "name": "example-board"}]
+    }
+  ]
+}

@@ -12,7 +12,9 @@ Slack has separate [messaging](skills/use-slack-messages/SKILL.md) and [Lists](s
 
 Trello has [provider authorization](skills/authorize-trello/SKILL.md), [setup](skills/setup-trello/SKILL.md), and a bounded [use skill](skills/use-trello/SKILL.md). It preserves direct writes and neutral card linking; exports require an explicit output and keep the previous file when retrieval fails. No Python or uv is needed.
 
-This is a staged extraction. Other Google, Microsoft, GitHub, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
+GitHub now has [Issues](skills/use-github-issues/SKILL.md), [Pull Requests](skills/use-github-pull-requests/SKILL.md), [Discussions](skills/use-github-discussions/SKILL.md), and [Projects](skills/use-github-projects/SKILL.md), each with only the [GitHub provider](skills/authorize-github/SKILL.md) dependency. [Setup](skills/setup-github/SKILL.md) retains gh authentication and capability-local uv rendering. Existing writes are issue creation and organization-board Status moves; Discussion writes remain deferred.
+
+This is a staged extraction. Other Google, Microsoft, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
 
 ## Configuration and dependencies
 Real account routing and credentials stay ignored beside the authorization skill, with tailored examples. Never source `.env` as shell code. Odoo's entry parses literal `ODOO_*` values and preserves exported values; no unrelated provider or workspace is loaded. No Python or uv environment is needed for this Bash capability.

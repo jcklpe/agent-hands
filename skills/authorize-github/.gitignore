@@ -1,0 +1,3 @@
+github-repos.json
+github-repos.*.json
+!github-repos.example.json

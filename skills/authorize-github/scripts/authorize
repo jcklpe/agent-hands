@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+GITHUB_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
+. "${GITHUB_AUTH_DIR}/scripts/client.sh"
+case "${1:-help}" in
+    help|--help|-h) printf 'Usage: authorize check | status | list-repos\ncheck inspects local dependencies/config; status invokes gh auth status (may access the network).\n'; exit 0 ;;
+    check|status|list-repos) _github_load_env || exit 1 ;;
+    *) _github_error 'Unknown command'; exit 1 ;;
+esac
+case "$1" in
+    check)
+        command -v gh >/dev/null && command -v jq >/dev/null || { _github_error 'Install gh and jq'; exit 1; }
+        if [ -f "$(_github_repos_config)" ]; then _github_config_ready || exit 1; fi
+        printf 'Local dependencies/config checked; authentication was not verified.\n' ;;
+    status) gh auth status ;;
+    list-repos) _github_list_repos ;;
+esac
