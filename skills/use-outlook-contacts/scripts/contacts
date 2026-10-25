@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPTS/../../authorize-microsoft/scripts/client.sh"
+source "$SCRIPTS/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) cat <<'HELP'
+contacts list ALIAS [--json]
+contacts find ALIAS QUERY [--json]
+contacts export ALIAS --output PATH
+contacts create ALIAS [FIELDS] [--execute]
+contacts update ALIAS --contact ID [FIELDS] [--execute]
+FIELDS: --display-name, --given-name, --surname, --email (repeat), --phone (repeat),
+        --mobile, --company, --job-title, --notes, --notes-file.
+Writes preview by default. Update preview reads the current remote contact.
+HELP
+        exit 0 ;;
+esac
+_m365_load_env
+command="$1"; shift
+case "$command" in
+    list|find|export|create|update) "_m365_contacts_$command" "$@" ;;
+    *) _m365_error 'Unknown contacts command'; exit 1 ;;
+esac
