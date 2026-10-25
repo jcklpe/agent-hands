@@ -9,19 +9,19 @@ Opened: 2026-10-25. Slug: `project-workflows-adoption`.
 The user requested a nested Project Workflows submodule, a project-specific branch created from its `main`, and documentation setup using the current setup skill. [Concept and ownership model](project-workflows-adoption.md).
 
 ## Project Organization
-Agent Hands owns `AGENTS.md`, `README.md`, `TODO.md`, the existing CLI feedback pair, and this adoption pair. The nested `project-workflows/` repository owns its eight procedures, templates, ignored local-context convention, and the tracked Agent Hands configuration on `codex/project-agent-hands`. The containing configs checkout and its separate Project Workflows adoption stay outside this change.
+Agent Hands owns `AGENTS.md`, `README.md`, `TODO.md`, the existing CLI feedback pair, and this adoption pair. The nested `project-workflows/` repository owns its eight procedures, templates, ignored local-context convention, and the tracked Agent Hands configuration on `project/agent-hands`. The containing configs checkout and its separate Project Workflows adoption stay outside this change.
 
 ## General Principles
-Preserve existing feedback and unrelated work. Use the current setup/run-spike/commit procedures, keep source notices and complete supporting files, and commit each repository's coherent scope separately. Do not push, install client skills, change credentials, or implement CLI proposals. A local commit is not proof of collaborator availability.
+Preserve existing feedback and unrelated work. Use the current setup/run-spike/commit procedures, keep source notices and complete supporting files, and commit each repository's coherent scope separately. Publish only the refs covered by the later explicit authorization; do not install client skills, change credentials, or implement CLI proposals. A local commit is not proof of collaborator availability.
 
 ## Current State Overview
-Local setup and verification are complete. The workflow configuration is committed on `codex/project-agent-hands`; the Agent Hands checkpoint records that exact child pin with the related documentation. All shared procedure bodies remain unchanged. Publication, fresh remote recursive cloning, and client QA remain separate.
+The initial local setup is complete. The follow-up renamed the workflow branch to `project/agent-hands`, adopted the accepted shared procedure improvements, preserved project configuration, and published the new workflow ref. Agent Hands consumer publication and fresh recursive-clone verification remain before completion of the Git handoff; client QA remains separate.
 
 ## To Do
-No local setup work remains. Publication and closure decisions stay with the user; the external checks below remain outstanding.
+- [ ] Publish the reviewed Agent Hands consumer checkpoint and verify a fresh remote recursive clone retrieves its exact nested workflow pin.
 
 ## Ready for Human QA
-- After the required child commit is published by the human, verify a fresh recursive clone can retrieve the Agent Hands pin and that the intended agent client follows `AGENTS.md` into the adopted workflow files. Local routing checks do not establish that client behavior or remote availability.
+- Confirm the intended agent client follows `AGENTS.md` into the adopted workflow files. Local routing and Git clone checks do not establish client discovery or interaction behavior.
 
 ## Done
 - [x] Inspect actual repository state, remotes, current instructions, and the current Project Workflows setup procedure. Agent Hands began clean with the CLI feedback checkpoint; the containing configs checkout already showed that child advance. The public Project Workflows remote advertised `main` as its default branch and no existing Agent Hands project branch.
@@ -32,7 +32,9 @@ No local setup work remains. Publication and closure decisions stay with the use
 - [x] Verify configuration parsing, document destinations, all eight skills and supporting resources, ignore behavior, links/frontmatter, branch ancestry, preserved feedback, and full selected diffs. Passed TOML/root resolution, eight skill frontmatter/resource checks, 80 local links, live attention markers, `.workflow.env` ignore checks, ancestry, unchanged concept content, additive-only task routing, and full selected-diff/whitespace review. The existing configs workflow checkout and outer recorded pin were preserved.
 - [x] Commit the project-specific workflow configuration in the child repository, then commit the exact child pin and documentation integration in Agent Hands. The child checkpoint changes only `workflow.toml`; this Agent Hands checkpoint records the pin and directly related docs. Both are scoped local commits with spike trailers.
 
-## Verification and Publication
-The project branch descends directly from the verified public `main` baseline; its only initial divergence is the Agent Hands configuration. The complete shared collection, templates, license, and source notices are retained. No runtime tests or external service operations were needed. The containing configs index and recorded Agent Hands pin remain unchanged.
+- [x] Rename the workflow adaptation to `project/agent-hands` and reconcile the reusable upstream update. The original `codex/project-agent-hands` name in the initial Done entries is historical. The new branch includes accepted shared `main`, retains only project configuration divergence, and tracks the published matching remote ref. Metadata and current routing use the neutral name; no folder or remote branch was deleted.
 
-The public upstream baseline was reachable, but the new child branch and Agent Hands checkpoint remain unpublished. A fresh remote recursive clone of the final pins and the intended client's workflow routing remain unverified. Publish the required child commit first, then the Agent Hands commit, under the human publication boundary. Updating the outer configs pin is a separate later action.
+## Verification and Publication
+The initial setup checks above remain its dated record. For the reconciliation follow-up, shared `main` and `project/agent-hands` are remotely available, accepted-main ancestry is verified, and the only resulting difference from shared `main` is Agent Hands configuration. The CLI feedback concept remains unchanged; no runtime or provider operation was performed.
+
+The installed Python skill validator could not import PyYAML; direct YAML parsing and reference/TOML checks were used and the failure remains recorded in the coordinating workflow-reconciliation task. Consumer publication and fresh remote recursive retrieval are still pending. The outer configs pin will be updated locally; its unrelated existing unpublished commits are not part of this publication scope.
