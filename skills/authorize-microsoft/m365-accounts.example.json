@@ -19,7 +19,11 @@
         ],
         "writable_calendar_ids": [
           "primary"
-        ]
+        ],
+        "timezone": "UTC",
+        "days_back": 14,
+        "days_ahead": 30,
+        "description_character_limit": 8000
       },
       "contacts": {
         "enabled": false,
