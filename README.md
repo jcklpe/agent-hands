@@ -20,7 +20,7 @@ Google Docs now has a [use skill](skills/use-google-docs/SKILL.md), shared [Goog
 
 [Markdown-to-PDF rendering](skills/render-markdown-pdf/SKILL.md) is now an independent capability with explicit inputs, output, and plain/résumé/compact themes. It has its own locked uv environment, requires Pandoc and native Pango/fonts, and has no provider dependency. Local asset access is explicit; failed exports preserve prior output.
 
-This is a staged extraction. Private workflow composition remains in its previous owner. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
+The [optional MCP catalog](mcp-integrations.md) records vendor setup sources, capability overlap, control differences, and verification limits. It does not install servers or replace the CLI skills. Private workflow composition remains in its previous owner; client installation is a separate choice.
 
 ## Configuration and dependencies
 Real account routing and credentials stay ignored beside the authorization skill, with tailored examples. Never source `.env` as shell code. Odoo's entry parses literal `ODOO_*` values and preserves exported values; no unrelated provider or workspace is loaded. No Python or uv environment is needed for this Bash capability.

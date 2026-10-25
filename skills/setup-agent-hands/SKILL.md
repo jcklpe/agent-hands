@@ -9,6 +9,8 @@ Start with the collection's [available capability list](../../README.md). Match 
 ## Select and inspect
 Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
 
+If the user wants an MCP or client plugin, consult the [optional integration catalog](../../mcp-integrations.md) for its vendor source, scope, and verification limits. Select only the requested route; CLI setup does not require adding an MCP connection, and installing a plugin does not configure these CLI credentials.
+
 For Odoo, use [setup-odoo](../setup-odoo/SKILL.md). It requires Bash/jq/curl and ordinary Unix tools, not uv/Python. Local macOS checks are recorded; fresh Linux/WSL installation and native Windows support are not established.
 
 For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on Slack authorization and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
