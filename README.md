@@ -127,3 +127,6 @@ Offline checks do not prove live permissions, tenant eligibility, or fresh-machi
 
 ## License
 [AGPL-3.0-only](LICENSE). See [NOTICE.md](NOTICE.md) for retained source attribution and [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.
+
+## Existing lifeos callers
+The optional [compatibility command](compat/lifeos/README.md) is available at `bin/lifeos`. It preserves existing command spellings and configured GitHub aggregate exports using the same provider configuration and native service implementations. New callers should use the native capability entrypoints. No former configs directory, shared credential file, or shared Python runtime is required.
