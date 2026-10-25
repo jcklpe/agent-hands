@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -eu
+GOOGLE_SHEETS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$GOOGLE_SHEETS_DIR/../authorize-google/scripts/client.sh"
+source "$GOOGLE_SHEETS_DIR/scripts/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) printf '%s\n' 'sheets read ALIAS FILE_URL_OR_ID [--range A1_RANGE]' 'Reads values as Markdown; no spreadsheet writes. Default: first tab, A1:Z200 (configurable row limit).'; exit 0 ;;
+    read) shift ;;
+    *) _google_error 'Expected sheets read'; exit 1 ;;
+esac
+_google_load_env
+_google_sheets_read "$@"

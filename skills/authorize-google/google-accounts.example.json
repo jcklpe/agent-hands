@@ -20,6 +20,10 @@
       },
       "contacts": {
         "enabled": false
+      },
+      "sheets": {
+        "enabled": false,
+        "row_limit": 200
       }
     }
   ]

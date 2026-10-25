@@ -142,6 +142,9 @@ _google_account_scopes() {
           "https://www.googleapis.com/auth/contacts.readonly",
           "https://www.googleapis.com/auth/contacts.other.readonly"
         else empty end)
+        ,(if (($account.sheets.enabled // false) == true) then
+          "https://www.googleapis.com/auth/spreadsheets.readonly"
+        else empty end)
       ] | unique | .[]
     ' "$(_google_accounts_path)"
 }
