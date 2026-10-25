@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../../authorize-google/scripts/client.sh"
+source "$SCRIPT_DIR/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) cat <<'EOF'
+calendar list-calendars ALIAS
+calendar find ALIAS QUERY [--calendar ID] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--json]
+calendar export ALIAS --output FILE [--calendar ID] [--from YYYY-MM-DD --to YYYY-MM-DD] [--compact --start-at INSTANT --tz ZONE]
+calendar create-event ALIAS --title TEXT --start DATE_OR_DATETIME [options] [--execute]
+calendar update-event ALIAS --event ID [options] [--series] [--replace-attendees] [--execute]
+Event options: --calendar ID --end DATE_OR_DATETIME --tz IANA_ZONE --location TEXT --desc TEXT --desc-file FILE --attendee EMAIL (repeatable) --recurrence RULE (repeatable) --transparency transparent|opaque --popup-minutes 0..40320 --notify
+Writes preview by default, require configured writable IDs, and send no attendee updates unless --notify. Executed writes also require calendar.write_enabled. No delete command. Attendee names must be resolved separately.
+EOF
+    exit 0 ;;
+esac
+command="$1"; shift
+GOOGLE_CALENDAR_ALIAS="${1:?Expected ALIAS}"; shift
+_google_load_env
+case "$command" in
+    list-calendars) _calendar_list_calendars "$@" ;;
+    find) _calendar_find "$@" ;;
+    export) _calendar_export "$@" ;;
+    create-event) _calendar_create_event "$@" ;;
+    update-event) _calendar_update_event "$@" ;;
+    *) _google_error 'Unknown Calendar command'; exit 1 ;;
+esac

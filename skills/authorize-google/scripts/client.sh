@@ -142,6 +142,10 @@ _google_account_scopes() {
           "https://www.googleapis.com/auth/contacts.readonly",
           "https://www.googleapis.com/auth/contacts.other.readonly"
         else empty end)
+        ,(if (($account.calendar.enabled // false) == true) then
+          "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+          (if (($account.calendar.write_enabled // false) == true) then "https://www.googleapis.com/auth/calendar.events" else "https://www.googleapis.com/auth/calendar.events.readonly" end)
+        else empty end)
         ,(if (($account.sheets.enabled // false) == true) then
           "https://www.googleapis.com/auth/spreadsheets.readonly"
         else empty end)

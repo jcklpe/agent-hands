@@ -24,6 +24,20 @@
       "sheets": {
         "enabled": false,
         "row_limit": 200
+      },
+      "calendar": {
+        "enabled": false,
+        "write_enabled": false,
+        "read_ids": [
+          "primary"
+        ],
+        "writable_ids": [
+          "primary"
+        ],
+        "days_back": 14,
+        "days_ahead": 30,
+        "max_pages": 40,
+        "no_description": []
       }
     }
   ]
