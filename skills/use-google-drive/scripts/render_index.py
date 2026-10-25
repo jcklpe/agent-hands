@@ -112,7 +112,9 @@ def main():
 
     recent = d.get("recent", [])
     out += ["---", "", "## Recently Modified", ""]
-    if recent:
+    if d.get("recent_enabled", True) is False:
+        out.append("_Disabled by the caller; no account-wide recent-file query was performed._")
+    elif recent:
         out += ["A bounded sample of recently modified files across this account.", "",
                 "| Modified | Type | File |", "|---|---|---|"]
         for f in recent:

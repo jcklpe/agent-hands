@@ -11,7 +11,7 @@ drive list ALIAS FOLDER_ID [--json]
 drive meta ALIAS FILE_URL_OR_ID [--json]
 drive read ALIAS FILE_URL_OR_ID [--range A1_RANGE]
 drive download ALIAS FILE_URL_OR_ID [--out PATH] [--mime MIME] [--force]
-drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days N]
+drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days N]  # --recent 0 skips the recent-file query
 drive import-doc ALIAS SOURCE_FILE --title TITLE [--folder FOLDER_ID] [--execute]
 Import previews by default and requires account write opt-in. Exports/downloads write local files only.
 EOF

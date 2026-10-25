@@ -30,6 +30,8 @@ Downloads preserve binary bytes or export native types: Docs/Slides to PDF, Shee
 ## Bounded index export
 `export-index` requires an explicit output file. Defaults are 25 top-level folders, 12 children per folder, and 30 recent files from 45 days. It is a metadata sample, not a backup or recursive mirror; truncation is stated. Failed retrieval or rendering preserves the previous index. The chosen output can contain sensitive account/file names; the caller determines its private storage and whether sharing is authorized.
 
+`--recent 0` disables the account-wide recent-file request entirely and labels that section as disabled rather than empty. This can be combined with folder exclusions, but it does not turn the index into a recursive security filter or hide top-level folder names/shortcuts.
+
 `drive.index_exclude` contains exact top-level folder names whose child listing is skipped; the portable default is empty. **This is not a privacy filter:** it does not filter the account-wide recent-file sample, descendant matches in other queries, or ordinary search/read operations. Do not promise that excluded content is absent from an index or safe to publish. A caller requiring a stronger privacy boundary must select a suitably restricted account/source or avoid that export.
 
 ## Import and verification

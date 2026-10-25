@@ -393,9 +393,10 @@ _drive_export_index() (
         esac
     done
     [ -n "$out" ] || { _google_error 'export-index requires --output FILE'; return 1; }
-    for value in "$max_folders" "$max_recent" "$recent_days"; do
+    for value in "$max_folders" "$recent_days"; do
         printf '%s' "$value" | grep -Eq '^[1-9][0-9]{0,3}$' || { _google_error 'Export bounds must be positive integers below 10000'; return 1; }
     done
+    printf '%s' "$max_recent" | grep -Eq '^(0|[1-9][0-9]{0,3})$' || { _google_error 'Recent bound must be zero or a positive integer below 10000'; return 1; }
     [ "$max_folders" -le 1000 ] && [ "$max_recent" -le 1000 ] || { _google_error 'Drive page bounds cannot exceed 1000'; return 1; }
     local email excludes folders_json recent_json enriched='[]' skipped='[]' row fid fname kids kid_count since payload result
     _google_account_exists "$alias" || { _google_error 'Unknown Google account'; return 1; }
@@ -414,9 +415,12 @@ _drive_export_index() (
         kid_count="$(printf '%s' "$kids" | jq '.files | length')" || return 1
         enriched="$(printf '%s' "$enriched" | jq -c --argjson folder "$row" --argjson response "$kids" --argjson count "$kid_count" --argjson cap "$children" '. + [$folder + {children: ($response.files[0:$cap]), child_count: $count, child_truncated: ($count > $cap or ($response.nextPageToken != null))}]')" || return 1
     done < "$DRIVE_WORK/folders.jsonl"
-    since="$(_drive_days_ago "$recent_days")" || return 1
-    recent_json="$(_drive_index_list "$alias" "modifiedTime > '${since}' and trashed=false and mimeType != 'application/vnd.google-apps.folder'" 'modifiedTime desc' "$max_recent")" || return 1
-    payload="$(jq -n --arg alias "$alias" --arg email "$email" --argjson folders "$enriched" --argjson recent "$recent_json" --argjson skipped "$skipped" --argjson first "$folders_json" --argjson mf "$max_folders" --argjson cpf "$children" --argjson mr "$max_recent" --argjson rd "$recent_days" '{alias:$alias, email:$email, folders:$folders, recent:$recent.files, skipped:$skipped, folders_truncated:($first.nextPageToken != null), recent_truncated:($recent.nextPageToken != null), caps:{max_folders:$mf,children_per_folder:$cpf,max_recent:$mr,recent_days:$rd}}')" || return 1
+    recent_json='{"files":[]}'
+    if [ "$max_recent" -gt 0 ]; then
+        since="$(_drive_days_ago "$recent_days")" || return 1
+        recent_json="$(_drive_index_list "$alias" "modifiedTime > '${since}' and trashed=false and mimeType != 'application/vnd.google-apps.folder'" 'modifiedTime desc' "$max_recent")" || return 1
+    fi
+    payload="$(jq -n --arg alias "$alias" --arg email "$email" --argjson folders "$enriched" --argjson recent "$recent_json" --argjson skipped "$skipped" --argjson first "$folders_json" --argjson mf "$max_folders" --argjson cpf "$children" --argjson mr "$max_recent" --argjson rd "$recent_days" '{alias:$alias, email:$email, folders:$folders, recent:$recent.files, recent_enabled:($mr > 0), skipped:$skipped, folders_truncated:($first.nextPageToken != null), recent_truncated:($recent.nextPageToken != null), caps:{max_folders:$mf,children_per_folder:$cpf,max_recent:$mr,recent_days:$rd}}')" || return 1
     result="$DRIVE_WORK/index.md"
     printf '%s' "$payload" | _drive_render_index > "$result" || return 1
     mkdir -p "$(dirname "$out")" || return 1

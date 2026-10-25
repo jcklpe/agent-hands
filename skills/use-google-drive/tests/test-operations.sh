@@ -13,6 +13,7 @@ _google_get_url() {
     local url="$2" arg query=""
     shift 2
     for arg in "$@"; do case "$arg" in q=*) query="${arg#q=}" ;; esac; done
+    printf '%s\n' "$query" >> "$WORK/queries"
     if [ "${FAIL_LIST:-0}" = 1 ]; then printf '%s' '{"error":{"code":403}}'; return; fi
     case "$url" in
         */files/synthetic-file) jq -n --arg name "${REMOTE_NAME:-example.txt}" '{id:"synthetic-file",name:$name,mimeType:"text/plain"}' ;;
@@ -60,6 +61,13 @@ FAIL_CHILDREN=1 expect_failure _drive_export_index example --output "$WORK/index
 _drive_export_index example --output "$WORK/index.md" > /dev/null
 grep -F 'Example Child' "$WORK/index.md" >/dev/null
 grep -F 'Additional folders or recent files were omitted' "$WORK/index.md" >/dev/null
+# A disabled recent sample must skip the request itself, not hide an already fetched response.
+: > "$WORK/queries"
+_drive_export_index example --output "$WORK/index.md" --recent 0 > /dev/null
+! grep -F 'modifiedTime >' "$WORK/queries" >/dev/null
+grep -F 'no account-wide recent-file query was performed' "$WORK/index.md" >/dev/null
+grep -F 'Example Child' "$WORK/index.md" >/dev/null
+expect_failure _drive_export_index example --output "$WORK/index.md" --recent -1
 expect_failure _drive_export_index example
 printf '%s' 'Example body' > "$WORK/body.md"
 : > "$WORK/curl-calls"
