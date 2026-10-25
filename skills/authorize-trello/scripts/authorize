@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+TRELLO_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
+. "${TRELLO_AUTH_DIR}/scripts/client.sh"
+case "${1:-help}" in
+    help|--help|-h) printf 'Usage: authorize check [read|write]\nChecks local configuration and required commands; no network request.\n'; exit 0 ;;
+    check) _trello_load_env || exit 1; case "${2:-read}" in read) _trello_ready ;; write) _trello_write_ready ;; *) _trello_error 'Expected read or write'; exit 1 ;; esac || exit 1; printf 'Local configuration is present; remote access is not verified.\n' ;;
+    *) _trello_error 'Unknown command'; exit 1 ;;
+esac

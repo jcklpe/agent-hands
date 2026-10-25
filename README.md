@@ -10,7 +10,9 @@ Portable skills that let an agent act on external systems through bounded tools.
 
 Slack has separate [messaging](skills/use-slack-messages/SKILL.md) and [Lists](skills/use-slack-lists/SKILL.md) skills with a shared [authorization](skills/authorize-slack/SKILL.md) dependency and [setup guide](skills/setup-slack/SKILL.md). Each Python capability has its own manifest/lock and requires only Python 3.11+ (standard library). Either use skill can be distributed with authorization alone. Existing Lists export accepts an explicit output directory.
 
-This is a staged extraction. Other Google, Microsoft, Trello, GitHub, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
+Trello has [provider authorization](skills/authorize-trello/SKILL.md), [setup](skills/setup-trello/SKILL.md), and a bounded [use skill](skills/use-trello/SKILL.md). It preserves direct writes and neutral card linking; exports require an explicit output and keep the previous file when retrieval fails. No Python or uv is needed.
+
+This is a staged extraction. Other Google, Microsoft, GitHub, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
 
 ## Configuration and dependencies
 Real account routing and credentials stay ignored beside the authorization skill, with tailored examples. Never source `.env` as shell code. Odoo's entry parses literal `ODOO_*` values and preserves exported values; no unrelated provider or workspace is loaded. No Python or uv environment is needed for this Bash capability.

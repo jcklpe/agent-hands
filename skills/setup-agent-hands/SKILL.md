@@ -4,7 +4,7 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo and Slack are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, and Trello are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Select and inspect
 Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
@@ -12,6 +12,8 @@ Read the chosen use skill and its declared authorization dependency. Identify th
 For Odoo, use [setup-odoo](../setup-odoo/SKILL.md). It requires Bash/jq/curl and ordinary Unix tools, not uv/Python. Local macOS checks are recorded; fresh Linux/WSL installation and native Windows support are not established.
 
 For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on Slack authorization and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
+
+For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; write commands act immediately, so no live mutation is part of a routine setup check.
 
 ## Missing runtime approach
 When an implemented Python capability declares a pyproject.toml and lock, use that capability's environment only. Check for uv first. If absent, use an appropriate installation method from [uv's official installation guide](https://docs.astral.sh/uv/getting-started/installation/) within the user's setup authorization. Do not assume Python or a package manager is already present. uv can provision a compatible Python version; follow the capability's declared version rather than replacing system Python. See [Python provisioning](https://docs.astral.sh/uv/guides/install-python/). Never invent a manifest or claim a future capability is ready.
