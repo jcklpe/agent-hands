@@ -138,6 +138,10 @@ _google_account_scopes() {
         (if (($account.docs.comments_enabled // false) == true) then
           "https://www.googleapis.com/auth/drive.readonly"
         else empty end)
+        ,(if (($account.contacts.enabled // false) == true) then
+          "https://www.googleapis.com/auth/contacts.readonly",
+          "https://www.googleapis.com/auth/contacts.other.readonly"
+        else empty end)
       ] | unique | .[]
     ' "$(_google_accounts_path)"
 }

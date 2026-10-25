@@ -4,7 +4,7 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, Trello, GitHub, and Google Docs are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, Trello, GitHub, and Google Docs/Contacts are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Select and inspect
 Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
@@ -17,7 +17,7 @@ For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support i
 
 For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed domains and their authorization sibling. Bash/gh/jq handle requests; rendering uses the selected domain’s uv environment. No all-provider dependency is installed.
 
-For Google Docs, use [setup-google-services](../setup-google-services/SKILL.md). Select the Docs skill and Google authorization; other Google service migrations are still pending.
+For Google Docs or Contacts, use [setup-google-services](../setup-google-services/SKILL.md). Select the requested use skill and Google authorization; other Google service migrations are still pending.
 
 ## Missing runtime approach
 When an implemented Python capability declares a pyproject.toml and lock, use that capability's environment only. Check for uv first. If absent, use an appropriate installation method from [uv's official installation guide](https://docs.astral.sh/uv/getting-started/installation/) within the user's setup authorization. Do not assume Python or a package manager is already present. uv can provision a compatible Python version; follow the capability's declared version rather than replacing system Python. See [Python provisioning](https://docs.astral.sh/uv/guides/install-python/). Never invent a manifest or claim a future capability is ready.

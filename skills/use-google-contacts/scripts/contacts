@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eu
+GOOGLE_CONTACTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${GOOGLE_CONTACTS_DIR}/../authorize-google/scripts/client.sh"
+case "${1:---help}" in
+    -h|--help|help) printf '%s\n' 'contacts resolve ALIAS QUERY' 'Returns JSON name/email candidates; read-only. No local nickname map or attendee selection.'; exit 0 ;;
+esac
+[ "$#" -eq 3 ] && [ "$1" = resolve ] || { _google_error 'Expected: contacts resolve ALIAS QUERY'; exit 1; }
+alias="$2"; query="$3"
+[ -n "$(_google_trim "$query")" ] || { _google_error 'QUERY must not be empty'; exit 1; }
+_google_load_env
+token="$(_google_access_token "$alias")"
+GOOGLE_ACCESS_TOKEN="$token" _google_python "$GOOGLE_CONTACTS_DIR" "$GOOGLE_CONTACTS_DIR/scripts/contacts.py" resolve "$query"
