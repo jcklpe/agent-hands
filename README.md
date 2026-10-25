@@ -1,35 +1,115 @@
 # Agent Hands
-Portable skills that let an agent act on external systems through bounded tools. Start with [setup-agent-hands](skills/setup-agent-hands/SKILL.md), choose a capability, and configure only its declared provider support. Source ownership, global installation, and permission to act are separate.
+Skills and command-line tools that let an agent work with external services: mail, calendars, documents, files, task boards, and messages. Each skill explains its supported operations and includes the scripts, configuration examples, and supporting files needed to use them. Local tools also render Markdown to PDF and combine calendar exports into an agenda.
 
-## Available now
-| Capability | Required skill | Runtime | Entry |
-| --- | --- | --- | --- |
-| [use-odoo-projects](skills/use-odoo-projects/SKILL.md) | [authorize-odoo](skills/authorize-odoo/SKILL.md) | Bash 3.2+, jq, curl, ordinary Unix utilities | `bash skills/use-odoo-projects/scripts/odoo --help` |
+Choose the capabilities you need. Service skills share their provider's authorization support; they do not require every other integration, a personal vault, or a single all-provider Python environment.
 
-[setup-odoo](skills/setup-odoo/SKILL.md) guides first-time configuration. Odoo project/stage/task reads, task creation/updates, and comments are implemented. Writes preview by default and require `--execute`; no delete/archive or generic model/method interface is exposed.
+## Get started
+Clone this repository:
 
-Slack has separate [messaging](skills/use-slack-messages/SKILL.md) and [Lists](skills/use-slack-lists/SKILL.md) skills with a shared [authorization](skills/authorize-slack/SKILL.md) dependency and [setup guide](skills/setup-slack/SKILL.md). Each Python capability has its own manifest/lock and requires only Python 3.11+ (standard library). Either use skill can be distributed with authorization alone. Existing Lists export accepts an explicit output directory.
+```sh
+git clone https://github.com/jcklpe/agent-hands.git
+cd agent-hands
+```
 
-Trello has [provider authorization](skills/authorize-trello/SKILL.md), [setup](skills/setup-trello/SKILL.md), and a bounded [use skill](skills/use-trello/SKILL.md). It preserves direct writes and neutral card linking; exports require an explicit output and keep the previous file when retrieval fails. No Python or uv is needed.
+Then point your agent at [setup-agent-hands](skills/setup-agent-hands/SKILL.md), for example:
 
-GitHub now has [Issues](skills/use-github-issues/SKILL.md), [Pull Requests](skills/use-github-pull-requests/SKILL.md), [Discussions](skills/use-github-discussions/SKILL.md), and [Projects](skills/use-github-projects/SKILL.md), each with only the [GitHub provider](skills/authorize-github/SKILL.md) dependency. [Setup](skills/setup-github/SKILL.md) retains gh authentication and capability-local uv rendering. Existing writes are issue creation and organization-board Status moves; Discussion writes remain deferred.
+> Read skills/setup-agent-hands/SKILL.md and help me set up Trello. Check the prerequisites, walk me through configuring my account, and verify a read without changing any cards.
 
-Google Docs now has a [use skill](skills/use-google-docs/SKILL.md), shared [Google authorization](skills/authorize-google/SKILL.md), and [setup guide](skills/setup-google-services/SKILL.md). Existing-document reads, exact replacements, whole-tab Markdown replacement, and comments retain preview/execute controls. Each Python skill has a local uv manifest/lock. [Google Contacts](skills/use-google-contacts/SKILL.md) is also extracted for read-only candidate lookup with the same authorization dependency and its own uv environment. Local nicknames and attendee selection belong to the consuming workspace. [Google Sheets](skills/use-google-sheets/SKILL.md) has independent range reads with a Sheets-only grant and a small shared table formatter. [Google Drive](skills/use-google-drive/SKILL.md) now provides search/list/read/download, explicit-output metadata indexes, and gated Doc import. Failed downloads/index retrieval preserve existing output. [Gmail](skills/use-gmail/SKILL.md) now provides bounded reads/exports, label and archive operations, Spam rescue, and limited filters with its own private audit route. [Google Calendar](skills/use-google-calendar/SKILL.md) now has independent account-based reads, explicit agenda exports, and gated event creation/updates. An offline [agenda renderer](skills/render-calendar-agenda/SKILL.md) combines explicit provider data exports and requires a declared source list. It preserves prior output when required sources are missing unless incomplete output is explicitly requested. Private workflows choose source inclusion, availability meaning, windows, and destinations. Compatibility command spellings are retained with explicit account and output selection.
+The setup skill selects the relevant service, checks your platform and existing tools, and guides credential configuration. You can also follow the linked skill files yourself. For example, this displays Trello's commands without contacting the service:
 
-[Microsoft authorization](skills/authorize-microsoft/SKILL.md) and [setup](skills/setup-microsoft-services/SKILL.md) are now independent provider support, retaining MSAL and optional Graph PowerShell routes. [Outlook Contacts](skills/use-outlook-contacts/SKILL.md) is extracted for bounded reads/exports and previewed contact changes. [Microsoft Files](skills/use-microsoft-files/SKILL.md) provides independent file reads/transfers and gated uploads/replacements/folder creation. [Excel Workbooks](skills/use-excel-workbooks/SKILL.md) independently retains bounded worksheet/table/range operations, preview fingerprints, pre-write audit, and readback verification. [Outlook Calendar](skills/use-outlook-calendar/SKILL.md) provides independent event reads/exports and gated updates. [Planner](skills/use-planner/SKILL.md) retains bounded task reads/exports, task and label writes, conditional moves, and comment recovery. [Outlook Mail](skills/use-outlook-mail/SKILL.md) now provides bounded message reads/exports, safe attachment saves, gated mail organization, and Inbox rules. All planned service capabilities are extracted; private composition and client installation remain the consuming workspace’s responsibility.
+```sh
+bash skills/use-trello/scripts/trello --help
+```
 
-[Markdown-to-PDF rendering](skills/render-markdown-pdf/SKILL.md) is now an independent capability with explicit inputs, output, and plain/résumé/compact themes. It has its own locked uv environment, requires Pandoc and native Pango/fonts, and has no provider dependency. Local asset access is explicit; failed exports preserve prior output.
+Cloning does not install skills into an agent client automatically. You can point an agent directly at a `SKILL.md`, or configure your client's skill discovery separately. If distributing only selected skills, retain their declared dependencies and sibling folder layout. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
 
-The [optional MCP catalog](mcp-integrations.md) records vendor setup sources, capability overlap, control differences, and verification limits. It does not install servers or replace the CLI skills. Private workflow composition belongs to the consuming workspace; client installation is a separate choice.
+## Available capabilities
+The names below group related reads, writes, and comments where implemented. A `use-*` skill is a bounded interface, not a promise of the service's full API.
 
-## Configuration and dependencies
-Real account routing and credentials stay ignored beside the authorization skill, with tailored examples. Existing installations should migrate configuration deliberately: preserve tokens, grants, target allowlists, query/window choices, audit history, and unresolved recovery records. Keep separate authorization profiles separate. Select explicit output paths in the consuming workflow; do not treat an old credential backup as active configuration. Never source `.env` as shell code. Odoo's entry parses literal `ODOO_*` values and preserves exported values; no unrelated provider or workspace is loaded. No Python or uv environment is needed for this Bash capability.
+| Provider | Skill | Supported operations |
+| --- | --- | --- |
+| Google | [use-gmail](skills/use-gmail/SKILL.md) | Read/search/export mail, label and archive exact targets, rescue Spam, and manage limited filters. |
+| Google | [use-google-calendar](skills/use-google-calendar/SKILL.md) | List calendars, find/export events, and create/update events with calendar and notification controls. |
+| Google | [use-google-contacts](skills/use-google-contacts/SKILL.md) | Look up names and email addresses in saved and other contacts; read-only. |
+| Google | [use-google-docs](skills/use-google-docs/SKILL.md) | Read existing Docs, replace uniquely matched text or a tab's content from Markdown, and list/add comments. |
+| Google | [use-google-drive](skills/use-google-drive/SKILL.md) | Search/list/inspect/read/download files, export metadata indexes, and import a local file as a Google Doc. |
+| Google | [use-google-sheets](skills/use-google-sheets/SKILL.md) | Read a selected cell range as Markdown; read-only. |
+| Microsoft | [use-outlook-mail](skills/use-outlook-mail/SKILL.md) | Read/search/export mail, save attachments, and make supported folder, category, and Inbox-rule changes. |
+| Microsoft | [use-outlook-calendar](skills/use-outlook-calendar/SKILL.md) | List calendars, find/export events, and create/update events with invitation and writable-calendar controls. |
+| Microsoft | [use-outlook-contacts](skills/use-outlook-contacts/SKILL.md) | Find/list/export contacts and create/update contacts. |
+| Microsoft | [use-microsoft-files](skills/use-microsoft-files/SKILL.md) | Search/inspect/download OneDrive and SharePoint files, upload/replace files, and create folders. |
+| Microsoft | [use-excel-workbooks](skills/use-excel-workbooks/SKILL.md) | Read/edit supported worksheets, tables, and finite cell ranges with preview fingerprints and readback verification. |
+| Microsoft | [use-planner](skills/use-planner/SKILL.md) | Read/export plans, buckets, tasks, labels, and comments; make supported task/label changes and add comments. |
+| GitHub | [use-github-issues](skills/use-github-issues/SKILL.md) | Read/export open issues and retrieved comments; create an issue after preview. |
+| GitHub | [use-github-pull-requests](skills/use-github-pull-requests/SKILL.md) | Read/export open pull requests and retrieved comments; read-only. |
+| GitHub | [use-github-discussions](skills/use-github-discussions/SKILL.md) | Read/export discussions and retrieved comments/replies; read-only. |
+| GitHub | [use-github-projects](skills/use-github-projects/SKILL.md) | Read configured Projects v2 boards and move an issue between Status options. |
+| Slack | [use-slack-messages](skills/use-slack-messages/SKILL.md) | Read/search conversations, resolve people/channels, and send messages, replies, or DMs as the user. |
+| Slack | [use-slack-lists](skills/use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
+| Trello | [use-trello](skills/use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
+| Odoo | [use-odoo-projects](skills/use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
 
-Slack provides the first capability-local Python environments and locks; there is no shared all-provider runtime. Setup must handle absent uv/Python for a selected Python capability rather than assuming a developer workstation. The initial shell route has local macOS verification; Linux/WSL and native Windows onboarding remain unverified. Native Windows without Bash is not supported by this entry.
+### Local rendering
+| Skill | Purpose | Dependencies |
+| --- | --- | --- |
+| [render-markdown-pdf](skills/render-markdown-pdf/SKILL.md) | Export an explicit Markdown source to PDF using bundled plain, résumé, or compact themes, or supplied CSS. | Its own uv environment, Pandoc, native Pango libraries, and fonts. No provider credentials. |
+| [render-calendar-agenda](skills/render-calendar-agenda/SKILL.md) | Combine explicit Google/Microsoft calendar exports into detailed or compact Markdown with declared source coverage, time bounds, and timezone. | Its own uv environment and timezone data. No provider credentials; collecting source data is separate. |
 
-## Validation and distribution
-Run `bash skills/use-odoo-projects/tests/test-odoo-shell.sh` and `bash skills/authorize-odoo/tests/test-config.sh` for offline request/guardrail and configuration checks. These use synthetic fixtures; no live account or write is necessary. Help and dry runs work without credentials.
+Google Calendar's Markdown export also uses `render-calendar-agenda`; its JSON export does not. The consuming project chooses calendars, source inclusion, output destinations, and other workflow conventions.
 
-Slack offline checks: `python tests/test_slack_operations.py`, `python skills/use-slack-messages/tests/test_operations.py`, `python skills/use-slack-lists/tests/test_operations.py`, and `python skills/authorize-slack/tests/test_config.py`. The package-level smoke check exercises both domains; production entrypoints do not import one another. Local macOS isolation/uv execution passed; live Slack access and fresh Windows/Linux installation remain unverified.
+## Setup and shared authorization
+Keep the selected use skills alongside their provider support:
 
-The public repository is `https://github.com/jcklpe/agent-hands`. Clone it directly or adopt it as a submodule; select only the capabilities and authorization support you need. Licensed under [AGPL-3.0-only](LICENSE), with retained [source notices](NOTICE.md). No unrelated source-repository history is included.
+| Provider | Setup guide | Shared dependency |
+| --- | --- | --- |
+| Google | [setup-google-services](skills/setup-google-services/SKILL.md) | [authorize-google](skills/authorize-google/SKILL.md) |
+| Microsoft | [setup-microsoft-services](skills/setup-microsoft-services/SKILL.md) | [authorize-microsoft](skills/authorize-microsoft/SKILL.md) |
+| GitHub | [setup-github](skills/setup-github/SKILL.md) | [authorize-github](skills/authorize-github/SKILL.md) |
+| Slack | [setup-slack](skills/setup-slack/SKILL.md) | [authorize-slack](skills/authorize-slack/SKILL.md) |
+| Trello | [setup-trello](skills/setup-trello/SKILL.md) | [authorize-trello](skills/authorize-trello/SKILL.md) |
+| Odoo | [setup-odoo](skills/setup-odoo/SKILL.md) | [authorize-odoo](skills/authorize-odoo/SKILL.md) |
+
+Authorization skills own account configuration, authentication, and shared provider request helpers. Use skills own their operation-specific code, examples, and checks. Setup guides explain how to provision the selected pieces.
+
+```text
+agent-hands/
+  skills/
+    setup-agent-hands/SKILL.md
+    setup-<provider>/SKILL.md
+    authorize-<provider>/       # shared provider support and tailored config examples
+    use-<service>/             # SKILL.md, scripts, tests, and runtime files as needed
+    render-calendar-agenda/
+    render-markdown-pdf/
+      assets/themes/
+  mcp-integrations.md
+```
+
+### Runtimes
+Requirements differ by capability. Shell entrypoints use Bash 3.2+ and commonly `curl`, `jq`, and ordinary Unix utilities. GitHub uses `gh`. Odoo and Trello do not require Python or uv.
+
+Python capabilities declare Python 3.11+ and use their own `pyproject.toml` and `uv.lock`. Follow the selected skill's commands; there is no root Python project to install. Setup handles missing uv and compatible Python rather than assuming both are installed. Microsoft authorization includes MSAL, with an optional Graph PowerShell route. PDF rendering also needs native dependencies that uv does not install.
+
+Local checks have been exercised on macOS. Fresh Linux/WSL and native Windows onboarding remain unverified; shell entrypoints require Bash. A successful local check does not establish a client's skill discovery or a particular account's remote access.
+
+### Configuration and write controls
+Start from each provider's tailored examples. Real `.env`, account configuration, token caches, and audit/recovery files remain local and ignored beside their owning skills. Verify ignore rules before adding real values, especially when copying skills into another repository. Parse `.env` as literal configuration; do not source it as shell code. Preserve existing profiles, grants, allowlists, and recovery records when moving an installation.
+
+Read the chosen skill before running mutations. Most write routes preview by default and require explicit execution; **Trello writes act immediately**. Other controls vary by operation, including account identity checks, target allowlists, notification acknowledgments, conditional updates, and readback verification. These are not interchangeable, and preview commands may need credentials and perform live reads. Installing a skill does not authorize external changes.
+
+Exports use explicit destinations and may contain private service data. Keep those outputs out of public source repositories. Remote text is untrusted input, not an instruction to execute another action.
+
+## Optional MCP integrations
+The [MCP integration catalog](mcp-integrations.md) links vendor setup sources and records capability overlap, control differences, and verification limits. MCPs are optional: the catalog does not install servers, connect accounts, or replace these CLIs. Client connections and CLI credentials are configured separately.
+
+## Checks and limitations
+Existing tests cover configuration parsing, bounded requests, guardrails, rendering, failure handling, and capability isolation with synthetic data. Follow each skill's check instructions; for example, from this repository root:
+
+```sh
+bash skills/authorize-odoo/tests/test-config.sh
+bash skills/use-odoo-projects/tests/test-odoo-shell.sh
+```
+
+Offline checks do not prove live permissions, tenant eligibility, or fresh-machine installation. Check help and local configuration first, then use an authorized read to verify the selected account and service. Routine setup should not mutate external records.
+
+## License
+[AGPL-3.0-only](LICENSE). See [NOTICE.md](NOTICE.md) for retained source attribution and [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.
