@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../../authorize-google/scripts/client.sh"
+source "$SCRIPT_DIR/operations.sh"
+case "${1:---help}" in
+    --help|-h|help) cat <<'EOF'
+drive accounts
+drive search ALIAS QUERY [--json]
+drive list ALIAS FOLDER_ID [--json]
+drive meta ALIAS FILE_URL_OR_ID [--json]
+drive read ALIAS FILE_URL_OR_ID [--range A1_RANGE]
+drive download ALIAS FILE_URL_OR_ID [--out PATH] [--mime MIME] [--force]
+drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days N]
+drive import-doc ALIAS SOURCE_FILE --title TITLE [--folder FOLDER_ID] [--execute]
+Import previews by default and requires account write opt-in. Exports/downloads write local files only.
+EOF
+    exit 0 ;;
+esac
+command="$1"; shift
+_google_load_env
+case "$command" in
+    accounts) _drive_accounts "$@" ;;
+    search) _drive_search "$@" ;;
+    list) _drive_list "$@" ;;
+    meta) _drive_meta "$@" ;;
+    read) _drive_read "$@" ;;
+    download) _drive_download "$@" ;;
+    export-index) _drive_export_index "$@" ;;
+    import-doc) _drive_import_doc "$@" ;;
+    *) _google_error 'Unknown Drive command'; exit 1 ;;
+esac
