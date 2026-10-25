@@ -4,7 +4,7 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, Trello, GitHub, and Google Docs/Contacts/Sheets/Drive/Gmail/Calendar are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, and Microsoft Mail/Calendar/Contacts/Files/Excel/Planner are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Select and inspect
 Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
@@ -19,7 +19,7 @@ For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed
 
 For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-services](../setup-google-services/SKILL.md). Select the requested use skill and Google authorization; provider mixing and private workflow routing remain outside the capabilities.
 
-Microsoft provider setup is available through [setup-microsoft-services](../setup-microsoft-services/SKILL.md); follow the available-capability list while the use skills migrate. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
+For Outlook Mail/Calendar/Contacts, Microsoft Files, Excel Workbooks, or Planner, use [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and select only the requested capability plus Microsoft authorization. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
 
 ## Missing runtime approach
 When an implemented Python capability declares a pyproject.toml and lock, use that capability's environment only. Check for uv first. If absent, use an appropriate installation method from [uv's official installation guide](https://docs.astral.sh/uv/getting-started/installation/) within the user's setup authorization. Do not assume Python or a package manager is already present. uv can provision a compatible Python version; follow the capability's declared version rather than replacing system Python. See [Python provisioning](https://docs.astral.sh/uv/guides/install-python/). Never invent a manifest or claim a future capability is ready.

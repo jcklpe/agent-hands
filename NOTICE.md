@@ -1,5 +1,5 @@
 # Source notices
-The initial Odoo implementation and fixtures were adapted from jcklpe/configs. The original notice below is retained for that material; the collection is distributed under AGPL-3.0-only as described in LICENSE.
+The extracted service implementations and fixtures were adapted from jcklpe/configs. The original notice below is retained for that material; the collection is distributed under AGPL-3.0-only as described in LICENSE.
 
 ```text
 MIT License

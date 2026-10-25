@@ -10,7 +10,11 @@
       "mail": {
         "enabled": false,
         "write_enabled": false,
-        "rules_enabled": false
+        "rules_enabled": false,
+        "days": 30,
+        "max_results": 150,
+        "body_character_limit": 8000,
+        "max_moves_per_call": 50
       },
       "calendar": {
         "enabled": false,

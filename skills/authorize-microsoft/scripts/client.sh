@@ -37,7 +37,7 @@ _m365_load_env() {
         case "$line" in ''|\#*) continue ;; esac
         case "$line" in *=*) ;; *) _m365_error 'Invalid Microsoft env assignment'; return 1 ;; esac
         key="$(_m365_trim "${line%%=*}")"; value="$(_m365_trim "${line#*=}")"
-        case "$key" in M365_ACCOUNTS_PATH|M365_PYTHON|M365_PWSH_BIN|M365_FILES_AUDIT_LOG|M365_EXCEL_AUDIT_LOG|M365_PLANNER_AUDIT_LOG) ;; *) _m365_error 'Unsupported Microsoft configuration key'; return 1 ;; esac
+        case "$key" in M365_ACCOUNTS_PATH|M365_PYTHON|M365_PWSH_BIN|M365_FILES_AUDIT_LOG|M365_EXCEL_AUDIT_LOG|M365_PLANNER_AUDIT_LOG|M365_MAIL_AUDIT_LOG) ;; *) _m365_error 'Unsupported Microsoft configuration key'; return 1 ;; esac
         case "$value" in
             \"*) case "$value" in *\") value="${value#\"}"; value="${value%\"}" ;; *) _m365_error 'Unclosed configuration quote'; return 1 ;; esac ;;
             \'*) case "$value" in *\') value="${value#\'}"; value="${value%\'}" ;; *) _m365_error 'Unclosed configuration quote'; return 1 ;; esac ;;

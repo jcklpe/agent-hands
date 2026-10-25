@@ -13,7 +13,7 @@ function Invoke-MgGraphRequest {
     Set-Content -LiteralPath $env:TEST_REQUEST_MARKER -Value $Uri
     '{"id":"synthetic-user"}'
 }
-function Set-MgRequestContext { param($MaxRetry) }
+function Set-MgRequestContext { param($MaxRetry) Set-Content -LiteralPath $env:TEST_RETRY_MARKER -Value $MaxRetry }
 Export-ModuleMember -Function Connect-MgGraph,Get-MgContext,Invoke-MgGraphRequest,Set-MgRequestContext
 PS
 jq -n '{tenant:"organizations",scopes:["User.Read"],expected_account:"different@example.com",headers:{},method:"GET",uri:"https://graph.microsoft.com/v1.0/me",body:""}' > "$WORK/request.json"
@@ -29,6 +29,7 @@ if ((Get-Command Connect-MgGraph).Module.Path -ne $fixture) { throw 'Synthetic G
 exit $LASTEXITCODE
 PS
 export TEST_REQUEST_MARKER="$WORK/request-sent"
+export TEST_RETRY_MARKER="$WORK/retry"
 run_fixture() { pwsh -NoLogo -NoProfile -File "$WORK/run.ps1" -ScriptPath "$AUTH/scripts/graph.ps1" -RequestPath "$1"; }
 if run_fixture "$WORK/request.json" > "$WORK/out" 2> "$WORK/error"; then printf 'Unexpected identity acceptance\n' >&2; exit 1; fi
 grep -F 'does not match' "$WORK/error" >/dev/null || { cat "$WORK/error" >&2; exit 1; }
@@ -41,4 +42,7 @@ rm "$TEST_REQUEST_MARKER"
 jq '.uri="https://attacker.invalid/me"' "$WORK/matched.json" > "$WORK/invalid.json"
 if run_fixture "$WORK/invalid.json" > "$WORK/out" 2> "$WORK/error"; then printf 'Unexpected endpoint acceptance\n' >&2; exit 1; fi
 [ ! -e "$TEST_REQUEST_MARKER" ]
+jq '.method="POST" | .uri="https://graph.microsoft.com/v1.0/$batch" | .body="{}"' "$WORK/matched.json" > "$WORK/mutation.json"
+run_fixture "$WORK/mutation.json" > "$WORK/out"
+[ "$(tr -d '\r\n' < "$TEST_RETRY_MARKER")" = 0 ]
 printf '%s\n' 'PowerShell identity and endpoint checks passed with a synthetic module; no account access'

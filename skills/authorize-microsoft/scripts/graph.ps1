@@ -79,6 +79,11 @@ try {
         $invoke.ContentType = "application/json; charset=utf-8"
     }
 
+    # Mutation and batch POSTs can repeat side effects after an ambiguous response; leave recovery to the capability caller.
+    if ([string]$request.method -ne 'GET') {
+        Set-MgRequestContext -MaxRetry 0 | Out-Null
+    }
+
     if ($request.PSObject.Properties.Name -contains "output_file" -and [string]$request.output_file) {
         # File downloads are not JSON; Invoke-MgGraphRequest refuses them unless it writes the bytes to a file.
         $invoke.Remove("OutputType")
@@ -88,10 +93,6 @@ try {
         exit 0
     }
 
-    # Workbook POSTs can append twice after an ambiguous timeout; leave retry decisions to verified readback and a new preview.
-    if ([string]$request.uri -match '/workbook/' -and [string]$request.method -ne 'GET') {
-        Set-MgRequestContext -MaxRetry 0 | Out-Null
-    }
     $response = Invoke-MgGraphRequest @invoke
     if ($null -eq $response -or [string]$response -eq "") {
         "{}"

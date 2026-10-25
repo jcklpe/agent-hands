@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPTS/../../authorize-microsoft/scripts/client.sh"
+source "$SCRIPTS/operations.sh"
+case "${1:---help}" in
+    help|--help|-h) cat <<'HELP'
+outlook-mail export ALIAS --output PATH
+outlook-mail folders ALIAS [--json]
+outlook-mail list ALIAS [--folder NAME|PATH|ID] [--search KQL] [--limit 1..200] [--json]
+outlook-mail read ALIAS --message ID [--full] [--json]
+outlook-mail attachments ALIAS --message ID [--save EXISTING_DIR] [--force]
+outlook-mail move ALIAS --folder NAME|PATH|ID --message ID [--ids-file FILE] [--execute]
+outlook-mail archive|unarchive|not-junk ALIAS --message ID [--ids-file FILE] [--execute]
+outlook-mail junk ALIAS [--limit N] [--json]
+outlook-mail categorize|uncategorize ALIAS --category NAME --message ID [--ids-file FILE] [--execute]
+outlook-mail create-folder ALIAS --name NAME [--parent NAME|PATH|ID] [--execute]
+outlook-mail rules ALIAS [--json]
+outlook-mail create-rule ALIAS --name NAME [--from ADDRESS] [--sender-contains TEXT] [--subject-contains TEXT] [--recipient-contains TEXT] [--category NAME] [--folder NAME|PATH|ID] [--delete] [--stop] [--execute]
+outlook-mail delete-rule ALIAS --rule ID [--execute]
+Writes preview by default and need account opt-in. --delete rules require full sender and recipient addresses and move future matching mail to Deleted Items. No send, forward, direct message deletion, or permanent deletion command exists.
+HELP
+        exit 0 ;;
+esac
+_m365_load_env
+_m365_mail_dispatch "$@"
