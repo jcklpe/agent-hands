@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -eu
+GOOGLE_DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${GOOGLE_DOCS_DIR}/../authorize-google/scripts/client.sh"
+case "${1:---help}" in
+    -h|--help|help) printf '%s\n' 'docs read|replace-once|set-body|comments|comment ALIAS DOC_URL_OR_ID [options]' 'Writes preview by default; --execute applies them. Use docs COMMAND --help for options.'; exit 0 ;;
+esac
+subcommand="$1"; shift
+case "$subcommand" in read|replace-once|set-body|comments|comment) ;; *) _google_error 'Unknown Docs command'; exit 1 ;; esac
+if [ "${1:-}" = '--help' ]; then _google_python "$GOOGLE_DOCS_DIR" "$GOOGLE_DOCS_DIR/scripts/docs.py" "$subcommand" --help; exit; fi
+[ "$#" -ge 2 ] || { _google_error 'Expected ALIAS and DOC_URL_OR_ID'; exit 1; }
+alias="$1"; document="$2"; shift 2
+case "$document" in
+    https://docs.google.com/document/d/*) document="${document#https://docs.google.com/document/d/}"; document="${document%%/*}"; document="${document%%\?*}" ;;
+    https://drive.google.com/open\?id=*) document="${document#*id=}"; document="${document%%&*}" ;;
+esac
+printf '%s' "$document" | grep -Eq '^[A-Za-z0-9_-]+$' || { _google_error 'Expected a Google Doc URL or document ID'; exit 1; }
+_google_load_env
+token="$(_google_access_token "$alias")"
+GOOGLE_ACCESS_TOKEN="$token" GOOGLE_DOCS_ALIAS="$alias" _google_python "$GOOGLE_DOCS_DIR" "$GOOGLE_DOCS_DIR/scripts/docs.py" "$subcommand" --document-id "$document" "$@"

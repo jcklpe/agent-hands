@@ -1,0 +1,23 @@
+{
+  "accounts": [
+    {
+      "alias": "example",
+      "email": "person@example.com",
+      "credentials_path": "google-credentials.json",
+      "token_path": "google-example-token.json",
+      "docs": {
+        "enabled": true,
+        "comments_enabled": false
+      },
+      "gmail": {
+        "enabled": false,
+        "write_enabled": false,
+        "filters_enabled": false
+      },
+      "drive": {
+        "enabled": false,
+        "write_enabled": false
+      }
+    }
+  ]
+}

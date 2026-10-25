@@ -1,0 +1,4 @@
+*.json
+!*.example.json
+.google-token-*
+*.tmp
