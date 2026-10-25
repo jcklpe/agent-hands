@@ -1,0 +1,3 @@
+slack-accounts.json
+slack-accounts.*.json
+!slack-accounts.example.json

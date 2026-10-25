@@ -8,14 +8,18 @@ Portable skills that let an agent act on external systems through bounded tools.
 
 [setup-odoo](skills/setup-odoo/SKILL.md) guides first-time configuration. Odoo project/stage/task reads, task creation/updates, and comments are implemented. Writes preview by default and require `--execute`; no delete/archive or generic model/method interface is exposed.
 
-This is a staged extraction. Other Google, Microsoft, Trello, Slack, GitHub, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
+Slack has separate [messaging](skills/use-slack-messages/SKILL.md) and [Lists](skills/use-slack-lists/SKILL.md) skills with a shared [authorization](skills/authorize-slack/SKILL.md) dependency and [setup guide](skills/setup-slack/SKILL.md). Each Python capability has its own manifest/lock and requires only Python 3.11+ (standard library). Either use skill can be distributed with authorization alone. Existing Lists export accepts an explicit output directory.
+
+This is a staged extraction. Other Google, Microsoft, Trello, GitHub, and rendering capabilities remain in their previous owner until individually migrated and checked. No portable MCP catalog has been audited yet. Do not interpret planned names as installed capabilities.
 
 ## Configuration and dependencies
 Real account routing and credentials stay ignored beside the authorization skill, with tailored examples. Never source `.env` as shell code. Odoo's entry parses literal `ODOO_*` values and preserves exported values; no unrelated provider or workspace is loaded. No Python or uv environment is needed for this Bash capability.
 
-Python-based capabilities will declare their own environments and locks when extracted; there is no shared all-provider runtime. Setup must handle absent uv/Python for a selected Python capability rather than assuming a developer workstation. The initial shell route has local macOS verification; Linux/WSL and native Windows onboarding remain unverified. Native Windows without Bash is not supported by this entry.
+Slack provides the first capability-local Python environments and locks; there is no shared all-provider runtime. Setup must handle absent uv/Python for a selected Python capability rather than assuming a developer workstation. The initial shell route has local macOS verification; Linux/WSL and native Windows onboarding remain unverified. Native Windows without Bash is not supported by this entry.
 
 ## Validation and distribution
 Run `bash skills/use-odoo-projects/tests/test-odoo-shell.sh` and `bash skills/authorize-odoo/tests/test-config.sh` for offline request/guardrail and configuration checks. These use synthetic fixtures; no live account or write is necessary. Help and dry runs work without credentials.
+
+Slack offline checks: `python tests/test_slack_operations.py`, `python skills/use-slack-messages/tests/test_operations.py`, `python skills/use-slack-lists/tests/test_operations.py`, and `python skills/authorize-slack/tests/test_config.py`. The package-level smoke check exercises both domains; production entrypoints do not import one another. Local macOS isolation/uv execution passed; live Slack access and fresh Windows/Linux installation remain unverified.
 
 The intended public origin is `https://github.com/jcklpe/agent-hands`. Local preparation does not publish it; remote creation and collaborator cloning remain pending. Licensed under [AGPL-3.0-only](LICENSE), with retained [source notices](NOTICE.md). No unrelated source-repository history is included.

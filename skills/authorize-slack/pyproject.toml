@@ -1,0 +1,9 @@
+[project]
+name = "agent-hands-authorize-slack"
+version = "0.1.0"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+dependencies = []
+
+[tool.uv]
+package = false
