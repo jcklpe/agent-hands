@@ -4,7 +4,7 @@
 set -eu
 
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/microsoft-files-test.XXXXXX")"
@@ -15,8 +15,8 @@ export M365_FILES_AUDIT_LOG
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 expect_fail() { if "$@" > "${WORK}/out.txt" 2> "${WORK}/err.txt"; then fail "expected failure: $*"; fi; }
 
-jq '(.accounts[] | select(.alias == "example") | .files) = {enabled: true, write_enabled: false}' "$SKILL/../authorize-microsoft/m365-powershell-accounts.example.json" > "${WORK}/read.json"
-jq '(.accounts[] | select(.alias == "example") | .files) = {enabled: true, write_enabled: true}' "$SKILL/../authorize-microsoft/m365-powershell-accounts.example.json" > "${WORK}/write.json"
+jq '(.accounts[] | select(.alias == "example") | .files) = {enabled: true, write_enabled: false}' "$SKILL/../setup-microsoft-services/m365-powershell-accounts.example.json" > "${WORK}/read.json"
+jq '(.accounts[] | select(.alias == "example") | .files) = {enabled: true, write_enabled: true}' "$SKILL/../setup-microsoft-services/m365-powershell-accounts.example.json" > "${WORK}/write.json"
 M365_ACCOUNTS_PATH="${WORK}/read.json"
 export M365_ACCOUNTS_PATH
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 GOOGLE_SHEETS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$GOOGLE_SHEETS_DIR/../authorize-google/scripts/client.sh"
+source "$GOOGLE_SHEETS_DIR/../setup-google-services/scripts/client.sh"
 source "$GOOGLE_SHEETS_DIR/scripts/operations.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

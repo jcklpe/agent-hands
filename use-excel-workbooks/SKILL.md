@@ -4,7 +4,7 @@ description: "Read or edit supported worksheets, tables, and finite cell ranges 
 ---
 
 # Use Excel Workbooks
-Depends only on [authorize-microsoft](../authorize-microsoft/SKILL.md), including shared file-item addressing and the file-write opt-in. [Setup](../setup-microsoft-services/SKILL.md) covers authorization. No Microsoft Files, mail, or private workspace skill must be installed. This skill owns a Python 3.11+ uv environment with no external Python dependencies; Bash 3.2 and jq plus the provider's chosen runtime are required. File access alone does not establish Excel API access.
+Depends only on [setup-microsoft-services](../setup-microsoft-services/SKILL.md), including shared file-item addressing and the file-write opt-in. [Setup](../setup-microsoft-services/SKILL.md) covers authorization. No Microsoft Files, mail, or private workspace skill must be installed. This skill owns a Python 3.11+ uv environment with no external Python dependencies; Bash 3.2 and jq plus the provider's chosen runtime are required. File access alone does not establish Excel API access.
 
 ## Supported reads
 Run from this skill folder or use an absolute script path:

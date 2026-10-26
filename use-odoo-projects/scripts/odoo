@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ODOO_USE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ODOO_AUTH_DIR="$(cd "${ODOO_USE_DIR}/../authorize-odoo" && pwd)" || exit 1
+ODOO_AUTH_DIR="$(cd "${ODOO_USE_DIR}/../setup-odoo" && pwd)" || exit 1
 . "${ODOO_AUTH_DIR}/scripts/client.sh"
 . "${ODOO_USE_DIR}/scripts/operations.sh"
 case "${1:-help}" in
@@ -17,7 +17,7 @@ Odoo projects and tasks: bounded reads and explicit writes.
   odoo tasks create ALIAS --project PROJECT_ID --name NAME [--description TEXT | --description-file FILE] [--stage STAGE_ID] [--assignee USER_ID]... [--deadline YYYY-MM-DD] [--execute] [--json]
   odoo tasks update ALIAS TASK_ID [--name NAME] [--description TEXT | --description-file FILE] [--stage STAGE_ID] [--assignee USER_ID]... [--clear-assignees] [--deadline YYYY-MM-DD | --clear-deadline] [--execute] [--json]
   odoo tasks comment ALIAS TASK_ID [--body TEXT | --body-file FILE] [--execute] [--json]
-Configuration belongs to authorize-odoo; no workspace/vault configuration is needed.
+Configuration belongs to setup-odoo; no workspace/vault configuration is needed.
 USAGE
         exit 0 ;;
 esac

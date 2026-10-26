@@ -6,7 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "authorize-github" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "setup-github" / "scripts"))
 from render_common import days_since, preview, header, names, label_names
 
 def render_discussions(data, args):

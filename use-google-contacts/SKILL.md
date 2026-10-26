@@ -4,7 +4,7 @@ description: "Look up candidate names and email addresses in a selected Google a
 ---
 
 # Use Google Contacts
-This read-only capability depends only on the sibling [authorize-google](../authorize-google/SKILL.md) skill. It requires Bash 3.2+, curl, jq, and uv or Python 3.11+; Python uses the standard library. [Setup](../setup-google-services/SKILL.md) is companion onboarding. No Calendar, Gmail, Microsoft, private workspace, or local nickname file is required.
+This read-only capability depends only on the sibling [setup-google-services](../setup-google-services/SKILL.md) skill. It requires Bash 3.2+, curl, jq, and uv or Python 3.11+; Python uses the standard library. [Setup](../setup-google-services/SKILL.md) is companion onboarding. No Calendar, Gmail, Microsoft, private workspace, or local nickname file is required.
 
 ## Lookup
 Run from this skill folder or use an absolute entrypoint path:

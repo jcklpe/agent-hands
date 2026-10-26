@@ -2,7 +2,7 @@
 # Offline synthetic requests; no remote or credential store.
 set -eu
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-. "$SKILL_DIR/../authorize-github/tests/operations-fixture.sh"
+. "$SKILL_DIR/../setup-github/tests/operations-fixture.sh"
 . "$SKILL_DIR/scripts/operations.sh"
 GITHUB_USE_DIR="$SKILL_DIR"
 rm "$work/github-repos.json"

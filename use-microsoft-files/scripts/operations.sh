@@ -2,7 +2,7 @@
 if [ -n "${ZSH_VERSION:-}" ]; then _microsoft_source="${(%):-%x}"; else _microsoft_source="${BASH_SOURCE[0]}"; fi
 MICROSOFT_FILES_DIR="$(cd "$(dirname "$_microsoft_source")/.." && pwd)"
 unset _microsoft_source
-source "$MICROSOFT_FILES_DIR/../authorize-microsoft/scripts/drive-items.sh"
+source "$MICROSOFT_FILES_DIR/../setup-microsoft-services/scripts/drive-items.sh"
 
 _m365_files_print_item() {
     jq -r '"name: " + (.name // "?"),

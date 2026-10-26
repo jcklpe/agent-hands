@@ -2,7 +2,7 @@
 if [ -n "${ZSH_VERSION:-}" ]; then _mail_source="${(%):-%x}"; else _mail_source="${BASH_SOURCE[0]}"; fi
 OUTLOOK_MAIL_DIR="$(cd "$(dirname "$_mail_source")/.." && pwd)"
 unset _mail_source
-source "$OUTLOOK_MAIL_DIR/../authorize-microsoft/scripts/batch.sh"
+source "$OUTLOOK_MAIL_DIR/../setup-microsoft-services/scripts/batch.sh"
 _m365_mail_python() { _m365_python "$OUTLOOK_MAIL_DIR" "$@"; }
 _m365_mail_render_helper() { _m365_mail_python "$OUTLOOK_MAIL_DIR/scripts/render.py" "$@"; }
 _m365_mail_warn() { printf 'WARN: %s\n' "$*" >&2; }

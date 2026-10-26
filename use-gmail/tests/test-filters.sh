@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-google/scripts/client.sh"
+source "$SKILL/../setup-google-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

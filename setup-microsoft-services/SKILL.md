@@ -1,10 +1,10 @@
 ---
 name: setup-microsoft-services
-description: "Prepare selected Microsoft service capabilities and their delegated account authorization. Use for first-time setup, missing runtimes, or scoped account-readiness diagnosis without installing unrelated providers."
+description: "Install selected Microsoft capabilities, establish or repair account access, choose existing profiles, and diagnose configuration or authentication. Owns the shared provider runtime used by the selected use skills."
 ---
 
 # Setup Microsoft Services
-Start with [authorize-microsoft](../authorize-microsoft/SKILL.md) and the collection's [available capabilities](../README.md). Provider support, [Outlook Contacts](../use-outlook-contacts/SKILL.md), [Microsoft Files](../use-microsoft-files/SKILL.md), [Excel Workbooks](../use-excel-workbooks/SKILL.md), [Outlook Calendar](../use-outlook-calendar/SKILL.md), [Planner](../use-planner/SKILL.md), and [Outlook Mail](../use-outlook-mail/SKILL.md) are extracted. Do not describe a planned capability as available or move a working legacy account merely because the provider package exists.
+Start with [account access and provider support](references/account-access.md) and the collection's [available capabilities](../README.md). Provider support, [Outlook Contacts](../use-outlook-contacts/SKILL.md), [Microsoft Files](../use-microsoft-files/SKILL.md), [Excel Workbooks](../use-excel-workbooks/SKILL.md), [Outlook Calendar](../use-outlook-calendar/SKILL.md), [Planner](../use-planner/SKILL.md), and [Outlook Mail](../use-outlook-mail/SKILL.md) are extracted. Do not describe a planned capability as available or move a working legacy account merely because the provider package exists.
 
 ## Choose a route
 Inspect the actual platform, installed Bash/curl/jq, and existing account configuration. Follow [setup-agent-hands](../setup-agent-hands/SKILL.md) for missing uv/Python. The MSAL route has a provider-local manifest/lock; `uv sync --locked` installs it without unrelated providers. An explicitly supplied `M365_PYTHON` must already include MSAL. Local macOS execution is checked; fresh Linux/WSL and native Windows onboarding remain unverified, and native Windows without Bash is unsupported by these entrypoints.
@@ -17,3 +17,6 @@ For Graph PowerShell, install PowerShell and Microsoft.Graph.Authentication only
 Check the owning repository's ignores before copying real configuration. Enable only needed services, inspect `authorize scopes ALIAS`, and explain the actual scope breadth rather than promising read-only grants for every read. `authorize check` and help are offline. Run `authorize auth ALIAS` only for requested authorization, then a requested `profile` read to confirm identity. User consent, tenant approval, local readiness, and live service access are separate results.
 
 No example contains working credentials. Never print caches or raw tokens in diagnostics. Do not enable additional services, move tokens, install global client links, or issue a live write as a setup test.
+
+## Account access and shared runtime
+Read [account access and provider support](references/account-access.md) for configuration, account selection, initial authorization, reconnection and diagnosis. This setup skill owns the provider scripts, examples and tests that the selected use skills load. Automatic refresh, where supported, stays in that runtime; normal operations do not require rerunning setup or granting broader access. Keep credential establishment separate from permission for each service action, and preserve existing user approval within its stated scope.

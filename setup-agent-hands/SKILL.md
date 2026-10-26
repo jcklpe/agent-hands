@@ -7,7 +7,7 @@ description: "Help a new user install selected external-service capabilities fro
 Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Select and inspect
-Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
+Read the chosen use skill and its provider's setup skill, including the linked account-access reference when configuration or authentication is involved. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
 
 For MCP setup, use the actual service guide: [setup-penpot](../setup-penpot/SKILL.md), [setup-pencil](../setup-pencil/SKILL.md), or [setup-jasp](../setup-jasp/SKILL.md). Pencil and JASP describe observed configurations with explicit fresh-machine and live-verification gaps; they do not establish working design or analysis access. For client plugins, use the selected client’s own supported setup rather than assuming a similarly named standalone vendor server. Installing a plugin does not configure these CLI credentials.
 
@@ -15,15 +15,15 @@ For Odoo, use [setup-odoo](../setup-odoo/SKILL.md). It requires Bash/jq/curl and
 
 For Penpot, use [setup-penpot](../setup-penpot/SKILL.md). Its configuration is one server URL that embeds the user's MCP key. The [use-penpot](../use-penpot/SKILL.md) connector needs Bash and its own uv environment with the pinned MCP Python SDK, and design work needs a Penpot tab the user connects. Client registration is a separate, per-client choice.
 
-For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on Slack authorization and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
+For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on setup-slack provider support and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
 
-For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; write commands act immediately, so no live mutation is part of a routine setup check.
+For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; mutation previews also require `shasum`. Writes require `--execute`, and no live mutation is part of a routine setup check.
 
-For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed domains and their authorization sibling. Bash/gh/jq handle requests; rendering uses the selected domain’s uv environment. No all-provider dependency is installed.
+For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed domains and setup-github provider support. Bash/gh/jq handle requests; rendering uses the selected domain’s uv environment. No all-provider dependency is installed.
 
-For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-services](../setup-google-services/SKILL.md). Select the requested use skill and Google authorization; provider mixing and private workflow routing remain outside the capabilities.
+For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-services](../setup-google-services/SKILL.md). Select the requested use skill and setup-google-services provider support; provider mixing and private workflow routing remain outside the capabilities.
 
-For Outlook Mail/Calendar/Contacts, Microsoft Files, Excel Workbooks, or Planner, use [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and select only the requested capability plus Microsoft authorization. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
+For Outlook Mail/Calendar/Contacts, Microsoft Files, Excel Workbooks, or Planner, use [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and select only the requested capability plus setup-microsoft-services provider support. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
 
 For local Markdown export, use [render-markdown-pdf](../render-markdown-pdf/SKILL.md). It has no authorization dependency; select only its own uv environment, Pandoc, native Pango, and fonts. The bundled plain theme is a general baseline, not an academic-style commitment.
 
@@ -35,4 +35,4 @@ Inspect installer sources and side effects before running them, preserve existin
 ## Configure and verify
 Use tailored provider examples and verify the owning repository's ignores before any real config is written. Keep credentials local and preserve existing profiles. Run help and relevant offline checks, then one authorized read when appropriate. Live writes need their own actual target and scope. Report local readiness separately from remote account access and client discovery. Do not add global skill links or MCP connections unless that installation is requested or already authorized.
 
-For combined calendars, install [render-calendar-agenda](../render-calendar-agenda/SKILL.md) plus only the chosen provider skills and their authorization dependencies. The renderer uses Python 3.11+ with timezone data and has no authorization dependency. Google Calendar Markdown export also needs this renderer; provider JSON exports do not.
+For combined calendars, install [render-calendar-agenda](../render-calendar-agenda/SKILL.md) plus only the chosen provider skills and their setup/runtime dependencies. The renderer uses Python 3.11+ with timezone data and has no authorization dependency. Google Calendar Markdown export also needs this renderer; provider JSON exports do not.

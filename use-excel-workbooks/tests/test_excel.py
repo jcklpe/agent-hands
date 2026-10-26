@@ -130,7 +130,7 @@ class ExcelTests(unittest.TestCase):
 
     def cli(self, *args, fail="", enabled=True, shell="bash"):
         script = r'''
-            . "$EXCEL_SKILL/../authorize-microsoft/scripts/client.sh"
+            . "$EXCEL_SKILL/../setup-microsoft-services/scripts/client.sh"
             . "$EXCEL_SKILL/scripts/operations.sh"
             _err() { printf 'ERROR: %s\n' "$*" >&2; }
             _warn() { printf 'WARNING: %s\n' "$*" >&2; }

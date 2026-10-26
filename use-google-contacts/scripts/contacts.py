@@ -33,7 +33,7 @@ def api_get(url, token, params):
             raise RuntimeError(
                 "People API returned 403. Enable the People API for this Google "
                 "project (https://console.cloud.google.com/apis/library/people.googleapis.com) "
-                "and review contacts scopes in authorize-google before reauthorizing.\n"
+                "and review contacts scopes in setup-google-services before reauthorizing.\n"
                 f"{detail}"
             )
         raise RuntimeError(f"People API error {exc.code}: {detail}")

@@ -482,7 +482,7 @@ _drive_import_doc() (
     [ -f "$source_file" ] || { _google_error "Source file does not exist: $source_file"; return 1; }
     [ -n "$title" ] || { _google_error "drive import-doc requires --title TITLE"; return 1; }
     _drive_write_enabled "$alias" || {
-        _google_error "Drive import is not enabled for '$alias'. Set drive.write_enabled=true in google-accounts.json and re-run 'authorize-google/scripts/authorize auth $alias'."
+        _google_error "Drive import is not enabled for '$alias'. Set drive.write_enabled=true in google-accounts.json and re-run 'setup-google-services/scripts/authorize auth $alias'."
         return 1
     }
 
@@ -575,7 +575,7 @@ _drive_rename() (
     [ -n "$(_google_trim "$name")" ] || { _google_error 'New name cannot be blank'; return 1; }
     [ "$name" = "$(_google_trim "$name")" ] || { _google_error 'New name cannot start or end with whitespace'; return 1; }
     if [ "$execute" -eq 1 ]; then
-        _drive_rename_enabled "$alias" || { _google_error "Drive rename is not enabled for '$alias'. Set drive.rename_enabled=true in google-accounts.json; see the authorize-google scope notes."; return 1; }
+        _drive_rename_enabled "$alias" || { _google_error "Drive rename is not enabled for '$alias'. Set drive.rename_enabled=true in google-accounts.json; see the setup-google-services scope notes."; return 1; }
         printf '%s' "$expect" | LC_ALL=C grep -Eq '^[a-f0-9]{64}$' || { _google_error 'Execute requires --expect PREVIEW_SHA256 from a preview of this exact rename'; return 1; }
     elif [ -n "$expect" ]; then
         _google_error '--expect is only used with --execute'; return 1

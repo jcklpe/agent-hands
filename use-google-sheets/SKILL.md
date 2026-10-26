@@ -4,7 +4,7 @@ description: "Read a selected Google Sheets range as Markdown through the bounde
 ---
 
 # Use Google Sheets
-Requires only the sibling [authorize-google](../authorize-google/SKILL.md) skill, Bash 3.2+, curl, jq, and uv or Python 3.11+. Its standard-library Python manifest/lock is local to this skill. The provider owns a small response formatter shared with legacy Drive reads; Sheets request/range selection lives here. [Setup](../setup-google-services/SKILL.md) is optional onboarding guidance.
+Requires only the sibling [setup-google-services](../setup-google-services/SKILL.md) skill, Bash 3.2+, curl, jq, and uv or Python 3.11+. Its standard-library Python manifest/lock is local to this skill. The provider owns a small response formatter shared with legacy Drive reads; Sheets request/range selection lives here. [Setup](../setup-google-services/SKILL.md) is optional onboarding guidance.
 
 ## Read values
 Run from this skill folder or use the absolute entrypoint path:

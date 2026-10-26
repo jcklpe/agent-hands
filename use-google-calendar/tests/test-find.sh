@@ -4,7 +4,7 @@ set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-source "$SKILL/../authorize-google/scripts/client.sh"
+source "$SKILL/../setup-google-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 OUT="$WORK/find.md"
 EVENTS="$WORK/events.json"

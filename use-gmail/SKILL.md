@@ -4,7 +4,7 @@ description: "Read bounded Gmail messages and labels, export selected mail, arch
 ---
 
 # Use Gmail
-Use only [authorize-google](../authorize-google/SKILL.md) for account configuration, OAuth, and runtime support. Follow [setup-google-services](../setup-google-services/SKILL.md) for onboarding. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+; Python uses the standard library and this skill's own manifest/lock. No Microsoft service, other use skill, or personal workspace is required.
+Use only [setup-google-services](../setup-google-services/SKILL.md) for account configuration, OAuth, and runtime support. Follow [setup-google-services](../setup-google-services/SKILL.md) for onboarding. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+; Python uses the standard library and this skill's own manifest/lock. No Microsoft service, other use skill, or personal workspace is required.
 
 ## Read and export
 Run from this skill folder or use an absolute script path:

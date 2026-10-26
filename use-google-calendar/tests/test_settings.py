@@ -66,7 +66,7 @@ class BuilderTest(unittest.TestCase):
 
 SHELL = r'''
 set -e
-source "$TEST_TOOL/../authorize-google/scripts/client.sh"
+source "$TEST_TOOL/../setup-google-services/scripts/client.sh"
 source "$TEST_TOOL/scripts/operations.sh"
 GOOGLE_PYTHON="$TEST_PY"
 _calendar_writable_ids() { printf primary; }

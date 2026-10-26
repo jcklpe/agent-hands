@@ -323,7 +323,7 @@ def command_replace_once(args):
             message = str(exc)
             if "HTTP 403" in message or "PERMISSION_DENIED" in message or "insufficient" in message.lower():
                 alias = os.environ.get("GOOGLE_DOCS_ALIAS", "").strip()
-                hint = f"run: authorize-google/scripts/authorize auth {alias} --docs-write" if alias else "authorize the Docs write scope: authorize-google/scripts/authorize auth ALIAS --docs-write"
+                hint = f"run: setup-google-services/scripts/authorize auth {alias} --docs-write" if alias else "authorize the Docs write scope: setup-google-services/scripts/authorize auth ALIAS --docs-write"
                 raise RuntimeError(f"{message}\nHINT: editing needs the Google Docs write scope — {hint}") from exc
             raise
         print(f"Updated document at revision {result.get('writeControl', {}).get('requiredRevisionId', revision_id)}; replaced 1 match with {len(blocks)} formatted block(s)")
@@ -348,9 +348,9 @@ def command_replace_once(args):
         if "HTTP 403" in message or "PERMISSION_DENIED" in message or "insufficient" in message.lower():
             alias = os.environ.get("GOOGLE_DOCS_ALIAS", "").strip()
             hint = (
-                f"run: authorize-google/scripts/authorize auth {alias} --docs-write"
+                f"run: setup-google-services/scripts/authorize auth {alias} --docs-write"
                 if alias
-                else "authorize the Docs write scope: authorize-google/scripts/authorize auth ALIAS --docs-write"
+                else "authorize the Docs write scope: setup-google-services/scripts/authorize auth ALIAS --docs-write"
             )
             raise RuntimeError(f"{message}\nHINT: editing needs the Google Docs write scope — {hint}") from exc
         raise
@@ -603,8 +603,8 @@ def command_set_body(args):
         message = str(exc)
         if "HTTP 403" in message or "PERMISSION_DENIED" in message or "insufficient" in message.lower():
             alias = os.environ.get("GOOGLE_DOCS_ALIAS", "").strip()
-            hint = (f"run: authorize-google/scripts/authorize auth {alias} --docs-write" if alias
-                    else "authorize the Docs write scope: authorize-google/scripts/authorize auth ALIAS --docs-write")
+            hint = (f"run: setup-google-services/scripts/authorize auth {alias} --docs-write" if alias
+                    else "authorize the Docs write scope: setup-google-services/scripts/authorize auth ALIAS --docs-write")
             raise RuntimeError(f"{message}\nHINT: editing needs the Google Docs write scope — {hint}") from exc
         raise
     print(f"Set body of document {document_id} in place ({len(blocks)} blocks).")
@@ -619,7 +619,7 @@ COMMENT_FIELDS = "id,content,quotedFileContent,author(displayName),createdTime,r
 
 def comment_scope_hint(message):
     alias = os.environ.get("GOOGLE_DOCS_ALIAS", "").strip() or "ALIAS"
-    return f"{message}\nHINT: commenting needs the full Drive scope — run: authorize-google/scripts/authorize auth {alias} --docs-comment"
+    return f"{message}\nHINT: commenting needs the full Drive scope — run: setup-google-services/scripts/authorize auth {alias} --docs-comment"
 
 
 def build_comment_payload(document, tab_ids, quote, body):

@@ -4,7 +4,7 @@ description: "Search, inspect, download, upload, replace, or create folders in O
 ---
 
 # Use Microsoft Files
-Requires [authorize-microsoft](../authorize-microsoft/SKILL.md) and `files.enabled` for the account. [Setup](../setup-microsoft-services/SKILL.md) explains delegated authorization. This capability has its own small Python 3.11+ uv environment for output publication and auditing; Bash 3.2, jq, and the selected provider runtime are required. No mail, calendar, workbook, or private workspace dependency is needed.
+Requires [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and `files.enabled` for the account. [Setup](../setup-microsoft-services/SKILL.md) explains delegated authorization. This capability has its own small Python 3.11+ uv environment for output publication and auditing; Bash 3.2, jq, and the selected provider runtime are required. No mail, calendar, workbook, or private workspace dependency is needed.
 
 ## Read and resolve
 ```sh

@@ -2,7 +2,7 @@
 ##- Offline regression checks for snapshot replacement, pipeline errors, and partially completed links.
 set -eu
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TRELLO_AUTH_DIR="$(cd "$HERE/../../authorize-trello" && pwd)"
+TRELLO_AUTH_DIR="$(cd "$HERE/../../setup-trello" && pwd)"
 . "$TRELLO_AUTH_DIR/scripts/client.sh"
 . "$HERE/../scripts/operations.sh"
 . "$HERE/../scripts/export.sh"

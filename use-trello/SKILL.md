@@ -3,7 +3,7 @@ name: use-trello
 description: "Read Trello boards/lists/labels, create or edit cards and checklists, comment, adjust labels, link related cards, traverse links, or export selected boards to Markdown."
 ---
 # Use Trello
-Requires sibling [authorize-trello](../authorize-trello/SKILL.md), Bash 3.2+, curl, jq, and standard Unix tools. No other capability or personal workspace is required. Use [setup-trello](../setup-trello/SKILL.md) for installation. From the collection root:
+Requires sibling [setup-trello](../setup-trello/SKILL.md), Bash 3.2+, curl, jq, `shasum` for mutation fingerprints, and standard Unix tools. No other capability or personal workspace is required. Use [setup-trello](../setup-trello/SKILL.md) for installation. From the collection root:
 ```sh
 bash use-trello/scripts/trello --help
 ```
@@ -14,8 +14,15 @@ Replace `--help` with the command below. Card references accept IDs or card URLs
 
 `export --output FILE` exports explicitly configured boards with open lists/cards, descriptions, labels, checklists, comment history, start/due dates, and last activity. Consumers decide the destination and freshness policy. Last activity includes comments/edits and is not an exact move date. Board comments page in batches of 1000 with a 30-page cap. Failure, malformed responses, stalled pagination, or cap exhaustion leave the previous local export intact and return an error. Local atomic file replacement does not make the remote reads a consistent transaction; the board can change during collection.
 
-## Writes are immediate
-Unlike some other Agent Hands tools, these commands have **no dry-run mode and no `--execute` flag**. A prior user request must authorize the exact target and change. Present final text/fields before execution when approval is missing; existing explicit approval within scope remains sufficient. Do not call a write merely to inspect what it would do. The tool uses a separate write token but does not enforce identity matching or a board allowlist.
+## Preview, then execute
+All 15 mutation commands preview by default and send zero mutation requests. The preview reads current targets, resolves names/IDs, shows the requested fields and ordered request steps, and returns `preview_hash`. Compound checklist additions and both `supersede` forms are planned in full before any write; identifiers for resources not yet created refer to their creation step.
+
+Repeat the same command with `--execute` to write. Add `--expect HASH` from the preview to refuse changed inputs or target state; this is recommended when approving a particular preview. Without `--expect`, execution still builds and revalidates a fresh plan, but it is not bound to an earlier preview. `--json` emits JSON without explanatory progress text. For example:
+```sh
+bash use-trello/scripts/trello rename-card --card CARD --name 'New title' --json
+bash use-trello/scripts/trello rename-card --card CARD --name 'New title' --execute --expect PREVIEW_HASH
+```
+A user request must authorize the exact target and change. Present the concrete preview when approval is missing; existing explicit approval within scope remains sufficient. A credential or `--execute` flag is not user authorization. Preview requires read access but no write token. Execution uses the separate write token; the provider does not enforce token identity matching or a board allowlist.
 
 | Command | Required inputs / effect |
 | --- | --- |
@@ -41,7 +48,7 @@ Scheduling supplies a native start field and explicit destination list. It does 
 
 This is a sequence of remote writes, **not a transaction**. Back-link succeeds before forward-link; a failure can leave a partial link. Inspect both cards, then retry with the known `--from` and `--to` values. Never repeat `--create` after a successor exists. Even a failed network request may have landed. The helper does not move/complete the predecessor or decide when a workflow should split.
 
-Ordinary writes report API responses; they do not all perform independent readback. Verify the changed state through an authorized live read/export before claiming the intended outcome. A failed multi-item checklist operation can leave earlier items in place. There is no rollback or automatic retry.
+The executor re-reads all planning dependencies before its first write and independently reads back each step before marking it verified. Trello provides no atomic conditional transaction: a concurrent change after preflight can still race a write. A request failure, malformed response, or failed readback stops the sequence and reports prior verified steps plus the uncertain step; even the uncertain step may have landed. Inspect actual state before planning a repair. Earlier checklist items, successor cards or links remain in place. There is no rollback or automatic retry. After successful work, refresh any consumer-owned snapshot separately.
 
 ## Offline checks
-Run `bash use-trello/tests/test-trello-renderers.sh`, `test-trello-checklists.sh`, and `test-failures.sh` (the latter two under the same tests directory). They check synthetic rendering, request shape, ambiguous-target refusal, snapshot preservation, and partial linking. Live access and writes are separate, unverified by this migration.
+Run `bash use-trello/tests/test-trello-renderers.sh`, `test-trello-checklists.sh`, and `test-failures.sh` (the latter two under the same tests directory). They check synthetic rendering, request shape, ambiguous-target refusal, snapshot preservation, and partial linking. `python3 use-trello/tests/test_mutations.py` runs the real CLI against a synthetic HTTP fixture: every mutation’s zero-write preview and execution/readback, compound order, stale state, invalid inputs and partial failures. Tests require a compatible Python interpreter, but the Trello CLI does not. Offline checks do not establish live access, real account permissions or concurrency-free remote execution.

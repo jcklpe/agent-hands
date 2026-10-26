@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -o pipefail
 TRELLO_USE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
-TRELLO_AUTH_DIR="$(cd "${TRELLO_USE_DIR}/../authorize-trello" && pwd)" || exit 1
+TRELLO_AUTH_DIR="$(cd "${TRELLO_USE_DIR}/../setup-trello" && pwd)" || exit 1
 . "${TRELLO_AUTH_DIR}/scripts/client.sh"
 . "${TRELLO_USE_DIR}/scripts/operations.sh"
 . "${TRELLO_USE_DIR}/scripts/export.sh"
+. "${TRELLO_USE_DIR}/scripts/mutations.sh"
 command_name="${1:-help}"
 [ "$#" -eq 0 ] || shift
 case "$command_name" in
     help|--help|-h)
         cat <<'USAGE'
-Trello: bounded reads, direct authorized writes, and explicit Markdown exports.
+Trello: bounded reads, previewed writes, and explicit Markdown exports.
   trello list-boards
   trello list-lists [BOARD_ID]
   trello list-labels [BOARD_ID]
@@ -32,8 +33,11 @@ Trello: bounded reads, direct authorized writes, and explicit Markdown exports.
   trello supersede --from CARD --to CARD
   trello supersede --create --from CARD --list NAME_OR_ID --name NAME [--board ID] [--desc TEXT | --desc-file FILE]
   trello chain --card CARD [--json]
-Writes execute immediately: there is no --execute switch or dry-run mode.
-No card deletion/archive or generic API command. Configuration: authorize-trello/.env.
+All 15 mutation commands preview by default. Add --execute to write.
+Use --expect PREVIEW_HASH to bind execution to a reviewed preview; --json emits JSON.
+Targets are revalidated before writes and each step is read back. Partial failures stop without retry.
+Trello has no atomic multi-step transaction; review failures before retrying.
+No card deletion/archive or generic API command. Setup and account access: setup-trello/SKILL.md.
 USAGE
         exit 0 ;;
 esac
@@ -43,7 +47,9 @@ case "$command_name" in
     list-lists) _trello_list_lists "$@" ;;
     list-labels) _trello_list_labels "$@" ;;
     export) _trello_export "$@" ;;
-    add-card|move-card|schedule-card|rename-card|set-desc|comment|add-checklist|add-checklist-item|check-item|uncheck-item|create-label|add-label|remove-label|delete-label|supersede|chain)
+    add-card|move-card|schedule-card|rename-card|set-desc|comment|add-checklist|add-checklist-item|check-item|uncheck-item|create-label|add-label|remove-label|delete-label|supersede)
+        _trello_mutation "$command_name" "$@" ;;
+    chain)
         # Check option arity before entering the existing parsers, avoiding a failed shift loop.
         options=("$@")
         while [ "$#" -gt 0 ]; do

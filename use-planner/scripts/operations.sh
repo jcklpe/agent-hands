@@ -2,7 +2,7 @@
 if [ -n "${ZSH_VERSION:-}" ]; then _planner_source="${(%):-%x}"; else _planner_source="${BASH_SOURCE[0]}"; fi
 PLANNER_DIR="$(cd "$(dirname "$_planner_source")/.." && pwd)"
 unset _planner_source
-source "$PLANNER_DIR/../authorize-microsoft/scripts/batch.sh"
+source "$PLANNER_DIR/../setup-microsoft-services/scripts/batch.sh"
 _m365_planner_python() { _m365_python "$PLANNER_DIR" "$@"; }
 _m365_planner_render_helper() { _m365_planner_python "$PLANNER_DIR/scripts/render.py" "$@"; }
 _m365_planner_warn() { printf 'WARN: %s\n' "$*" >&2; }

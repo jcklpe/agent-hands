@@ -4,7 +4,7 @@ set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-source "$SKILL/../authorize-trello/scripts/client.sh"
+source "$SKILL/../setup-trello/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 source "$SKILL/scripts/export.sh"
 expect_failure() { if "$@" > "$WORK/out" 2> "$WORK/err"; then echo "unexpected success"; exit 1; fi; }

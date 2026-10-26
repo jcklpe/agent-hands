@@ -1,9 +1,9 @@
 ---
 name: setup-github
-description: "Install selected GitHub Issues, Pull Requests, Discussions, or Projects capabilities and configure gh authentication or repository aliases as needed."
+description: "Install selected GitHub capabilities, establish or repair account access, choose existing profiles, and diagnose configuration or authentication. Owns the shared provider runtime used by the selected use skills."
 ---
 # Setup GitHub
-Select one or more use skills and keep [authorize-github](../authorize-github/SKILL.md) as their sibling. Each capability runs with only this provider dependency; unrelated services and the other GitHub domains are optional. Bash 3.2+, gh, jq, and Python 3.11+ rendering are required. macOS offline execution is verified; fresh Linux/WSL onboarding is not yet verified, and native Windows needs a Bash-compatible environment.
+Select one or more use skills and keep this setup folder as their sibling. Its [account-access reference](references/account-access.md) describes shared provider support. Each capability runs with only this provider dependency; unrelated services and the other GitHub domains are optional. Bash 3.2+, gh, jq, and Python 3.11+ rendering are required. macOS offline execution is verified; fresh Linux/WSL onboarding is not yet verified, and native Windows needs a Bash-compatible environment.
 
 1. Inspect existing tools and account settings. Install missing gh/jq through the appropriate package manager within setup authorization. For missing uv, follow [official installation](https://docs.astral.sh/uv/getting-started/installation/); uv can provision compatible Python. Preserve existing toolchains.
 2. Run the selected `scripts/github --help` with Bash. Each use skill has its own uv manifest/lock with no third-party Python packages. `GITHUB_PYTHON` may select a compatible existing interpreter instead.
@@ -12,3 +12,6 @@ Select one or more use skills and keep [authorize-github](../authorize-github/SK
 5. Run the provider's local `check`, then authorized account/read verification. Do not create an issue or move a project item as a setup test. Report runtime readiness, live access, and client skill discovery separately.
 
 Do not push, create repositories, or change a project's automation as part of onboarding. Existing private snapshot/index destinations remain consumer choices.
+
+## Account access and shared runtime
+Read [account access and provider support](references/account-access.md) for configuration, account selection, initial authorization, reconnection and diagnosis. This setup skill owns the provider scripts, examples and tests that the selected use skills load. Automatic refresh, where supported, stays in that runtime; normal operations do not require rerunning setup or granting broader access. Keep credential establishment separate from permission for each service action, and preserve existing user approval within its stated scope.

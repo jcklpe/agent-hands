@@ -6,7 +6,7 @@ import runpy
 import sys
 
 FILE_TYPE = "#microsoft.graph.fileAttachment"
-publish = runpy.run_path(str(Path(__file__).resolve().parents[2] / "authorize-microsoft/scripts/publish.py"))["publish"]
+publish = runpy.run_path(str(Path(__file__).resolve().parents[2] / "setup-microsoft-services/scripts/publish.py"))["publish"]
 
 
 def destination(directory, name, force):

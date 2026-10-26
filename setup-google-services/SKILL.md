@@ -1,10 +1,10 @@
 ---
 name: setup-google-services
-description: "Help a user install and configure selected Google service skills, obtain desktop OAuth credentials, and verify local readiness without changing unrelated Google integrations."
+description: "Install selected Google capabilities, establish or repair account access, choose existing profiles, and diagnose configuration or authentication. Owns the shared provider runtime used by the selected use skills."
 ---
 
 # Setup Google Services
-Currently [Google Docs](../use-google-docs/SKILL.md), [Google Contacts](../use-google-contacts/SKILL.md), [Google Sheets](../use-google-sheets/SKILL.md), [Google Drive](../use-google-drive/SKILL.md), [Gmail](../use-gmail/SKILL.md), and [Google Calendar](../use-google-calendar/SKILL.md) are extracted. Each depends only on [authorize-google](../authorize-google/SKILL.md). Do not advertise planned capabilities as available.
+Currently [Google Docs](../use-google-docs/SKILL.md), [Google Contacts](../use-google-contacts/SKILL.md), [Google Sheets](../use-google-sheets/SKILL.md), [Google Drive](../use-google-drive/SKILL.md), [Gmail](../use-gmail/SKILL.md), and [Google Calendar](../use-google-calendar/SKILL.md) are extracted. Each depends only on this setup skill’s [provider runtime](references/account-access.md). Do not advertise planned capabilities as available.
 
 ## Prepare the selected capability
 Check the actual platform and existing tools. The entrypoints require Bash 3.2+, curl, jq, and uv or Python 3.11+. Follow [setup-agent-hands](../setup-agent-hands/SKILL.md) for missing uv/Python rather than assuming a developer environment. From each selected Python skill folder, `uv sync --locked` prepares its own environment. There is no all-provider dependency installation. macOS offline execution is checked; fresh Linux/WSL and native Windows onboarding remain unverified. Native Windows without Bash is unsupported by this entry.
@@ -17,3 +17,6 @@ Check the actual platform and existing tools. The entrypoints require Bash 3.2+,
 5. Run the selected capability’s help, then one authorized read of a known document, sheet range, contact query, bounded mail query, or event lookup. Verify the account/target and report what was actually tested. A successful local check does not establish live access or authorize a write.
 
 If access fails, distinguish a missing API, insufficient scope, wrong account, or document permission. Do not broaden permissions automatically. Reuse working configuration rather than replacing tokens or forcing a new consent flow.
+
+## Account access and shared runtime
+Read [account access and provider support](references/account-access.md) for configuration, account selection, initial authorization, reconnection and diagnosis. This setup skill owns the provider scripts, examples and tests that the selected use skills load. Automatic refresh, where supported, stays in that runtime; normal operations do not require rerunning setup or granting broader access. Keep credential establishment separate from permission for each service action, and preserve existing user approval within its stated scope.

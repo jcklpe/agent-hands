@@ -4,7 +4,7 @@ description: "Search, list, inspect, read, download, or export a bounded Google 
 ---
 
 # Use Google Drive
-Requires only the sibling [authorize-google](../authorize-google/SKILL.md) skill, Bash 3.2+, curl, jq, ordinary Unix utilities, and uv or Python 3.11+. The Python manifest/lock is local to this skill. A small Sheets table formatter is shared through provider support; neither the Docs nor Sheets use skill is a runtime dependency. [Setup](../setup-google-services/SKILL.md) guides onboarding. Personal destinations, account choices, and exclusion policies belong to the caller's ignored configuration and workflow.
+Requires only the sibling [setup-google-services](../setup-google-services/SKILL.md) skill, Bash 3.2+, curl, jq, ordinary Unix utilities, and uv or Python 3.11+. The Python manifest/lock is local to this skill. A small Sheets table formatter is shared through provider support; neither the Docs nor Sheets use skill is a runtime dependency. [Setup](../setup-google-services/SKILL.md) guides onboarding. Personal destinations, account choices, and exclusion policies belong to the caller's ignored configuration and workflow.
 
 ## Commands
 Run from this skill folder or use an absolute entrypoint path:

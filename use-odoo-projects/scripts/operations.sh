@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bounded Odoo project/task operations; requires authorize-odoo/scripts/client.sh.
+# Bounded Odoo project/task operations; requires setup-odoo/scripts/client.sh.
 
 _odoo_relation_label_filter='def relation_label: if . == null or . == false then "" elif type == "array" then ((.[1] // .[0] // "") | tostring) elif type == "object" then ((.display_name // .name // .id // "") | tostring) else tostring end;'
 

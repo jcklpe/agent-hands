@@ -4,7 +4,7 @@ description: "Read Microsoft Planner plans, buckets, tasks, labels, and comments
 ---
 
 # Use Planner
-Requires only [authorize-microsoft](../authorize-microsoft/SKILL.md), Bash 3.2+, jq, and this skill's Python 3.11+ environment. Follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for onboarding. Run `uv sync --locked` here, or supply a compatible `M365_PYTHON`. No mail, files, personal workspace, or other task platform is required.
+Requires only [setup-microsoft-services](../setup-microsoft-services/SKILL.md), Bash 3.2+, jq, and this skill's Python 3.11+ environment. Follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for onboarding. Run `uv sync --locked` here, or supply a compatible `M365_PYTHON`. No mail, files, personal workspace, or other task platform is required.
 
 ## Entry and configuration
 Run `bash scripts/planner --help` from this folder for the exact arguments. Commands are `plans`, `buckets`, `tasks`, `task`, `export`, `labels`, `label`, `unlabel`, `create-task`, `update-task`, `move-task`, `comments`, and `comment`. Reads need `planner.enabled`. Configure plan IDs in the provider's ignored account JSON; writes are restricted to those plans and require both `planner.write_enabled` and `--execute`. A preview may read current remote state; it is not an offline simulation.

@@ -2,7 +2,7 @@
 if [ -n "${ZSH_VERSION:-}" ]; then _excel_source="${(%):-%x}"; else _excel_source="${BASH_SOURCE[0]}"; fi
 EXCEL_WORKBOOKS_DIR="$(cd "$(dirname "$_excel_source")/.." && pwd)"
 unset _excel_source
-source "$EXCEL_WORKBOOKS_DIR/../authorize-microsoft/scripts/drive-items.sh"
+source "$EXCEL_WORKBOOKS_DIR/../setup-microsoft-services/scripts/drive-items.sh"
 _m365_excel_python() { _m365_python "$EXCEL_WORKBOOKS_DIR" "$@"; }
 _m365_excel_warn() { printf 'WARN: %s\n' "$*" >&2; }
 _m365_excel_audit_path() { case "${M365_EXCEL_AUDIT_LOG:-workbook-writes.jsonl}" in /*) printf '%s\n' "$M365_EXCEL_AUDIT_LOG" ;; *) printf '%s/%s\n' "$EXCEL_WORKBOOKS_DIR" "${M365_EXCEL_AUDIT_LOG:-workbook-writes.jsonl}" ;; esac; }

@@ -3,7 +3,7 @@ name: use-slack-messages
 description: "Read Slack conversations, search messages, resolve people/channels, or send an explicitly requested message, reply, or DM as the user."
 ---
 # Use Slack Messages
-Requires sibling [authorize-slack](../authorize-slack/SKILL.md) and Python 3.11+. See [setup-slack](../setup-slack/SKILL.md) for installation. No Lists or other-provider dependency. The entry is `scripts/slack_messages.py`; from the collection root:
+Requires sibling [setup-slack](../setup-slack/SKILL.md) and Python 3.11+. See [setup-slack](../setup-slack/SKILL.md) for installation. No Lists or other-provider dependency. The entry is `scripts/slack_messages.py`; from the collection root:
 ```sh
 uv run --project use-slack-messages python use-slack-messages/scripts/slack_messages.py --help
 ```
@@ -31,4 +31,4 @@ Ordinary sends inspect the returned author when supplied, report the returned ch
 
 For List item operations/comments use [use-slack-lists](../use-slack-lists/SKILL.md); it is an optional adjacent capability, not a runtime dependency. Run `python use-slack-messages/tests/test_operations.py` from the collection root for offline conversation checks.
 
-Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../authorize-slack/tests/test_request_helpers.py`.
+Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../setup-slack/tests/test_request_helpers.py`.

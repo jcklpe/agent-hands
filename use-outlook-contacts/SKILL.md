@@ -4,7 +4,7 @@ description: "Find, list, export, create, or update Outlook contacts through Mic
 ---
 
 # Use Outlook Contacts
-The only skill dependency is [authorize-microsoft](../authorize-microsoft/SKILL.md); [setup-microsoft-services](../setup-microsoft-services/SKILL.md) covers onboarding. Enable `contacts.enabled` for the selected account. The preserved scope is Contacts.ReadWrite, including for reads; command authorization is separate from that grant. This skill owns its small Python 3.11+ uv environment for payloads and rendering. Bash 3.2 and jq are required, plus the chosen provider runtime. No Gmail, Google Contacts, calendar, private alias map, or workspace is needed.
+The only skill dependency is [setup-microsoft-services](../setup-microsoft-services/SKILL.md); [setup-microsoft-services](../setup-microsoft-services/SKILL.md) covers onboarding. Enable `contacts.enabled` for the selected account. The preserved scope is Contacts.ReadWrite, including for reads; command authorization is separate from that grant. This skill owns its small Python 3.11+ uv environment for payloads and rendering. Bash 3.2 and jq are required, plus the chosen provider runtime. No Gmail, Google Contacts, calendar, private alias map, or workspace is needed.
 
 ## Commands
 Run from this skill folder or use an absolute script path:

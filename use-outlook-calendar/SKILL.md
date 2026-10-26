@@ -4,7 +4,7 @@ description: "List calendars, find or export events, and create or update Outloo
 ---
 
 # Use Outlook Calendar
-Depends only on [authorize-microsoft](../authorize-microsoft/SKILL.md); follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for account setup. Enable `calendar.enabled` for the account. The existing grant is Calendars.ReadWrite, including for reads. Bash 3.2, jq, this skill's Python 3.11+ uv environment, and the selected provider runtime are required. No Google calendar, Contacts, private aliases, or personal workspace is loaded.
+Depends only on [setup-microsoft-services](../setup-microsoft-services/SKILL.md); follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for account setup. Enable `calendar.enabled` for the account. The existing grant is Calendars.ReadWrite, including for reads. Bash 3.2, jq, this skill's Python 3.11+ uv environment, and the selected provider runtime are required. No Google calendar, Contacts, private aliases, or personal workspace is loaded.
 
 ## Read and export
 ```sh

@@ -4,7 +4,7 @@ description: "Read or edit an existing Google Doc, replace uniquely matched text
 ---
 
 # Use Google Docs
-Requires only [authorize-google](../authorize-google/SKILL.md) as a sibling skill, plus Bash 3.2+, curl, jq, and uv or Python 3.11+. Its Python environment is independent and uses the standard library. [Setup](../setup-google-services/SKILL.md) is companion onboarding, not a runtime import. Use the tool's own mechanics here; project-specific selection, authorship conventions, and publishing policy belong with the caller.
+Requires only [setup-google-services](../setup-google-services/SKILL.md) as a sibling skill, plus Bash 3.2+, curl, jq, and uv or Python 3.11+. Its Python environment is independent and uses the standard library. [Setup](../setup-google-services/SKILL.md) is companion onboarding, not a runtime import. Use the tool's own mechanics here; project-specific selection, authorship conventions, and publishing policy belong with the caller.
 
 ## Commands
 Run from this skill folder or use the absolute entrypoint path. Help does not need credentials; `bash scripts/docs COMMAND --help` shows complete options.

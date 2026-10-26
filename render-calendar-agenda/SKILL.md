@@ -5,7 +5,7 @@ description: "Combine explicit Google and Microsoft calendar exports into a deta
 
 # Render Calendar Agenda
 ## Scope and dependencies
-Render caller-selected data without network access or credentials. Python 3.11+ with IANA timezone data is sufficient; use this skill's standard-library-only uv manifest/lock. No provider skill is loaded at runtime. To obtain data, use `export-data` from [use-google-calendar](../use-google-calendar/SKILL.md) and/or [use-outlook-calendar](../use-outlook-calendar/SKILL.md). Those commands need their respective authorization skills.
+Render caller-selected data without network access or credentials. Python 3.11+ with IANA timezone data is sufficient; use this skill's standard-library-only uv manifest/lock. No provider skill is loaded at runtime. To obtain data, use `export-data` from [use-google-calendar](../use-google-calendar/SKILL.md) and/or [use-outlook-calendar](../use-outlook-calendar/SKILL.md). Those commands need their respective provider setup/runtime skills.
 
 The calling workflow owns account/calendar selection, inclusion requirements, availability interpretation, refresh timing, and output destinations. This tool has no workspace, calendar names, near/far split, or personal availability defaults. Skill installation does not authorize fetching private data or writing a shared destination.
 

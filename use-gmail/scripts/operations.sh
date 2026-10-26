@@ -90,7 +90,7 @@ _gmail_get() (
         _google_error "Gmail returned HTTP ${http_code} for '$alias'${reason:+ ($reason)}: ${message:-request failed}"
         case "$reason" in
             rateLimitExceeded|userRateLimitExceeded) _google_say "NEXT: wait a minute and retry, or narrow the sync with --query or --max-results" >&2 ;;
-            insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT) _google_say "NEXT: run 'authorize-google/scripts/authorize auth $alias' to refresh the granted scopes" >&2 ;;
+            insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT) _google_say "NEXT: run 'setup-google-services/scripts/authorize auth $alias' to refresh the granted scopes" >&2 ;;
         esac
         return 1
     done
@@ -147,7 +147,7 @@ _gmail_export_alias() (
     _google_say "Updated $out"
 )
 
-##- Gmail labels and archiving. Reads (labels, list) use the read-only scope; executed changes also need gmail.write_enabled, which adds gmail.modify at the next 'authorize-google/scripts/authorize auth ALIAS'.
+##- Gmail labels and archiving. Reads (labels, list) use the read-only scope; executed changes also need gmail.write_enabled, which adds gmail.modify at the next 'setup-google-services/scripts/authorize auth ALIAS'.
 ##- The only label changes are removing or restoring INBOX (archive and unarchive), adding or removing user labels, and moving mail out of Spam (not-spam). There is no trash, delete, report-spam, send, or mark-read command, and messages in Trash, or in Spam outside not-spam, are refused.
 _GMAIL_API='https://gmail.googleapis.com/gmail/v1/users/me'
 
@@ -164,7 +164,7 @@ _gmail_require_write() {
     local alias="$1"
     if ! _google_account_value "$alias" '(.gmail.write_enabled // false) == true' 2>/dev/null | grep -qx true; then
         _google_error "Gmail label changes are not enabled for alias '$alias'"
-        _google_say "NEXT: set gmail.write_enabled to true for '$alias' in $(_google_accounts_path), then run 'authorize-google/scripts/authorize auth $alias' to grant gmail.modify" >&2
+        _google_say "NEXT: set gmail.write_enabled to true for '$alias' in $(_google_accounts_path), then run 'setup-google-services/scripts/authorize auth $alias' to grant gmail.modify" >&2
         return 1
     fi
 }
@@ -190,7 +190,7 @@ _gmail_send() (
             message="$(jq -r '.error.message // empty' "$response" 2>/dev/null)"
             _google_error "Gmail returned HTTP ${http_code}: ${message:-request failed}"
             if [ "$http_code" = "403" ]; then
-                _google_say "NEXT: if the token predates gmail.write_enabled, run 'authorize-google/scripts/authorize auth $alias' to grant gmail.modify" >&2
+                _google_say "NEXT: if the token predates gmail.write_enabled, run 'setup-google-services/scripts/authorize auth $alias' to grant gmail.modify" >&2
             fi
             return 1
             ;;
@@ -545,7 +545,7 @@ _gmail_require_filters() {
     local alias="$1"
     if ! _google_account_value "$alias" '(.gmail.filters_enabled // false) == true' 2>/dev/null | grep -qx true; then
         _google_error "Gmail filter changes are not enabled for alias '$alias'"
-        _google_say "NEXT: set gmail.filters_enabled to true for '$alias' in $(_google_accounts_path), then run 'authorize-google/scripts/authorize auth $alias' to grant gmail.settings.basic" >&2
+        _google_say "NEXT: set gmail.filters_enabled to true for '$alias' in $(_google_accounts_path), then run 'setup-google-services/scripts/authorize auth $alias' to grant gmail.settings.basic" >&2
         return 1
     fi
 }
@@ -634,7 +634,7 @@ _gmail_create_filter() (
     _gmail_list "$alias" --query "$search" --limit 5 || _gmail_warn "Could not run the preview search"
     if [ "$execute" -ne 1 ]; then _google_say "DRY RUN: no filter was created. Re-run with --execute to create it."; return 0; fi
     _gmail_require_filters "$alias" || return 1
-    created="$(_gmail_send POST "$alias" "${_GMAIL_API}/settings/filters" "$body")" || { _google_say "NEXT: if the token predates gmail.filters_enabled, run 'authorize-google/scripts/authorize auth $alias' to grant gmail.settings.basic" >&2; return 1; }
+    created="$(_gmail_send POST "$alias" "${_GMAIL_API}/settings/filters" "$body")" || { _google_say "NEXT: if the token predates gmail.filters_enabled, run 'setup-google-services/scripts/authorize auth $alias' to grant gmail.settings.basic" >&2; return 1; }
     readback="$(_google_get_url "$alias" "${_GMAIL_API}/settings/filters/$(_gmail_urlencode "$(printf '%s' "$created" | jq -r '.id')")")" || return 1
     ok="$(jq -n --argjson want "$body" --argjson got "$readback" '($got.criteria == $want.criteria) and (($got.action.addLabelIds // []) == ($want.action.addLabelIds // [])) and (($got.action.removeLabelIds // []) == ($want.action.removeLabelIds // []))')"
     jq -nc --arg ts "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" --arg alias "$alias" --argjson f "$readback" --argjson ok "$ok" '{ts: $ts, service: "gmail", alias: $alias, action: "create-filter", filter_id: $f.id, criteria: $f.criteria, filter_action: $f.action, verified: $ok}' | _gmail_audit_append || _gmail_warn "Could not append to the mail audit log: $(_gmail_audit_log_path)"

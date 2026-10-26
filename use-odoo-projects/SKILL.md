@@ -5,7 +5,7 @@ description: "Read Odoo projects, stages, tasks, and comments, or preview and ex
 
 # Use Odoo Projects
 ## Entry and dependencies
-Run commands from this skill's folder, or use an absolute path to `scripts/odoo`. Required support: [authorize-odoo](../authorize-odoo/SKILL.md) for account routing, credentials, transport, and pacing. Bash 3.2+, jq, curl, and ordinary Unix utilities are required; no other provider, Python environment, or personal workspace is loaded. Use [setup-odoo](../setup-odoo/SKILL.md) only for initial configuration.
+Run commands from this skill's folder, or use an absolute path to `scripts/odoo`. Required support: [setup-odoo](../setup-odoo/SKILL.md) for account routing, credentials, transport, and pacing. Bash 3.2+, jq, curl, and ordinary Unix utilities are required; no other provider, Python environment, or personal workspace is loaded. Use [setup-odoo](../setup-odoo/SKILL.md) only for initial configuration.
 
 Respect the current project's instructions and the user's authorized action. Target account/project/task IDs come from the caller, not hardcoded personal defaults. This CLI's dry-run plan is not permission to execute it. Use `bash scripts/odoo --help` for the implemented surface.
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-##- Bounded Trello operations. Writes are direct and require prior authorization.
+##- Bounded operation builders. The CLI captures their requests into a preview before execution.
 
 _trello_first_board_id() (
     set -o pipefail
     local first
-    first="${TRELLO_BOARD_IDS%%,*}"
+    first="${TRELLO_BOARD_IDS:-}"
+    first="${first%%,*}"
     _trello_trim "$first"
 )
 
@@ -159,7 +160,7 @@ _trello_resolve_label_id() (
         _trello_get "/boards/${board_id}/labels" \
             --data-urlencode "fields=name" \
             --data-urlencode "limit=1000" |
-            jq -r --arg name "$label_ref" '.[] | select(.name == $name) | .id'
+            jq -r --arg name "$label_ref" 'if type != "array" or length >= 1000 then error("Incomplete label lookup") else .[] | select(.name == $name) | .id end'
     )" || return 1
 
     if [ -z "$matches" ]; then
@@ -358,6 +359,7 @@ _trello_schedule_card() (
         *) _trello_error "schedule-card --until must be an ISO date YYYY-MM-DD (got '$until_date')"; return 1 ;;
     esac
 
+    printf '%s\n' "$until_date" | awk -F- '{ y=$1+0; m=$2+0; d=$3+0; days=31; if(m==4 || m==6 || m==9 || m==11) days=30; if(m==2) days=28+((y%4==0 && y%100!=0)||y%400==0); exit !(y>=1 && m>=1 && m<=12 && d>=1 && d<=days) }' || { _trello_error 'schedule-card --until must be a real calendar date'; return 1; }
     list_id="$(_trello_resolve_list_id "$board_id" "$list_ref")" || return 1
     # Date-only scheduling preserves the existing noon-UTC convention; it does not create a wake automation.
     start_iso="${until_date}T12:00:00.000Z"

@@ -4,12 +4,12 @@
 set -eu
 
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/outlook-m365-mail-read-test.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-jq '(.accounts[] | .mail) = {enabled:true, write_enabled:false, rules_enabled:false}' "$SKILL/../authorize-microsoft/m365-accounts.example.json" > "$WORK/accounts.json"
+jq '(.accounts[] | .mail) = {enabled:true, write_enabled:false, rules_enabled:false}' "$SKILL/../setup-microsoft-services/m365-accounts.example.json" > "$WORK/accounts.json"
 M365_ACCOUNTS_PATH="$WORK/accounts.json"
 export M365_ACCOUNTS_PATH
 

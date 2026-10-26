@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir "$WORK/temp"
 export M365_CONFIG_DIR="$WORK" TMPDIR="$WORK/temp"
 M365_PYTHON="${M365_PYTHON:-python3}"
-cp "$SKILL/../authorize-microsoft/m365-powershell-accounts.example.json" "$WORK/m365-accounts.json"
+cp "$SKILL/../setup-microsoft-services/m365-powershell-accounts.example.json" "$WORK/m365-accounts.json"
 expect_failure() { if "$@" > "$WORK/out" 2> "$WORK/error"; then printf 'Unexpected success\n' >&2; exit 1; fi; }
 _m365_get() { [ "${FAIL_READ:-0}" = 0 ] || return 1; case "$2" in */me) printf '%s' '{"mail":"person@example.com"}' ;; */contacts/contact-1) jq '.value[0]' "$SKILL/tests/fixtures/contacts.json" ;; *) cat "$SKILL/tests/fixtures/contacts.json" ;; esac; }
 _m365_write() { printf '%s' "$4" > "$WORK/written.json"; jq '. + {id:"contact-1"}' "$WORK/written.json"; }

@@ -3,7 +3,7 @@ name: use-slack-lists
 description: "Read Slack List schemas/items, create or update typed fields, read or add an item comment, or export selected configured Lists as Markdown."
 ---
 # Use Slack Lists
-Requires sibling [authorize-slack](../authorize-slack/SKILL.md) and Python 3.11+; no messaging skill or other provider is required. See [setup-slack](../setup-slack/SKILL.md). The entry is `scripts/slack_lists.py`; from the collection root:
+Requires sibling [setup-slack](../setup-slack/SKILL.md) and Python 3.11+; no messaging skill or other provider is required. See [setup-slack](../setup-slack/SKILL.md). The entry is `scripts/slack_lists.py`; from the collection root:
 ```sh
 uv run --project use-slack-lists python use-slack-lists/scripts/slack_lists.py --help
 ```
@@ -39,4 +39,4 @@ A `record_id` navigation URL does not prove the item's detail panel opens. Keep 
 
 Run `python use-slack-lists/tests/test_operations.py` from the collection root for offline discussion/partial-failure checks. No live write has been performed as part of this extraction.
 
-Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../authorize-slack/tests/test_request_helpers.py`.
+Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../setup-slack/tests/test_request_helpers.py`.

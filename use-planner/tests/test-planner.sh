@@ -4,7 +4,7 @@
 set -eu
 
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 WORK="$(mktemp -d)"
@@ -16,7 +16,7 @@ refute() { if "$@"; then printf 'FAIL: expected failure: %s\n' "$*" >&2; exit 1;
 lacks() { if printf '%s\n' "$1" | grep -F -- "$2" >/dev/null; then printf 'FAIL: unexpected %s\n' "$2" >&2; exit 1; fi; }
 
 # Planner enabled for reads only, with one allowlisted plan.
-jq '(.accounts[] | select(.alias == "example") | .planner) = {enabled: true, write_enabled: false, plans: [{id: "plan-1", name: "Project Tracker"}]}' "$SKILL/../authorize-microsoft/m365-powershell-accounts.example.json" > "${WORK}/read.json"
+jq '(.accounts[] | select(.alias == "example") | .planner) = {enabled: true, write_enabled: false, plans: [{id: "plan-1", name: "Project Tracker"}]}' "$SKILL/../setup-microsoft-services/m365-powershell-accounts.example.json" > "${WORK}/read.json"
 M365_ACCOUNTS_PATH="${WORK}/read.json"
 export M365_ACCOUNTS_PATH
 

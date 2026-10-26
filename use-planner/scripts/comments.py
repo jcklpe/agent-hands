@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-spec = importlib.util.spec_from_file_location("m365_render", Path(__file__).resolve().parents[2] / "authorize-microsoft/scripts/text.py")
+spec = importlib.util.spec_from_file_location("m365_render", Path(__file__).resolve().parents[2] / "setup-microsoft-services/scripts/text.py")
 render = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(render)
 posts = json.load(sys.stdin)["value"]

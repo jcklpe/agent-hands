@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "authorize-slack" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "setup-slack" / "scripts"))
 import slack_auth as support
 
 def send(acct, channel, text, thread_ts):

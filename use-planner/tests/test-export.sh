@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 WORK="$(mktemp -d)"

@@ -4,11 +4,11 @@ set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-source "$SKILL/../authorize-microsoft/scripts/client.sh"
+source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 export M365_CONFIG_DIR="$WORK"
-jq '.accounts[0].files.enabled=true' "$SKILL/../authorize-microsoft/m365-powershell-accounts.example.json" > "$WORK/m365-accounts.json"
+jq '.accounts[0].files.enabled=true' "$SKILL/../setup-microsoft-services/m365-powershell-accounts.example.json" > "$WORK/m365-accounts.json"
 FILES_SEARCH_OUT="$WORK/search"; FILES_META_OUT="$WORK/meta"; FILES_LINK_OUT="$WORK/link"
 _m365_get() {
     case "$2" in

@@ -27,6 +27,9 @@ The real `.env` is ignored by this folder's [.gitignore](.gitignore). Check igno
 
 Report which pieces are installed, configured, discovered and verified as separate levels, without revealing the URL or key. Repeated setup must preserve existing configuration.
 
+## Operation boundary
+Setup owns initial connection, account/key establishment and repair. [use-penpot](../use-penpot/SKILL.md) owns normal file operations and their permission/verification checks. Arbitrary `execute_code` can write immediately; there is no generic dry-run or `--execute` flag. Credential access does not authorize a design change.
+
 ## Diagnose narrowly
 `bash scripts/check` explains missing, malformed or overly permissive configuration. If tool calls keep reporting no connected session while the user's file shows MCP connected, suspect the key: the user regenerates it in Penpot's Integrations page and replaces the value in `.env`. How Penpot reports an invalid key has not been verified. When the client shows no Penpot tools, check its registration and start a new session before changing configuration. When tools appear but calls report no connected session, the Penpot tab is disconnected or asleep; see use-penpot.
 

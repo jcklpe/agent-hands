@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-_support_path = Path(__file__).resolve().parents[2] / "authorize-microsoft/scripts/text.py"
+_support_path = Path(__file__).resolve().parents[2] / "setup-microsoft-services/scripts/text.py"
 _spec = importlib.util.spec_from_file_location("microsoft_text", _support_path)
 _text = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_text)

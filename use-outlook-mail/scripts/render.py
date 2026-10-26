@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import runpy
 import sys
-_shared = runpy.run_path(str(Path(__file__).resolve().parents[2] / "authorize-microsoft/scripts/text.py"))
+_shared = runpy.run_path(str(Path(__file__).resolve().parents[2] / "setup-microsoft-services/scripts/text.py"))
 clean_text, truncate, quote, address = (_shared[name] for name in ("clean_text", "truncate", "quote", "address"))
 
 def unsubscribe_line(message):

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPTS/../../authorize-microsoft/scripts/client.sh"
+source "$SCRIPTS/../../setup-microsoft-services/scripts/client.sh"
 source "$SCRIPTS/operations.sh"
 case "${1:-help}" in help|--help|-h) _m365_excel_help; exit 0 ;; esac
 _m365_load_env

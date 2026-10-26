@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SKILL/../authorize-google/scripts/client.sh"
+source "$SKILL/../setup-google-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -75,6 +75,6 @@ curl() {
 : > "${WORK}/sleeps.log"
 if _gmail_get example https://gmail.example/list > /dev/null 2> "${WORK}/err.txt"; then fail "non-rate-limit 403 fails"; fi
 [ -s "${WORK}/sleeps.log" ] && fail "non-rate-limit errors are not retried"
-grep -F "authorize-google/scripts/authorize auth example" "${WORK}/err.txt" >/dev/null || fail "scope errors point at re-auth"
+grep -F "setup-google-services/scripts/authorize auth example" "${WORK}/err.txt" >/dev/null || fail "scope errors point at re-auth"
 
 printf 'Gmail transport and rich-body rendering checks passed\n'

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../../authorize-google/scripts/client.sh"
+source "$SCRIPT_DIR/../../setup-google-services/scripts/client.sh"
 source "$SCRIPT_DIR/operations.sh"
 case "${1:---help}" in
     --help|-h|help) cat <<'EOF'

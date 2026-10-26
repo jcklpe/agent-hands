@@ -4,7 +4,7 @@ description: "List Google calendars, find events, export a bounded agenda, or cr
 ---
 
 # Use Google Calendar
-Depends on [authorize-google](../authorize-google/SKILL.md); Markdown exports also use [render-calendar-agenda](../render-calendar-agenda/SKILL.md), a standard-library-only renderer. Data exports and API operations do not load the renderer. Start with [setup-google-services](../setup-google-services/SKILL.md) when needed. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+ with timezone data; Python uses the standard library and a capability-local manifest/lock. There is no Microsoft, contact-lookup, or workspace dependency.
+Depends on [setup-google-services](../setup-google-services/SKILL.md); Markdown exports also use [render-calendar-agenda](../render-calendar-agenda/SKILL.md), a standard-library-only renderer. Data exports and API operations do not load the renderer. Start with [setup-google-services](../setup-google-services/SKILL.md) when needed. Requires Bash 3.2+, curl, jq, and uv or Python 3.11+ with timezone data; Python uses the standard library and a capability-local manifest/lock. There is no Microsoft, contact-lookup, or workspace dependency.
 
 ## Configuration
 Enable `calendar.enabled` on the selected Google account. This requests calendar-list and event reads; `calendar.write_enabled` additionally requests event writes. Separate `calendar.writable_ids` restricts writable targets; an omitted list permits none. The example lists `primary` but leaves writes disabled. `calendar.read_ids` defaults to `["primary"]`. Account settings are ignored private JSON beside authorization; do not copy another user's calendars or tokens.

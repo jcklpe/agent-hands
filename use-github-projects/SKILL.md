@@ -3,7 +3,7 @@ name: use-github-projects
 description: "Read configured GitHub Projects v2 boards or move an issue between Status options with a dry-run plan."
 ---
 # Use GitHub Projects
-Requires sibling [authorize-github](../authorize-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
+Requires sibling [setup-github](../setup-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
 
 From the collection root:
 ```sh
@@ -21,4 +21,4 @@ Exports read up to 500 items per configured project and fail at the cap or a kno
 Execution requires `--execute` plus user authorization for the precise issue/board/status. The API response confirms the mutation request; there is no independent full-state readback. Board automation belongs to its owner and may cause further effects, but this tool does not promise issue closure/reopening or a schedule. Do not change automation, add board items, edit unrelated fields, or push anything as an implicit follow-up. See [gh project item-list](https://cli.github.com/manual/gh_project_item-list) for underlying read behavior.
 
 ## Verification
-Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Run `bash tests/test-render.sh` for its renderer. Shared configuration, publication, and issue/PR rendering checks live under `../authorize-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.
+Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Run `bash tests/test-render.sh` for its renderer. Shared configuration, publication, and issue/PR rendering checks live under `../setup-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.

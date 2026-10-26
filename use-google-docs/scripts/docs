@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 GOOGLE_DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "${GOOGLE_DOCS_DIR}/../authorize-google/scripts/client.sh"
+source "${GOOGLE_DOCS_DIR}/../setup-google-services/scripts/client.sh"
 case "${1:---help}" in
     -h|--help|help) printf '%s\n' 'docs read|replace-once|set-body|comments|comment ALIAS DOC_URL_OR_ID [options]' 'Writes preview by default; --execute applies them. Use docs COMMAND --help for options.'; exit 0 ;;
 esac

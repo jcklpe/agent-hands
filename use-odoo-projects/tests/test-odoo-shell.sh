@@ -5,7 +5,7 @@ set -eu
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOL_DIR="$(cd "${TEST_DIR}/.." && pwd)"
-ODOO_AUTH_DIR="$(cd "${TOOL_DIR}/../authorize-odoo" && pwd)"
+ODOO_AUTH_DIR="$(cd "${TOOL_DIR}/../setup-odoo" && pwd)"
 ODOO_ACCOUNTS_PATH="${ODOO_AUTH_DIR}/odoo-accounts.example.json"
 ODOO_API_KEY="synthetic-test-key"
 ODOO_MIN_REQUEST_INTERVAL_SECONDS=0

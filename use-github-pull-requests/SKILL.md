@@ -3,7 +3,7 @@ name: use-github-pull-requests
 description: "Read open GitHub pull requests and their retrieved comments, or export them to Markdown for a bounded review."
 ---
 # Use GitHub Pull Requests
-Requires sibling [authorize-github](../authorize-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
+Requires sibling [setup-github](../setup-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
 
 From the collection root:
 ```sh
@@ -18,4 +18,4 @@ Issue/PR collection stops below its 300-item cap; a cap hit or detail-read failu
 This capability reads/exports open PR metadata, body, labels, assignees, and the comments returned by gh. It does not retrieve the code diff or promise full review-thread history. It creates no PRs, posts no reviews/comments, merges nothing, and never pushes. Use another explicitly authorized capability for those operations; this skill is not a generic gh escape hatch.
 
 ## Verification
-Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Shared configuration, publication, and issue/PR rendering checks live under `../authorize-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.
+Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Shared configuration, publication, and issue/PR rendering checks live under `../setup-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.

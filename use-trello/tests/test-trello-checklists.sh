@@ -5,7 +5,7 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-TRELLO_AUTH_DIR="$(cd "${USE_DIR}/../authorize-trello" && pwd)"
+TRELLO_AUTH_DIR="$(cd "${USE_DIR}/../setup-trello" && pwd)"
 . "${TRELLO_AUTH_DIR}/scripts/client.sh"
 . "${USE_DIR}/scripts/operations.sh"
 TRELLO_SNOOZE_LISTS=Snoozed

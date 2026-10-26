@@ -4,7 +4,7 @@ description: "Read, search, and export Outlook mail; save attachments or preview
 ---
 
 # Use Outlook Mail
-Requires only [authorize-microsoft](../authorize-microsoft/SKILL.md), Bash 3.2+, jq, and this skill's Python 3.11+ environment. Follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for onboarding. Run `uv sync --locked` here or supply a compatible `M365_PYTHON`. Gmail, other Microsoft capability skills, and a personal workspace are not dependencies.
+Requires only [setup-microsoft-services](../setup-microsoft-services/SKILL.md), Bash 3.2+, jq, and this skill's Python 3.11+ environment. Follow [setup-microsoft-services](../setup-microsoft-services/SKILL.md) for onboarding. Run `uv sync --locked` here or supply a compatible `M365_PYTHON`. Gmail, other Microsoft capability skills, and a personal workspace are not dependencies.
 
 ## Entry and reads
 Run `bash scripts/mail --help` here for exact arguments. Account aliases, enabled capabilities, and bounds live in the provider's ignored account JSON. Set `mail.enabled` for reads. Help is offline; previews may read real account data and invoke provider authentication.
