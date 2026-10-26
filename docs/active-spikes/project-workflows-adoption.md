@@ -41,3 +41,7 @@ The consumer checkpoint is published, and a fresh public recursive clone retriev
 
 ## Local collection rollout
 The later local-only rollout merges reviewed shared main `b79f368` into the existing `project/agent-hands` history from `f566247`. It brings root-level procedures, capture-for-later, removal of the unused env/NOTICE scaffold, and target-aware setup/update guidance. Agent Hands metadata remains intact. Current routing is updated without changing its 39 root service skills, feedback pair, tools, or existing notes. Earlier publication and recursive-clone checks describe the old pin; they do not verify availability of this new local merge. Security/privacy review and separate publication are still required before a fresh collaborator clone can retrieve it.
+
+## Shared rollout follow-up
+Reconciled shared main `8f6bdcf` locally, preserving this project's adaptation. The follow-up clarifies separately authorized list migration, incomplete parent scaffolds, and private local recovery. Publication remains on hold; the public source URL does not make this new child pin available remotely.
+The bounded legacy-register check found no remaining pinned-issues or future-ideas list in this project's documentation; existing individual notes and deferred work were preserved.
