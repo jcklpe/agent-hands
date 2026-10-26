@@ -5,7 +5,7 @@ description: "Read Slack List schemas/items, create or update typed fields, read
 # Use Slack Lists
 Requires sibling [authorize-slack](../authorize-slack/SKILL.md) and Python 3.11+; no messaging skill or other provider is required. See [setup-slack](../setup-slack/SKILL.md). The entry is `scripts/slack_lists.py`; from the collection root:
 ```sh
-uv run --project skills/use-slack-lists python skills/use-slack-lists/scripts/slack_lists.py --help
+uv run --project use-slack-lists python use-slack-lists/scripts/slack_lists.py --help
 ```
 Append these commands instead of `--help`:
 ```text
@@ -37,6 +37,6 @@ Comment preview performs reads and identity validation but sends nothing. Execut
 
 A `record_id` navigation URL does not prove the item's detail panel opens. Keep record verification, discussion links, and UI navigation distinct; do not invent URLs or create a comment merely to manufacture a link. The tool cannot verify browser navigation.
 
-Run `python skills/use-slack-lists/tests/test_operations.py` from the collection root for offline discussion/partial-failure checks. No live write has been performed as part of this extraction.
+Run `python use-slack-lists/tests/test_operations.py` from the collection root for offline discussion/partial-failure checks. No live write has been performed as part of this extraction.
 
 Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../authorize-slack/tests/test_request_helpers.py`.

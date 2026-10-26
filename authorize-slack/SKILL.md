@@ -12,8 +12,8 @@ The parser reads literal `SLACK_*` assignments without shell expansion or evalua
 
 Run from the collection root (or use absolute paths):
 ```sh
-uv run --project skills/authorize-slack python skills/authorize-slack/scripts/slack_auth.py check example
-uv run --project skills/authorize-slack python skills/authorize-slack/scripts/slack_auth.py whoami example
+uv run --project authorize-slack python authorize-slack/scripts/slack_auth.py check example
+uv run --project authorize-slack python authorize-slack/scripts/slack_auth.py whoami example
 ```
 `check` verifies local fields/token presence without network access. `whoami` calls `auth.test`, compares both team and user IDs, and rejects bot tokens. `accounts` lists profile metadata, never token values. A local check is not evidence of remote authorization.
 

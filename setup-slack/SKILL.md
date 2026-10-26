@@ -8,7 +8,7 @@ Start with [setup-agent-hands](../setup-agent-hands/SKILL.md) and select [use-sl
 ## Runtime
 Inspect the OS and available tools. If uv is missing, follow the [official installer](https://docs.astral.sh/uv/getting-started/installation/) within setup authorization; do not assume Python, Bash, or a package manager is installed. uv can provision Python for the selected manifest. From the collection root, run the selected command with `--help`, for example:
 ```sh
-uv run --project skills/use-slack-messages python skills/use-slack-messages/scripts/slack_messages.py --help
+uv run --project use-slack-messages python use-slack-messages/scripts/slack_messages.py --help
 ```
 The manifest and lock belong to that capability, not an all-provider environment. With an already compatible Python, invoking the script directly also works. macOS offline execution is verified; fresh Windows/Linux bootstrap is not yet verified. The Python entrypoints do not require a Unix shell.
 

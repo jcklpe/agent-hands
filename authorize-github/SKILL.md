@@ -15,9 +15,9 @@ Repo aliases require unique simple names, owner/repo fields, optional project ow
 ## Commands and runtime
 From the collection root:
 ```sh
-bash skills/authorize-github/scripts/authorize check
-bash skills/authorize-github/scripts/authorize status
-bash skills/authorize-github/scripts/authorize list-repos
+bash authorize-github/scripts/authorize check
+bash authorize-github/scripts/authorize status
+bash authorize-github/scripts/authorize list-repos
 ```
 `check` inspects local gh/jq availability and an existing alias file without network access; it does not verify credentials. `status` invokes gh's account check and may access the network. `list-repos` reads only local metadata. No token value is printed by these helpers.
 

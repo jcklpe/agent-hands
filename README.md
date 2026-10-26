@@ -13,14 +13,14 @@ cd agent-hands
 
 For an existing checkout, run `git submodule update --init --recursive` to obtain the workflow collection at the recorded revision.
 
-Then point your agent at [setup-agent-hands](skills/setup-agent-hands/SKILL.md), for example:
+Then point your agent at [setup-agent-hands](setup-agent-hands/SKILL.md), for example:
 
-> Read skills/setup-agent-hands/SKILL.md and help me set up Trello. Check the prerequisites, walk me through configuring my account, and verify a read without changing any cards.
+> Read setup-agent-hands/SKILL.md and help me set up Trello. Check the prerequisites, walk me through configuring my account, and verify a read without changing any cards.
 
 The setup skill selects the relevant service, checks your platform and existing tools, and guides credential configuration. You can also follow the linked skill files yourself. For example, this displays Trello's commands without contacting the service:
 
 ```sh
-bash skills/use-trello/scripts/trello --help
+bash use-trello/scripts/trello --help
 ```
 
 Cloning does not install skills into an agent client automatically. You can point an agent directly at a `SKILL.md`, or configure your client's skill discovery separately. If distributing only selected skills, retain their declared dependencies and sibling folder layout. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
@@ -30,33 +30,33 @@ The names below group related reads, writes, and comments where implemented. A `
 
 | Provider | Skill | Supported operations |
 | --- | --- | --- |
-| Google | [use-gmail](skills/use-gmail/SKILL.md) | Read/search/export mail, label and archive exact targets, rescue Spam, and manage limited filters. |
-| Google | [use-google-calendar](skills/use-google-calendar/SKILL.md) | List calendars, find/export events, and create/update events with calendar and notification controls. |
-| Google | [use-google-contacts](skills/use-google-contacts/SKILL.md) | Look up names and email addresses in saved and other contacts; read-only. |
-| Google | [use-google-docs](skills/use-google-docs/SKILL.md) | Read existing Docs, replace uniquely matched text or a tab's content from Markdown, and list/add comments. |
-| Google | [use-google-drive](skills/use-google-drive/SKILL.md) | Search/list/inspect/read/download files, export metadata indexes, and import a local file as a Google Doc. |
-| Google | [use-google-sheets](skills/use-google-sheets/SKILL.md) | Read a selected cell range as Markdown; read-only. |
-| Microsoft | [use-outlook-mail](skills/use-outlook-mail/SKILL.md) | Read/search/export mail, save attachments, and make supported folder, category, and Inbox-rule changes. |
-| Microsoft | [use-outlook-calendar](skills/use-outlook-calendar/SKILL.md) | List calendars, find/export events, and create/update events with invitation and writable-calendar controls. |
-| Microsoft | [use-outlook-contacts](skills/use-outlook-contacts/SKILL.md) | Find/list/export contacts and create/update contacts. |
-| Microsoft | [use-microsoft-files](skills/use-microsoft-files/SKILL.md) | Search/inspect/download OneDrive and SharePoint files, upload/replace files, and create folders. |
-| Microsoft | [use-excel-workbooks](skills/use-excel-workbooks/SKILL.md) | Read/edit supported worksheets, tables, and finite cell ranges with preview fingerprints and readback verification. |
-| Microsoft | [use-planner](skills/use-planner/SKILL.md) | Read/export plans, buckets, tasks, labels, and comments; make supported task/label changes and add comments. |
-| GitHub | [use-github-issues](skills/use-github-issues/SKILL.md) | Read/export open issues and retrieved comments; create an issue after preview. |
-| GitHub | [use-github-pull-requests](skills/use-github-pull-requests/SKILL.md) | Read/export open pull requests and retrieved comments; read-only. |
-| GitHub | [use-github-discussions](skills/use-github-discussions/SKILL.md) | Read/export discussions and retrieved comments/replies; read-only. |
-| GitHub | [use-github-projects](skills/use-github-projects/SKILL.md) | Read configured Projects v2 boards and move an issue between Status options. |
-| Slack | [use-slack-messages](skills/use-slack-messages/SKILL.md) | Read/search conversations, resolve people/channels, and send messages, replies, or DMs as the user. |
-| Slack | [use-slack-lists](skills/use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
-| Trello | [use-trello](skills/use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
-| Odoo | [use-odoo-projects](skills/use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
-| Penpot | [use-penpot](skills/use-penpot/SKILL.md) | Inspect and edit a design file the user has connected, through Penpot's own MCP tools, and export images for visual checks. Provides the stdio connector clients register so the key stays out of client configuration. Writes act immediately. |
+| Google | [use-gmail](use-gmail/SKILL.md) | Read/search/export mail, label and archive exact targets, rescue Spam, and manage limited filters. |
+| Google | [use-google-calendar](use-google-calendar/SKILL.md) | List calendars, find/export events, and create/update events with calendar and notification controls. |
+| Google | [use-google-contacts](use-google-contacts/SKILL.md) | Look up names and email addresses in saved and other contacts; read-only. |
+| Google | [use-google-docs](use-google-docs/SKILL.md) | Read existing Docs, replace uniquely matched text or a tab's content from Markdown, and list/add comments. |
+| Google | [use-google-drive](use-google-drive/SKILL.md) | Search/list/inspect/read/download files, export metadata indexes, and import a local file as a Google Doc. |
+| Google | [use-google-sheets](use-google-sheets/SKILL.md) | Read a selected cell range as Markdown; read-only. |
+| Microsoft | [use-outlook-mail](use-outlook-mail/SKILL.md) | Read/search/export mail, save attachments, and make supported folder, category, and Inbox-rule changes. |
+| Microsoft | [use-outlook-calendar](use-outlook-calendar/SKILL.md) | List calendars, find/export events, and create/update events with invitation and writable-calendar controls. |
+| Microsoft | [use-outlook-contacts](use-outlook-contacts/SKILL.md) | Find/list/export contacts and create/update contacts. |
+| Microsoft | [use-microsoft-files](use-microsoft-files/SKILL.md) | Search/inspect/download OneDrive and SharePoint files, upload/replace files, and create folders. |
+| Microsoft | [use-excel-workbooks](use-excel-workbooks/SKILL.md) | Read/edit supported worksheets, tables, and finite cell ranges with preview fingerprints and readback verification. |
+| Microsoft | [use-planner](use-planner/SKILL.md) | Read/export plans, buckets, tasks, labels, and comments; make supported task/label changes and add comments. |
+| GitHub | [use-github-issues](use-github-issues/SKILL.md) | Read/export open issues and retrieved comments; create an issue after preview. |
+| GitHub | [use-github-pull-requests](use-github-pull-requests/SKILL.md) | Read/export open pull requests and retrieved comments; read-only. |
+| GitHub | [use-github-discussions](use-github-discussions/SKILL.md) | Read/export discussions and retrieved comments/replies; read-only. |
+| GitHub | [use-github-projects](use-github-projects/SKILL.md) | Read configured Projects v2 boards and move an issue between Status options. |
+| Slack | [use-slack-messages](use-slack-messages/SKILL.md) | Read/search conversations, resolve people/channels, and send messages, replies, or DMs as the user. |
+| Slack | [use-slack-lists](use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
+| Trello | [use-trello](use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
+| Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
+| Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a design file the user has connected, through Penpot's own MCP tools, and export images for visual checks. Provides the stdio connector clients register so the key stays out of client configuration. Writes act immediately. |
 
 ### Local rendering
 | Skill | Purpose | Dependencies |
 | --- | --- | --- |
-| [render-markdown-pdf](skills/render-markdown-pdf/SKILL.md) | Export an explicit Markdown source to PDF using bundled plain, résumé, or compact themes, or supplied CSS. | Its own uv environment, Pandoc, native Pango libraries, and fonts. No provider credentials. |
-| [render-calendar-agenda](skills/render-calendar-agenda/SKILL.md) | Combine explicit Google/Microsoft calendar exports into detailed or compact Markdown with declared source coverage, time bounds, and timezone. | Its own uv environment and timezone data. No provider credentials; collecting source data is separate. |
+| [render-markdown-pdf](render-markdown-pdf/SKILL.md) | Export an explicit Markdown source to PDF using bundled plain, résumé, or compact themes, or supplied CSS. | Its own uv environment, Pandoc, native Pango libraries, and fonts. No provider credentials. |
+| [render-calendar-agenda](render-calendar-agenda/SKILL.md) | Combine explicit Google/Microsoft calendar exports into detailed or compact Markdown with declared source coverage, time bounds, and timezone. | Its own uv environment and timezone data. No provider credentials; collecting source data is separate. |
 
 Google Calendar's Markdown export also uses `render-calendar-agenda`; its JSON export does not. The consuming project chooses calendars, source inclusion, output destinations, and other workflow conventions.
 
@@ -65,13 +65,13 @@ Keep the selected use skills alongside their provider support:
 
 | Provider | Setup guide | Shared dependency |
 | --- | --- | --- |
-| Google | [setup-google-services](skills/setup-google-services/SKILL.md) | [authorize-google](skills/authorize-google/SKILL.md) |
-| Microsoft | [setup-microsoft-services](skills/setup-microsoft-services/SKILL.md) | [authorize-microsoft](skills/authorize-microsoft/SKILL.md) |
-| GitHub | [setup-github](skills/setup-github/SKILL.md) | [authorize-github](skills/authorize-github/SKILL.md) |
-| Slack | [setup-slack](skills/setup-slack/SKILL.md) | [authorize-slack](skills/authorize-slack/SKILL.md) |
-| Trello | [setup-trello](skills/setup-trello/SKILL.md) | [authorize-trello](skills/authorize-trello/SKILL.md) |
-| Odoo | [setup-odoo](skills/setup-odoo/SKILL.md) | [authorize-odoo](skills/authorize-odoo/SKILL.md) |
-| Penpot | [setup-penpot](skills/setup-penpot/SKILL.md) | None; setup-penpot owns the configuration |
+| Google | [setup-google-services](setup-google-services/SKILL.md) | [authorize-google](authorize-google/SKILL.md) |
+| Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) | [authorize-microsoft](authorize-microsoft/SKILL.md) |
+| GitHub | [setup-github](setup-github/SKILL.md) | [authorize-github](authorize-github/SKILL.md) |
+| Slack | [setup-slack](setup-slack/SKILL.md) | [authorize-slack](authorize-slack/SKILL.md) |
+| Trello | [setup-trello](setup-trello/SKILL.md) | [authorize-trello](authorize-trello/SKILL.md) |
+| Odoo | [setup-odoo](setup-odoo/SKILL.md) | [authorize-odoo](authorize-odoo/SKILL.md) |
+| Penpot | [setup-penpot](setup-penpot/SKILL.md) | None; setup-penpot owns the configuration |
 
 Authorization skills own account configuration, authentication, and shared provider request helpers. Use skills own their operation-specific code, examples, and checks. Setup guides explain how to provision the selected pieces. Penpot has no separate authorization skill because its only credential is the single server URL that setup-penpot configures.
 
@@ -80,14 +80,13 @@ agent-hands/
   docs/active-spikes/        # project reasoning and task records
   project-workflows/        # workflow procedures, templates, and project configuration
   TODO.md                   # short work index
-  skills/
-    setup-agent-hands/SKILL.md
-    setup-<provider>/SKILL.md
-    authorize-<provider>/       # shared provider support and tailored config examples
-    use-<service>/             # SKILL.md, scripts, tests, and runtime files as needed
-    render-calendar-agenda/
-    render-markdown-pdf/
-      assets/themes/
+  setup-agent-hands/SKILL.md
+  setup-<provider>/SKILL.md
+  authorize-<provider>/       # shared provider support and tailored config examples
+  use-<service>/             # SKILL.md, scripts, tests, and runtime files as needed
+  render-calendar-agenda/
+  render-markdown-pdf/
+    assets/themes/
 ```
 
 ### Runtimes
@@ -114,18 +113,18 @@ Commit workflow changes in the child first, then record its exact pin with relat
 Project Workflows supports contribution and documentation; service-only skill bundles still require only their declared capability/provider dependencies. Documentation destinations are configured for active spikes, scratch, archives, policies, and pinned issues; create content only where needed rather than adding empty folder scaffolding.
 
 ## MCP setup
-For an implemented MCP route, use its service guide: [setup-penpot](skills/setup-penpot/SKILL.md) and [use-penpot](skills/use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](skills/setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](skills/setup-jasp/SKILL.md) documents the local application bridge. The latter two record configured installations and the live-verification gaps; they do not claim tested design or analysis workflows.
+For an implemented MCP route, use its service guide: [setup-penpot](setup-penpot/SKILL.md) and [use-penpot](use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](setup-jasp/SKILL.md) documents the local application bridge. The latter two record configured installations and the live-verification gaps; they do not claim tested design or analysis workflows.
 
 Choose the needed service and client. Each guide records prerequisites, registration, startup, verification, and remaining setup gaps. Client plugins are separate installations: their enabled state neither selects a vendor's standalone MCP server nor configures these CLI credentials. Restore those through the client's supported plugin setup and verify the authorized account separately.
 ## Checks and limitations
 Existing tests cover configuration parsing, bounded requests, guardrails, rendering, failure handling, and capability isolation with synthetic data. Follow each skill's check instructions; for example, from this repository root:
 
 ```sh
-bash skills/authorize-odoo/tests/test-config.sh
-bash skills/use-odoo-projects/tests/test-odoo-shell.sh
+bash authorize-odoo/tests/test-config.sh
+bash use-odoo-projects/tests/test-odoo-shell.sh
 ```
 
 Offline checks do not prove live permissions, tenant eligibility, or fresh-machine installation. Check help and local configuration first, then use an authorized read to verify the selected account and service. Routine setup should not mutate external records.
 
 ## License
-[AGPL-3.0-only](LICENSE). See [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.
+[AGPL-3.0-only](LICENSE). See [theme provenance](render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.

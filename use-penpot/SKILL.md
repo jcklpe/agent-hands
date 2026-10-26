@@ -20,7 +20,7 @@ Registration stores only the command path; never put the server URL or key in cl
 Claude Code, available in every project:
 
 ```sh
-claude mcp add --scope user penpot -- bash <agent-hands>/skills/use-penpot/scripts/penpot-mcp
+claude mcp add --scope user penpot -- bash <agent-hands>/use-penpot/scripts/penpot-mcp
 ```
 
 Codex, in `~/.codex/config.toml`:
@@ -28,7 +28,7 @@ Codex, in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.penpot]
 command = "bash"
-args = ["<agent-hands>/skills/use-penpot/scripts/penpot-mcp"]
+args = ["<agent-hands>/use-penpot/scripts/penpot-mcp"]
 ```
 
 Other stdio clients take the same command. Replace an existing Penpot entry rather than adding a second one with identical tools. Clients usually load servers at session start, so verify discovery in a new session.

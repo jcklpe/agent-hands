@@ -40,9 +40,9 @@ None. This checkpoint changes documentation only; no implementation is being pre
 On 2026-10-25, local credential-free help succeeded:
 
 ```sh
-bash skills/use-google-drive/scripts/drive --help
-bash skills/use-google-docs/scripts/docs --help
-python3.13 skills/use-google-docs/scripts/docs.py read --help
+bash use-google-drive/scripts/drive --help
+bash use-google-docs/scripts/docs --help
+python3.13 use-google-docs/scripts/docs.py read --help
 ```
 
 The direct Python command checked the read parser using an existing compatible interpreter; it did not exercise the wrapper's uv setup, read provider configuration, or contact Google. Source review confirmed the classifications above. Document readback, relative-link checks, whitespace checks, and full selected-diff review passed; only the two spike documents and root index were added. The containing repository's tracked submodule pin remains unchanged. Runtime test suites and fresh live reads are unnecessary for these documentation-only changes and were not run.

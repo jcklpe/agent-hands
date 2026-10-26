@@ -1,5 +1,5 @@
 # Agent Instructions
-This collection owns portable external-service capabilities, not personal workspace policy. Put implementation, templates, and assets beside their owning skill. Keep provider authorization dependencies explicit and small. A capability must not require unrelated providers or a personal vault.
+This collection owns portable external-service capabilities, not personal workspace policy. Native skill directories live directly at this repository’s root, each with its own SKILL.md. Put implementation, templates, and assets beside their owning skill; do not recreate an extra skills/ layer or compatibility aliases. Keep provider authorization dependencies explicit and small. A capability must not require unrelated providers or a personal vault.
 
 ## Project workflow
 This repository adopts [Project Workflows](project-workflows/README.md) at `project-workflows/`. Read [workflow.toml](project-workflows/workflow.toml) first and resolve its project root relative to that collection. Use its `skills/<skill-name>/SKILL.md` procedures before global workflow seeds; these project instructions override seed defaults. All eight project procedures travel together. General skills and external-service capabilities remain optional unless the task requires them.

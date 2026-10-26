@@ -11,8 +11,8 @@ Exported variables take precedence over literal env assignments. The parser neve
 
 From the collection root:
 ```sh
-bash skills/authorize-trello/scripts/authorize check read
-bash skills/authorize-trello/scripts/authorize check write
+bash authorize-trello/scripts/authorize check read
+bash authorize-trello/scripts/authorize check write
 ```
 These check local presence and required commands, without network requests or printing values. They do not verify token ownership, scopes, or live access. This client does not implement an OAuth browser callback, refresh, or automatic identity-matching gate. Never infer a Slack-style identity check or dry run for Trello.
 
