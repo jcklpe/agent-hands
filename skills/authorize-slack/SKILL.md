@@ -19,3 +19,5 @@ uv run --project skills/authorize-slack python skills/authorize-slack/scripts/sl
 
 ## Errors and authority
 Writes require a matching user identity. Missing scopes, inaccessible resources, and expired tokens must be reported; do not expand grants, disable token rotation, or acquire browser credentials automatically. The transport reports rate-limit delay and uncertain network outcomes without retrying writes. Inspect a possibly changed destination before any retry. Current scopes and app setup belong to the account owner; see [Slack token types](https://docs.slack.dev/authentication/tokens/) and [token rotation](https://docs.slack.dev/authentication/using-token-rotation/).
+
+Run `python3 tests/test_request_helpers.py` from this skill folder for synthetic message-URL and pagination-bound checks.

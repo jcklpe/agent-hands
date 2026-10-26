@@ -24,3 +24,6 @@ bash skills/authorize-github/scripts/authorize list-repos
 Each use skill needs Bash 3.2+, gh, jq, and Python 3.11+ for Markdown rendering. With uv installed, rendering uses the selected capability's manifest/lock. `GITHUB_PYTHON` can select an existing compatible executable instead. The provider has no all-service Python environment. [setup-github](../setup-github/SKILL.md) covers onboarding.
 
 Read failures and ambiguous targets are errors. Export retrieval/rendering completes in a private temporary directory before named output artifacts are replaced. Multi-file publication is not a transaction; interrupted replacement attempts restore the artifact currently being moved, and report retained recovery files if restoration fails. Do not treat a successful local export as proof of unlimited server history or a consistent remote snapshot.
+
+## Offline checks
+Run `bash tests/test-operations.sh` and `bash tests/test-render.sh` from this skill folder. They cover provider configuration, shared issue/PR exports and rendering, failure preservation, and interrupted publication using synthetic data. Capability-specific writes and renderers are tested beside their owning use skills.

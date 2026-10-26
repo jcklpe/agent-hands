@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-##- Run the extracted Slack request/guardrail smoke checks without a live account.
 set -eu
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec python3 "${SCRIPT_DIR}/../../../tests/test_slack_operations.py"
+HANDS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+python3 "$HANDS/skills/authorize-slack/tests/test_request_helpers.py"
+for owner in use-slack-messages use-slack-lists; do
+    python3 "$HANDS/skills/$owner/tests/test-write-guards.py"
+done

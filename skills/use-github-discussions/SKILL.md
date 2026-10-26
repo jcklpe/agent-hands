@@ -19,4 +19,4 @@ The existing GraphQL query reads up to 50 discussions, 50 comments per discussio
 This capability has no write operation. Creating/editing/commenting on Discussions remains deferred; do not infer support from the unified `use-*` name or bypass the boundary through raw gh.
 
 ## Verification
-Offline renderer/request checks live at collection `tests/test-github-render.sh` and `tests/test-github-operations.sh`. They use synthetic identities/data and exercise both write gates and read-failure preservation. Each domain was also loaded/rendered with only its authorization sibling. Local checks do not establish live account access or successful writes.
+Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Run `bash tests/test-render.sh` for its renderer. Shared configuration, publication, and issue/PR rendering checks live under `../authorize-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.

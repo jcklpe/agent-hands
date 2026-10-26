@@ -18,4 +18,4 @@ Issue/PR collection stops below its 300-item cap; a cap hit or detail-read failu
 This capability reads/exports open PR metadata, body, labels, assignees, and the comments returned by gh. It does not retrieve the code diff or promise full review-thread history. It creates no PRs, posts no reviews/comments, merges nothing, and never pushes. Use another explicitly authorized capability for those operations; this skill is not a generic gh escape hatch.
 
 ## Verification
-Offline renderer/request checks live at collection `tests/test-github-render.sh` and `tests/test-github-operations.sh`. They use synthetic identities/data and exercise both write gates and read-failure preservation. Each domain was also loaded/rendered with only its authorization sibling. Local checks do not establish live account access or successful writes.
+Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Shared configuration, publication, and issue/PR rendering checks live under `../authorize-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.
