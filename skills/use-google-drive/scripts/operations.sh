@@ -39,6 +39,12 @@ _drive_write_enabled() {
     _google_account_value "$alias" '(.drive.write_enabled // false) == true' 2>/dev/null | grep -qx true
 }
 
+# Rename has its own opt-in because it needs metadata access to files this app did not create, which drive.write_enabled (drive.file) never granted.
+_drive_rename_enabled() {
+    local alias="$1"
+    _google_account_value "$alias" '(.drive.enabled // false) == true and (.drive.rename_enabled // false) == true' 2>/dev/null | grep -qx true
+}
+
 _drive_query_escape() {
     printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"
 }
@@ -48,6 +54,7 @@ _drive_file_id() {
     case "$reference" in
         https://drive.google.com/file/d/*|https://docs.google.com/document/d/*|https://docs.google.com/spreadsheets/d/*|https://docs.google.com/presentation/d/*) reference="${reference#*/d/}"; reference="${reference%%/*}"; reference="${reference%%\?*}" ;;
         https://drive.google.com/open\?id=*) reference="${reference#*id=}"; reference="${reference%%&*}" ;;
+        https://drive.google.com/drive/folders/*|https://drive.google.com/drive/u/*/folders/*) reference="${reference#*/folders/}"; reference="${reference%%[/?]*}" ;;
     esac
     printf '%s' "$reference" | grep -Eq '^[A-Za-z0-9_-]+$' || { _google_error 'Expected a Google file URL or ID'; return 1; }
     printf '%s\n' "$reference"
@@ -521,5 +528,141 @@ _drive_import_doc() (
       "Parents: " + (((.parents // []) | join(", "))) + "\n" +
       "Drive ID: " + (.driveId // "")
     ' "$result_file"
+)
+
+_drive_rename_fetch() {
+    local alias="$1" file_id="$2" response
+    response="$(_google_get_url "$alias" "https://www.googleapis.com/drive/v3/files/${file_id}" \
+        --data-urlencode "supportsAllDrives=true" \
+        --data-urlencode "fields=id,name,mimeType,parents,driveId,trashed,webViewLink,capabilities(canRename)")" || return 1
+    printf '%s' "$response" | jq -e --arg id "$file_id" '.id == $id and (.name | type == "string")' >/dev/null || { _google_error 'Drive returned unexpected metadata for this file ID'; return 1; }
+    printf '%s\n' "$response"
+}
+
+# Prints IDs of other nontrashed items in PARENT whose name is exactly NAME; Drive allows duplicates, so a match would make the result ambiguous.
+_drive_rename_siblings() {
+    local alias="$1" parent="$2" drive_id="$3" name="$4" self="$5" response
+    local args=(--data-urlencode "q='$(_drive_query_escape "$parent")' in parents and name = '$(_drive_query_escape "$name")' and trashed = false" --data-urlencode 'fields=files(id,name),nextPageToken' --data-urlencode 'pageSize=10' --data-urlencode 'supportsAllDrives=true' --data-urlencode 'includeItemsFromAllDrives=true')
+    [ -z "$drive_id" ] || args+=(--data-urlencode 'corpora=drive' --data-urlencode "driveId=${drive_id}")
+    response="$(_google_get_url "$alias" 'https://www.googleapis.com/drive/v3/files' "${args[@]}")" || return 1
+    printf '%s' "$response" | jq -er --arg name "$name" --arg self "$self" 'if (.files | type) == "array" then [.files[] | select(.name == $name and .id != $self) | .id] | join(", ") else error("invalid listing") end'
+}
+
+_drive_sha256() {
+    _google_python "$GOOGLE_DRIVE_DIR" -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'
+}
+
+# drive rename ALIAS FILE_URL_OR_ID --name NEW_NAME [--expect PREVIEW_SHA256 --execute]
+# Changes only the name of one file or folder. The fingerprint detects changes between preview and execution; it is not an atomic lock.
+_drive_rename() (
+    set -o pipefail
+    _drive_work_begin || return 1
+    local alias="${1:-}" ref="${2:-}" name="" execute=0 expect=""
+    local file_id meta_file plan_hash parent duplicates sibling_check="no other item in the parent uses the proposed name" body_file result_file token status request_ok=0 error_message
+    [ -n "$alias" ] || { _google_error "drive rename requires ALIAS"; return 1; }
+    [ -n "$ref" ] || { _google_error "drive rename requires FILE_URL_OR_ID"; return 1; }
+    shift 2
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --name) [ -n "${2:-}" ] || { _google_error "--name requires NEW_NAME"; return 1; }; name="$2"; shift 2 ;;
+            --expect) [ -n "${2:-}" ] || { _google_error "--expect requires PREVIEW_SHA256"; return 1; }; expect="$2"; shift 2 ;;
+            --execute) execute=1; shift ;;
+            *) _google_error "Unknown drive rename option: $1"; return 1 ;;
+        esac
+    done
+    [ -n "$name" ] || { _google_error "drive rename requires --name NEW_NAME"; return 1; }
+    case "$name" in *[[:cntrl:]]*) _google_error 'New name must be a single line without control characters'; return 1 ;; esac
+    [ -n "$(_google_trim "$name")" ] || { _google_error 'New name cannot be blank'; return 1; }
+    [ "$name" = "$(_google_trim "$name")" ] || { _google_error 'New name cannot start or end with whitespace'; return 1; }
+    if [ "$execute" -eq 1 ]; then
+        _drive_rename_enabled "$alias" || { _google_error "Drive rename is not enabled for '$alias'. Set drive.rename_enabled=true in google-accounts.json; see the authorize-google scope notes."; return 1; }
+        printf '%s' "$expect" | LC_ALL=C grep -Eq '^[a-f0-9]{64}$' || { _google_error 'Execute requires --expect PREVIEW_SHA256 from a preview of this exact rename'; return 1; }
+    elif [ -n "$expect" ]; then
+        _google_error '--expect is only used with --execute'; return 1
+    fi
+
+    file_id="$(_drive_file_id "$ref")" || return 1
+    meta_file="$DRIVE_WORK/rename-before.json"
+    _drive_rename_fetch "$alias" "$file_id" > "$meta_file" || return 1
+    jq -e '(.trashed // false) | not' "$meta_file" >/dev/null || { _google_error 'Refusing to rename a trashed item'; return 1; }
+    jq -e '.driveId == null or .id != .driveId' "$meta_file" >/dev/null || { _google_error 'This ID is a shared drive root; shared drives are renamed through drives.update, which this CLI does not support'; return 1; }
+    jq -e --arg name "$name" '.name != $name' "$meta_file" >/dev/null || { _google_error 'The item already has this name; nothing to rename'; return 1; }
+
+    while IFS= read -r parent; do
+        [ -n "$parent" ] || continue
+        duplicates="$(_drive_rename_siblings "$alias" "$parent" "$(jq -r '.driveId // ""' "$meta_file")" "$name" "$file_id")" || { _google_error "Cannot check parent $parent for an existing item with this name"; return 1; }
+        [ -z "$duplicates" ] || { _google_error "Parent $parent already contains an item with this exact name ($duplicates); choose an unambiguous name"; return 1; }
+    done <<EOF
+$(jq -r '(.parents // [])[]' "$meta_file")
+EOF
+    jq -e '(.parents // []) | length > 0' "$meta_file" >/dev/null || sibling_check='skipped because no parent is visible to this account'
+
+    plan_hash="$(jq -cS --arg alias "$alias" --arg name "$name" '{alias:$alias, id:.id, mimeType:(.mimeType // ""), driveId:(.driveId // ""), parents:(.parents // []), trashed:(.trashed // false), current_name:.name, proposed_name:$name}' "$meta_file" | _drive_sha256)" || return 1
+
+    _google_say "Google Drive rename plan:"
+    _google_say "Account: $alias ($(_google_account_email "$alias"))"
+    jq -r --arg name "$name" '
+      "File ID: " + .id + "\n" +
+      "MIME type: " + (.mimeType // "") + "\n" +
+      "Current name: " + .name + "\n" +
+      "Proposed name: " + $name + "\n" +
+      "Parents: " + (((.parents // []) | join(", ")) | if . == "" then "<none visible>" else . end) + "\n" +
+      "Drive ID: " + (.driveId // "<My Drive>") + "\n" +
+      "URL: " + (.webViewLink // "") + "\n" +
+      "Account can rename: " + ((.capabilities.canRename // false) | tostring)
+    ' "$meta_file"
+    _google_say "Same-name check: $sibling_check"
+    if jq -e '.mimeType == "application/vnd.google-apps.shortcut"' "$meta_file" >/dev/null; then _drive_warn 'This is a shortcut; renaming it does not rename its target.'; fi
+    _google_say "Preview SHA-256: $plan_hash"
+
+    if [ "$execute" -ne 1 ]; then
+        _drive_rename_enabled "$alias" || _google_say "Execution is currently blocked: drive.rename_enabled is not true for '$alias'."
+        _google_say "DRY RUN: review, then repeat the same arguments with --expect $plan_hash --execute."
+        return 0
+    fi
+    [ "$expect" = "$plan_hash" ] || { _google_error 'The item or rename no longer matches the reviewed preview (name, parent, or arguments changed). Nothing was renamed; preview again.'; return 1; }
+    jq -e '.capabilities.canRename == true' "$meta_file" >/dev/null || { _google_error "Drive reports that '$alias' cannot rename this item"; return 1; }
+
+    body_file="$DRIVE_WORK/rename-body.json"
+    result_file="$DRIVE_WORK/rename-result.json"
+    jq -n --arg name "$name" '{name: $name}' > "$body_file" || return 1
+    token="$(_google_access_token "$alias")" || return 1
+    status="$(curl -sS -o "$result_file" -w '%{http_code}' -X PATCH "https://www.googleapis.com/drive/v3/files/${file_id}?supportsAllDrives=true&fields=id,name" \
+        -H "Authorization: Bearer ${token}" \
+        -H 'Content-Type: application/json; charset=UTF-8' \
+        --data-binary "@${body_file}")" || status=000
+    case "$status" in 2??) request_ok=1 ;; esac
+    if [ "$request_ok" -ne 1 ]; then
+        error_message="$(jq -r '.error.message // empty' "$result_file" 2>/dev/null || true)"
+        _google_error "Rename request failed (HTTP $status)${error_message:+: $error_message}"
+        if jq -e '[.. | .reason? // empty] | any(. == "insufficientPermissions" or . == "ACCESS_TOKEN_SCOPE_INSUFFICIENT")' "$result_file" >/dev/null 2>&1; then
+            _google_error "The '$alias' token lacks a scope that can rename this item: drive.metadata or full drive is required, and drive.file reaches only files this app created or opened."
+        fi
+    fi
+
+    # Readback runs after every attempt so an uncertain outcome is reported from Drive's current state, not assumed.
+    if ! _drive_rename_fetch "$alias" "$file_id" > "$DRIVE_WORK/rename-after.json"; then
+        _google_error "Readback failed; the rename outcome is unknown. Inspect with 'drive meta $alias $file_id' before retrying."
+        return 1
+    fi
+    if jq -e --arg name "$name" '.name == $name' "$DRIVE_WORK/rename-after.json" >/dev/null; then
+        if [ "$request_ok" -ne 1 ]; then
+            _google_error "Readback shows the proposed name although the request reported failure; inspect before relying on it."
+            return 1
+        fi
+        jq -r --slurpfile before "$meta_file" '
+          "Renamed Drive item: " + .id + "\n" +
+          "Previous name: " + $before[0].name + "\n" +
+          "Confirmed name: " + .name + "\n" +
+          "URL: " + (.webViewLink // "")
+        ' "$DRIVE_WORK/rename-after.json"
+        return 0
+    fi
+    if [ "$request_ok" -eq 1 ]; then
+        _google_error "Drive accepted the request, but readback shows a different name: $(jq -r '.name' "$DRIVE_WORK/rename-after.json"). Inspect before retrying."
+    else
+        _google_error "Not renamed; current name: $(jq -r '.name' "$DRIVE_WORK/rename-after.json")"
+    fi
+    return 1
 )
 

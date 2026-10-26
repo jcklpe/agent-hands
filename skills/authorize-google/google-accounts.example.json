@@ -16,7 +16,8 @@
       },
       "drive": {
         "enabled": false,
-        "write_enabled": false
+        "write_enabled": false,
+        "rename_enabled": false
       },
       "contacts": {
         "enabled": false

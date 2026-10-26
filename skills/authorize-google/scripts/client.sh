@@ -130,6 +130,9 @@ _google_account_scopes() {
           "https://www.googleapis.com/auth/spreadsheets.readonly",
           (if (($account.drive.write_enabled // false) == true) then
             "https://www.googleapis.com/auth/drive.file"
+          else empty end),
+          (if (($account.drive.rename_enabled // false) == true) then
+            "https://www.googleapis.com/auth/drive.metadata"
           else empty end)
         else empty end)
         ,(if (($account.docs.enabled // false) == true) then

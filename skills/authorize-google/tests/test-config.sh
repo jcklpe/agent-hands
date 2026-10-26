@@ -9,6 +9,8 @@ cp "$AUTH/google-accounts.example.json" "$WORK/google-accounts.json"
 _google_accounts_ready
 [ "$(_google_account_path example '.token_path')" = "$WORK/google-example-token.json" ]
 [ "$(_google_account_scopes example)" = 'https://www.googleapis.com/auth/documents.readonly' ]
+jq '.accounts[0].drive.enabled = true | .accounts[0].drive.rename_enabled = true' "$WORK/google-accounts.json" > "$WORK/rename.json"
+GOOGLE_ACCOUNTS_PATH=rename.json _google_account_scopes example | grep -qx 'https://www.googleapis.com/auth/drive.metadata'
 (cd / && bash "$AUTH/scripts/authorize" check >/dev/null)
 printf '%s\n' 'GOOGLE_ACCOUNTS_PATH=$(touch MUST_NOT_EXIST)' > "$WORK/.env"
 _google_load_env

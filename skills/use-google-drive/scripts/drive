@@ -13,7 +13,8 @@ drive read ALIAS FILE_URL_OR_ID [--range A1_RANGE]
 drive download ALIAS FILE_URL_OR_ID [--out PATH] [--mime MIME] [--force]
 drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days N] [--exclude-folder NAME]...  # --recent 0 skips the recent-file query
 drive import-doc ALIAS SOURCE_FILE --title TITLE [--folder FOLDER_ID] [--execute]
-Import previews by default and requires account write opt-in. Exports/downloads write local files only.
+drive rename ALIAS FILE_URL_OR_ID --name NEW_NAME [--expect PREVIEW_SHA256 --execute]
+Import and rename preview by default and require account write opt-in; rename executes only with its preview fingerprint. Exports/downloads write local files only.
 EOF
     exit 0 ;;
 esac
@@ -28,5 +29,6 @@ case "$command" in
     download) _drive_download "$@" ;;
     export-index) _drive_export_index "$@" ;;
     import-doc) _drive_import_doc "$@" ;;
+    rename) _drive_rename "$@" ;;
     *) _google_error 'Unknown Drive command'; exit 1 ;;
 esac
