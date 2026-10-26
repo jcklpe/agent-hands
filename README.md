@@ -1,3 +1,5 @@
+![Agent Hands](assets/agent-hands-wordmark.png)
+
 # Agent Hands
 Skills and command-line tools that let an agent work with external services: mail, calendars, documents, files, task boards, and messages. Each skill explains its supported operations and includes the scripts, configuration examples, and supporting files needed to use them. Local tools also render Markdown to PDF and combine calendar exports into an agenda.
 
