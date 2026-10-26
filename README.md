@@ -5,7 +5,7 @@ Skills and command-line tools that let an agent work with external services: mai
 
 Choose the capabilities you need. Service skills share their provider's authorization support; they do not require every other integration, a personal vault, or a single all-provider Python environment.
 
-## <img src="assets/agent-hands-logomark.png" width="48" height="48" alt="Agent Hands robot"> Set up with your agent
+## 🤖 Set up with your agent
 **Copy and paste this prompt into your coding agent** to begin [guided setup](setup-agent-hands/SKILL.md):
 
 ```text
