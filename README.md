@@ -132,5 +132,8 @@ bash use-odoo-projects/tests/test-odoo-shell.sh
 
 Offline checks do not prove live permissions, tenant eligibility, or fresh-machine installation. Check help and local configuration first, then use an authorized read to verify the selected account and service. Routine setup should not mutate external records.
 
+## Security
+Keep secrets and private data out of commits and public reports. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+
 ## License
 [AGPL-3.0-only](LICENSE). See [theme provenance](render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.
