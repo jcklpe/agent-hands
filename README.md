@@ -4,7 +4,18 @@ Skills and command-line tools that let an agent work with external services: mai
 Choose the capabilities you need. Service skills share their provider's authorization support; they do not require every other integration, a personal vault, or a single all-provider Python environment.
 
 ## Get started
-Clone this repository:
+Copy this prompt into your coding agent, replacing the bracketed text with your goal:
+
+```text
+Help me set up Agent Hands for [the service or task I need].
+
+Use https://github.com/jcklpe/agent-hands. Reuse an existing checkout or clone it locally if needed. Read the checkout's AGENTS.md and setup-agent-hands/SKILL.md, then set up only the skills and dependencies needed for my goal. Preserve existing configuration, keep credentials local, and guide me through any account authorization. Verify setup with help, relevant offline checks, and an authorized read; do not change remote records just to test setup. Tell me what is installed, what you verified, and what still needs my input.
+```
+
+The [setup skill](setup-agent-hands/SKILL.md) helps your agent select capabilities, check platform support, and configure the services you need.
+
+### Manual setup
+If you prefer to set up the checkout yourself:
 
 ```sh
 git clone --recurse-submodules https://github.com/jcklpe/agent-hands.git
@@ -13,11 +24,7 @@ cd agent-hands
 
 For an existing checkout, `git submodule update --init --recursive` obtains published workflow pins. The current local rollout remains unpublished pending security/privacy review; it is not yet retrievable from a fresh remote clone.
 
-Then point your agent at [setup-agent-hands](setup-agent-hands/SKILL.md), for example:
-
-> Read setup-agent-hands/SKILL.md and help me set up Trello. Check the prerequisites, walk me through configuring my account, and verify a read without changing any cards.
-
-The setup skill selects the relevant service, checks your platform and existing tools, and guides credential configuration. You can also follow the linked skill files yourself. For example, this displays Trello's commands without contacting the service:
+Read [setup-agent-hands](setup-agent-hands/SKILL.md) and follow the selected service's guide. For example, this displays Trello's commands without contacting the service:
 
 ```sh
 bash use-trello/scripts/trello --help
