@@ -39,3 +39,13 @@ if (
 ); then echo 'FAIL: interrupted publication returned success'; exit 1; fi
 [ "$(cat "$work/interrupted/issues.md")" = keep-me ]
 printf 'ok: interrupted publication restores its pending artifact\n'
+
+# Explicit false must survive the configuration summary; only missing/null defaults to true.
+unset GITHUB_ENV_FILE
+jq '.repos[0].issues=false' "$work/github-repos.json" > "$work/disabled.json"
+GITHUB_REPOS_PATH=disabled.json _github_list_repos > "$work/summary"
+grep -F 'issues:false' "$work/summary" >/dev/null
+jq 'del(.repos[0].issues)' "$work/github-repos.json" > "$work/defaulted.json"
+GITHUB_REPOS_PATH=defaulted.json _github_list_repos > "$work/summary"
+grep -F 'issues:true' "$work/summary" >/dev/null
+printf 'ok: repository summary preserves an explicitly disabled domain\n'

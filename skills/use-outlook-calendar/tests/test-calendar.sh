@@ -35,6 +35,8 @@ _m365_calendar_update example --event event-1 --replace-attendees --notify --exe
 jq -e '.attendees == [] and (keys | length) == 1' "$WORK/written.json" >/dev/null
 _m365_calendar_find example workshop --json > "$WORK/found.json"
 jq -e '.items[0].id == "event-1"' "$WORK/found.json" >/dev/null
+_m365_calendar_find example workshop > "$WORK/human.txt"
+grep -F "event_id: event-1" "$WORK/human.txt" >/dev/null
 _m365_calendar_export example --output "$WORK/calendar.md" > "$WORK/out"
 grep -F 'Example workshop' "$WORK/calendar.md" >/dev/null
 cp "$WORK/calendar.md" "$WORK/previous.md"

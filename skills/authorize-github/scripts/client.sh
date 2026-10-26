@@ -81,7 +81,7 @@ _github_resolve_repo() {
 
 _github_list_repos() {
     _github_config_ready || return 1
-    jq -r '.repos[] | "\(.alias) | \(.owner)/\(.repo) | issues:\(.issues // true) prs:\(.prs // false) discussions:\(.discussions // false) projects:\((.projects // []) | length)"' "$(_github_repos_config)"
+    jq -r '.repos[] | "\(.alias) | \(.owner)/\(.repo) | issues:\(if .issues == null then true else .issues end) prs:\(.prs // false) discussions:\(.discussions // false) projects:\((.projects // []) | length)"' "$(_github_repos_config)"
 }
 
 _github_export_begin() {

@@ -42,4 +42,4 @@ Creation verifies returned conditions, actions, exceptions, enabled state, seque
 ## Private audit and validation
 Audit defaults to ignored `mail-writes.jsonl` beside this skill. `M365_MAIL_AUDIT_LOG` in the provider env selects another private location; relative paths resolve here. Records include message IDs, senders, subjects, and rule criteria. Audit is best-effort after execution; a failed append does not undo a write. Never commit these records or treat them as a transaction log covering every failure.
 
-Retained synthetic checks cover reads, moves, categories, rule gates/readback, export preservation, attachment safety, and failed deletion verification. Provider-only isolation and legacy compatibility are checked without real mail or consent. Live account behavior and fresh cross-platform installation remain unverified.
+Retained synthetic checks cover reads, moves, categories, rule gates/readback, export preservation, attachment safety, and failed deletion verification. Provider-only isolation and native command behavior are checked without real mail or consent. Live account behavior and fresh cross-platform installation remain unverified.

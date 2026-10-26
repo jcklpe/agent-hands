@@ -77,7 +77,7 @@ def render_planner(args, data):
         "",
         f"Account email: `{args.email}`",
         "",
-        "Generated snapshot of the plans configured for this account. Do not edit by hand; change Planner through `lifeos m365 planner` and re-sync.",
+        "Generated snapshot of the plans configured for this account. Do not edit by hand; change Planner through the native `use-planner` capability and export again.",
         "",
     ]
     plans = data.get("plans") or []

@@ -49,7 +49,7 @@ cp "${ODOO_AUTH_DIR}/odoo-accounts.example.json" "${TEST_TEMP}/odoo-accounts.jso
 )
 (
     export ODOO_CONFIG_DIR="${TEST_TEMP}/unconfigured"
-    unset ODOO_ENV_FILE ODOO_ACCOUNTS_PATH ODOO_API_KEY LIFEOS_VAULT_PATH
+    unset ODOO_ENV_FILE ODOO_ACCOUNTS_PATH ODOO_API_KEY
     bash "${ODOO_USE_DIR}/scripts/odoo" --help >/dev/null
     bash "${ODOO_USE_DIR}/scripts/odoo" tasks update example 42 --name 'Offline preview' --json | jq -e '.task_id == 42 and .values.name == "Offline preview"' >/dev/null
 )

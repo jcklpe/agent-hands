@@ -14,6 +14,8 @@ _m365_get() { [ "${FAIL_READ:-0}" = 0 ] || return 1; case "$2" in */me) printf '
 _m365_write() { printf '%s' "$4" > "$WORK/written.json"; jq '. + {id:"contact-1"}' "$WORK/written.json"; }
 _m365_contacts_find example ADA --json > "$WORK/found.json"
 jq -e '.value[0].id == "contact-1"' "$WORK/found.json" >/dev/null
+_m365_contacts_find example ADA > "$WORK/human.txt"
+grep -F "contact_id: contact-1" "$WORK/human.txt" >/dev/null
 _m365_contacts_create example --display-name 'Example Person' > "$WORK/out"
 grep -F 'DRY RUN' "$WORK/out" >/dev/null
 [ ! -e "$WORK/written.json" ]

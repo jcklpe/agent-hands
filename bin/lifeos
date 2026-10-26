@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Stable optional compatibility entrypoint; native service CLIs remain independent.
-AGENT_HANDS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec bash "${AGENT_HANDS_ROOT}/compat/lifeos/lifeos.sh" "$@"
