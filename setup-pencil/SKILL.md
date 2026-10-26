@@ -25,3 +25,10 @@ Keep VS Code and the intended Pencil document open. Restart the chosen client se
 
 ## Evidence and gaps
 On 2026-10-26, both Codex and Claude Code had this stdio registration, and its macOS ARM64 executable existed. The installed extension's package metadata, MCP configuration generator, and adapter confirmed the publisher ID, argument shape, and extension-managed registration. No server was started, no design file was read, and no fresh-machine or account setup was tested during that check. Report installation, discovery, and successful document access separately.
+
+## Optional global discovery
+Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
+```sh
+python3 setup-pencil/scripts/link-skills.py --client codex
+```
+This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. This links only the setup guide; it does not install or register the vendor MCP integration. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.

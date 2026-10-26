@@ -37,3 +37,10 @@ Timed events are converted into the chosen display timezone; all-day dates stay 
 Version 1 bundles contain `schema_version`, `provider` (`google` or `microsoft`), `source` (the account alias), `start`, `end`, `complete: true`, and a nonempty `calendars` array. Google members contain `calendar` metadata and `events.items`. Microsoft members contain `id`, optional `graphId`, `name`, and `events`; the bundle declares `timezone: "UTC"`. Use provider exporters instead of constructing completeness claims manually.
 
 `tests/test_render.py` exercises source coverage, preserved output, timezone conversion, shared-UID merging, local-ID isolation, compact output, and refusal paths. Existing provider/legacy rendering fixtures remain the regression check for detailed event formatting. These are offline checks, not evidence of live account access or fresh-platform onboarding.
+
+## Optional global discovery
+Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
+```sh
+python3 render-calendar-agenda/scripts/link-skills.py --client codex
+```
+This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.

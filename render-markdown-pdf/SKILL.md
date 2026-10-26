@@ -34,3 +34,10 @@ Existing output is refused unless `--force` is explicit. Successful rendering pu
 Inspect the resulting PDF, not just the exit code. Check extracted text and metadata with `pdftotext`/`pdfinfo`, render every page with `pdftoppm -png`, and view the images for clipping, missing glyphs, awkward breaks, and table/code overflow. Use synthetic inputs for package checks. A successful export is not authorization to publish or upload the document.
 
 Run `uv run --locked python tests/test_render.py` for output-preservation and resource-boundary checks. `tests/fixtures/report.md` and `tests/fixtures/resume.md` are synthetic visual-review inputs; pass the report's `images/` directory as its asset grant. Write review PDFs outside the source collection or to its ignored `exports/` directory.
+
+## Optional global discovery
+Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
+```sh
+python3 render-markdown-pdf/scripts/link-skills.py --client codex
+```
+This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.

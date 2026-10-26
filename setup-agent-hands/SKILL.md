@@ -1,10 +1,15 @@
 ---
 name: setup-agent-hands
-description: "Help a new user install selected external-service capabilities from Agent Hands. Use to choose available skills, inspect dependencies and platform support, bootstrap missing runtimes, and configure only the requested providers."
+description: "Help a new user install selected external-service capabilities from Agent Hands. Use to choose available skills, inspect dependencies and platform support, bootstrap missing runtimes, configure only the requested providers, and offer service-selected global discovery for supported local clients."
 ---
 
 # Setup Agent Hands
 Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+
+## Setup dialogue
+Begin by asking what the user wants to do. Resolve the selected service and capabilities, then ask which supported local agent clients they use and whether they want those skills linked for global discovery. Offer direct checkout use without links as an equal choice. Reuse choices already supplied; ask only what is missing, in short steps rather than a form with placeholders. Keep global skill discovery, runtime installation, account authorization and MCP registration as separate choices.
+
+When global links are wanted, read [optional global skill links](references/global-skill-links.md), inspect the client's actual discovery directory, and invoke each selected service's `scripts/link-skills.py` with only its requested capabilities. Multi-capability services require `--skill`; never infer all services from the repository being present. Preview the exact destinations and apply with `--execute` within the user's stated installation scope. Preserve existing links, expose conflicts, and use the explicit recoverable repair procedure when an old checkout path is confirmed. The dialogue can optionally link itself with [its own entrypoint](scripts/link-skills.py); it is not automatically added to every service selection.
 
 ## Select and inspect
 Read the chosen use skill and its provider's setup skill, including the linked account-access reference when configuration or authentication is involved. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.

@@ -29,3 +29,10 @@ Tools come from the running JASP version. Before analysis work, inspect its meth
 
 ## Evidence and gaps
 On 2026-10-26 the Codex entry above existed and a local checkout of that bridge revision was available. Its manifest and implementation confirmed the runtime, endpoint default, dynamic discovery, and polling. That check did not establish a running JASP application, RPC reachability, successful tool discovery, or any completed analysis. New-machine setup still needs the JASP build/RPC-enable step resolved and a successful read-only check.
+
+## Optional global discovery
+Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
+```sh
+python3 setup-jasp/scripts/link-skills.py --client codex
+```
+This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. This links only the setup guide; it does not install or register the vendor MCP integration. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.

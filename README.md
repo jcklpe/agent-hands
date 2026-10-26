@@ -29,7 +29,7 @@ Read [setup-agent-hands](setup-agent-hands/SKILL.md) and follow the selected ser
 bash use-trello/scripts/trello --help
 ```
 
-Cloning does not install skills into an agent client automatically. You can point an agent directly at a `SKILL.md`, or configure your client's skill discovery separately. If distributing only selected skills, retain their declared dependencies and sibling folder layout. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
+Cloning does not install skills into an agent client automatically. The setup dialogue offers optional global discovery for selected services in Codex and Claude Code. Each service setup owns its `scripts/link-skills.py` entrypoint: preview first, then apply the authorized selection with `--execute`. See [global link choices and conflict-safe repair](setup-agent-hands/references/global-skill-links.md). Direct use of a `SKILL.md` remains available without links. If distributing only selected skills, retain their declared dependencies and sibling folder layout; optional link entrypoints also require the shared `setup-agent-hands/scripts/skill_links.py` primitive. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
 
 ## Available capabilities
 The names below group related reads, writes, and comments where implemented. A `use-*` skill is a bounded interface, not a promise of the service's full API.

@@ -34,3 +34,10 @@ Setup owns initial connection, account/key establishment and repair. [use-penpot
 `bash scripts/check` explains missing, malformed or overly permissive configuration. If tool calls keep reporting no connected session while the user's file shows MCP connected, suspect the key: the user regenerates it in Penpot's Integrations page and replaces the value in `.env`. How Penpot reports an invalid key has not been verified. When the client shows no Penpot tools, check its registration and start a new session before changing configuration. When tools appear but calls report no connected session, the Penpot tab is disconnected or asleep; see use-penpot.
 
 Do not broaden account access, change Penpot sharing or team permissions, or route around a denied key through browser automation.
+
+## Optional global discovery
+Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
+```sh
+python3 setup-penpot/scripts/link-skills.py --client codex
+```
+This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.
