@@ -5,16 +5,12 @@ Skills and command-line tools that let an agent work with external services: mai
 
 Choose the capabilities you need. Service skills share their provider's authorization support; they do not require every other integration, a personal vault, or a single all-provider Python environment.
 
-## Get started
-Copy this prompt into your coding agent, replacing the bracketed text with your goal:
+## Set up with your agent
+**Copy and paste this prompt into your coding agent** to begin [guided setup](setup-agent-hands/SKILL.md):
 
 ```text
-Help me set up Agent Hands for [the service or task I need].
-
-Use https://github.com/jcklpe/agent-hands. Reuse an existing checkout or clone it locally if needed. Read the checkout's AGENTS.md and setup-agent-hands/SKILL.md, then set up only the skills and dependencies needed for my goal. Preserve existing configuration, keep credentials local, and guide me through any account authorization. Verify setup with help, relevant offline checks, and an authorized read; do not change remote records just to test setup. Tell me what is installed, what you verified, and what still needs my input.
+Help me set up https://github.com/jcklpe/agent-hands: read AGENTS.md and setup-agent-hands/SKILL.md, then guide me through setup step by step, starting by asking what I want to do.
 ```
-
-The [setup skill](setup-agent-hands/SKILL.md) helps your agent select capabilities, check platform support, and configure the services you need.
 
 ### Manual setup
 If you prefer to set up the checkout yourself:
