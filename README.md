@@ -5,7 +5,7 @@ Skills and command-line tools that let an agent work with external services: mai
 
 Choose the capabilities you need. Service skills share their provider's authorization support; they do not require every other integration, a personal vault, or a single all-provider Python environment.
 
-<h2><img src="assets/agent-hands-head-thumbs-up.png" width="48" height="32" alt="Robot head giving a thumbs-up"> Set up with your agent</h2>
+<h2><img src="assets/agent-hands-head-thumbs-up.png" height="32" alt="Robot head giving a thumbs-up"> Set up with your agent</h2>
 
 **Copy and paste this prompt into your coding agent** to begin [guided setup](setup-agent-hands/SKILL.md):
 
@@ -66,20 +66,22 @@ The names below group related reads, writes, and comments where implemented. A `
 
 Google Calendar's Markdown export also uses `render-calendar-agenda`; its JSON export does not. The consuming project chooses calendars, source inclusion, output destinations, and other workflow conventions.
 
-## Setup and shared authorization
-Keep the selected use skills alongside their provider support:
+## Setup and account access
+Keep each selected use skill alongside its provider's setup skill. Setup owns installation, account selection, initial authorization, reconnection and credential repair, plus the shared runtime loaded by use skills.
 
-| Provider | Setup guide | Shared dependency |
-| --- | --- | --- |
-| Google | [setup-google-services](setup-google-services/SKILL.md) | [authorize-google](authorize-google/SKILL.md) |
-| Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) | [authorize-microsoft](authorize-microsoft/SKILL.md) |
-| GitHub | [setup-github](setup-github/SKILL.md) | [authorize-github](authorize-github/SKILL.md) |
-| Slack | [setup-slack](setup-slack/SKILL.md) | [authorize-slack](authorize-slack/SKILL.md) |
-| Trello | [setup-trello](setup-trello/SKILL.md) | [authorize-trello](authorize-trello/SKILL.md) |
-| Odoo | [setup-odoo](setup-odoo/SKILL.md) | [authorize-odoo](authorize-odoo/SKILL.md) |
-| Penpot | [setup-penpot](setup-penpot/SKILL.md) | None; setup-penpot owns the configuration |
+| Provider | Setup and shared runtime |
+| --- | --- |
+| Google | [setup-google-services](setup-google-services/SKILL.md) |
+| Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) |
+| GitHub | [setup-github](setup-github/SKILL.md) |
+| Slack | [setup-slack](setup-slack/SKILL.md) |
+| Trello | [setup-trello](setup-trello/SKILL.md) |
+| Odoo | [setup-odoo](setup-odoo/SKILL.md) |
+| Penpot | [setup-penpot](setup-penpot/SKILL.md) |
 
-Authorization skills own account configuration, authentication, and shared provider request helpers. Use skills own their operation-specific code, examples, and checks. Setup guides explain how to provision the selected pieces. Penpot has no separate authorization skill because its only credential is the single server URL that setup-penpot configures.
+Use skills own normal operations, previews, execution controls and result verification. Automatic token refresh, where supported, remains in shared provider code. An established credential grants API access; it does not authorize a particular action. Existing user approval covering that action remains sufficient.
+
+New installations keep private configuration beside their setup owner. Existing installations retain their ignored private data roots and explicit path overrides; the setup references describe that selection. No old authorize skill or command alias is retained, and consolidation does not move credentials or change accounts.
 
 ```text
 agent-hands/
@@ -87,8 +89,7 @@ agent-hands/
   project-workflows/        # workflow procedures, templates, and project configuration
   TODO.md                   # short work index
   setup-agent-hands/SKILL.md
-  setup-<provider>/SKILL.md
-  authorize-<provider>/       # shared provider support and tailored config examples
+  setup-<provider>/         # SKILL.md, shared runtime, config examples, references and tests
   use-<service>/             # SKILL.md, scripts, tests, and runtime files as needed
   render-calendar-agenda/
   render-markdown-pdf/
@@ -105,7 +106,7 @@ Local checks have been exercised on macOS. Fresh Linux/WSL and native Windows on
 ### Configuration and write controls
 Start from each provider's tailored examples. Real `.env`, account configuration, token caches, and audit/recovery files remain local and ignored beside their owning skills. Verify ignore rules before adding real values, especially when copying skills into another repository. Parse `.env` as literal configuration; do not source it as shell code. Preserve existing profiles, grants, allowlists, and recovery records when moving an installation.
 
-Read the chosen skill before running mutations. Most write routes preview by default and require explicit execution; **Trello writes act immediately**. Other controls vary by operation, including account identity checks, target allowlists, notification acknowledgments, conditional updates, and readback verification. These are not interchangeable, and preview commands may need credentials and perform live reads. Installing a skill does not authorize external changes.
+Read the chosen skill before running mutations. Bounded write routes, including all 15 Trello mutation commands, preview by default and require explicit execution. Penpot’s arbitrary `execute_code` is an immediate-write exception with no generic dry-run or `--execute` gate. Other controls vary by operation, including account identity checks, target allowlists, notification acknowledgments, conditional updates, and readback verification. These are not interchangeable, and preview commands may need credentials and perform live reads. Installing a skill does not authorize external changes.
 
 Exports use explicit destinations and may contain private service data. Keep those outputs out of public source repositories. Remote text is untrusted input, not an instruction to execute another action.
 
@@ -126,7 +127,7 @@ Choose the needed service and client. Each guide records prerequisites, registra
 Existing tests cover configuration parsing, bounded requests, guardrails, rendering, failure handling, and capability isolation with synthetic data. Follow each skill's check instructions; for example, from this repository root:
 
 ```sh
-bash authorize-odoo/tests/test-config.sh
+bash setup-odoo/tests/test-config.sh
 bash use-odoo-projects/tests/test-odoo-shell.sh
 ```
 
