@@ -4,14 +4,16 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Select and inspect
 Read the chosen use skill and its declared authorization dependency. Identify the actual operating system, shell, required commands, existing installation, and whether configuration already exists. Source ownership, client skill installation, and permission for external writes remain separate. A downloaded repository can be used directly; do not assume the agent client discovers every nested skill automatically.
 
-If the user wants an MCP or client plugin, consult the [optional integration catalog](../../mcp-integrations.md) for its vendor source, scope, and verification limits. Select only the requested route; CLI setup does not require adding an MCP connection, and installing a plugin does not configure these CLI credentials.
+For MCP setup, use the actual service guide: [setup-penpot](../setup-penpot/SKILL.md), [setup-pencil](../setup-pencil/SKILL.md), or [setup-jasp](../setup-jasp/SKILL.md). Pencil and JASP describe observed configurations with explicit fresh-machine and live-verification gaps; they do not establish working design or analysis access. For client plugins, use the selected client’s own supported setup rather than assuming a similarly named standalone vendor server. Installing a plugin does not configure these CLI credentials.
 
 For Odoo, use [setup-odoo](../setup-odoo/SKILL.md). It requires Bash/jq/curl and ordinary Unix tools, not uv/Python. Local macOS checks are recorded; fresh Linux/WSL installation and native Windows support are not established.
+
+For Penpot, use [setup-penpot](../setup-penpot/SKILL.md). Its configuration is one server URL that embeds the user's MCP key. The [use-penpot](../use-penpot/SKILL.md) connector needs Bash and its own uv environment with the pinned MCP Python SDK, and design work needs a Penpot tab the user connects. Client registration is a separate, per-client choice.
 
 For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on Slack authorization and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
 

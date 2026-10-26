@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Local Penpot configuration check: no network request and no URL or key output.
+set -u
+PENPOT_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "${PENPOT_SETUP_DIR}/scripts/config.sh"
+case "${1:-}" in
+    -h|--help|help) printf '%s\n' 'check: verify the Penpot MCP server URL is configured, well formed and stored owner-only; no network request or URL/key output'; exit 0 ;;
+    '') ;;
+    *) _penpot_error 'Unknown option; run check --help'; exit 1 ;;
+esac
+_penpot_load_env || exit 1
+url="$(_penpot_server_url)" || exit 1
+env_file="$(_penpot_env_path)"
+source_note='an exported environment variable'
+if [ -n "$env_file" ]; then
+    mode="$(_penpot_file_mode "$env_file")"
+    case "$mode" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;; *) _penpot_error 'Could not read the env file permissions'; exit 1 ;; esac
+    case "$mode" in *00) ;; *) _penpot_error "The env file is accessible to other users (mode ${mode}); run chmod 600 on it"; exit 1 ;; esac
+    source_note='an owner-only env file'
+fi
+case "$url" in https://*) key_note='key present' ;; *) key_note='loopback server, no key required' ;; esac
+printf 'Penpot MCP server configured for %s (%s, from %s). Service access is not verified; use-penpot --list-tools checks the connection.\n' "$(_penpot_url_host "$url")" "$key_note" "$source_note"

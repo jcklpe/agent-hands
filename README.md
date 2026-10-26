@@ -50,6 +50,7 @@ The names below group related reads, writes, and comments where implemented. A `
 | Slack | [use-slack-lists](skills/use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
 | Trello | [use-trello](skills/use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
 | Odoo | [use-odoo-projects](skills/use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
+| Penpot | [use-penpot](skills/use-penpot/SKILL.md) | Inspect and edit a design file the user has connected, through Penpot's own MCP tools, and export images for visual checks. Provides the stdio connector clients register so the key stays out of client configuration. Writes act immediately. |
 
 ### Local rendering
 | Skill | Purpose | Dependencies |
@@ -70,8 +71,9 @@ Keep the selected use skills alongside their provider support:
 | Slack | [setup-slack](skills/setup-slack/SKILL.md) | [authorize-slack](skills/authorize-slack/SKILL.md) |
 | Trello | [setup-trello](skills/setup-trello/SKILL.md) | [authorize-trello](skills/authorize-trello/SKILL.md) |
 | Odoo | [setup-odoo](skills/setup-odoo/SKILL.md) | [authorize-odoo](skills/authorize-odoo/SKILL.md) |
+| Penpot | [setup-penpot](skills/setup-penpot/SKILL.md) | None; setup-penpot owns the configuration |
 
-Authorization skills own account configuration, authentication, and shared provider request helpers. Use skills own their operation-specific code, examples, and checks. Setup guides explain how to provision the selected pieces.
+Authorization skills own account configuration, authentication, and shared provider request helpers. Use skills own their operation-specific code, examples, and checks. Setup guides explain how to provision the selected pieces. Penpot has no separate authorization skill because its only credential is the single server URL that setup-penpot configures.
 
 ```text
 agent-hands/
@@ -86,7 +88,6 @@ agent-hands/
     render-calendar-agenda/
     render-markdown-pdf/
       assets/themes/
-  mcp-integrations.md
 ```
 
 ### Runtimes
@@ -112,9 +113,10 @@ Commit workflow changes in the child first, then record its exact pin with relat
 
 Project Workflows supports contribution and documentation; service-only skill bundles still require only their declared capability/provider dependencies. Documentation destinations are configured for active spikes, scratch, archives, policies, and pinned issues; create content only where needed rather than adding empty folder scaffolding.
 
-## Optional MCP integrations
-The [MCP integration catalog](mcp-integrations.md) links vendor setup sources and records capability overlap, control differences, and verification limits. MCPs are optional: the catalog does not install servers, connect accounts, or replace these CLIs. Client connections and CLI credentials are configured separately.
+## MCP setup
+For an implemented MCP route, use its service guide: [setup-penpot](skills/setup-penpot/SKILL.md) and [use-penpot](skills/use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](skills/setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](skills/setup-jasp/SKILL.md) documents the local application bridge. The latter two record configured installations and the live-verification gaps; they do not claim tested design or analysis workflows.
 
+Choose the needed service and client. Each guide records prerequisites, registration, startup, verification, and remaining setup gaps. Client plugins are separate installations: their enabled state neither selects a vendor's standalone MCP server nor configures these CLI credentials. Restore those through the client's supported plugin setup and verify the authorized account separately.
 ## Checks and limitations
 Existing tests cover configuration parsing, bounded requests, guardrails, rendering, failure handling, and capability isolation with synthetic data. Follow each skill's check instructions; for example, from this repository root:
 
@@ -126,7 +128,4 @@ bash skills/use-odoo-projects/tests/test-odoo-shell.sh
 Offline checks do not prove live permissions, tenant eligibility, or fresh-machine installation. Check help and local configuration first, then use an authorized read to verify the selected account and service. Routine setup should not mutate external records.
 
 ## License
-[AGPL-3.0-only](LICENSE). See [NOTICE.md](NOTICE.md) for retained source attribution and [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.
-
-## Existing lifeos callers
-The optional [compatibility command](compat/lifeos/README.md) is available at `bin/lifeos`. It preserves existing command spellings and configured GitHub aggregate exports using the same provider configuration and native service implementations. New callers should use the native capability entrypoints. No former configs directory, shared credential file, or shared Python runtime is required.
+[AGPL-3.0-only](LICENSE). See [theme provenance](skills/render-markdown-pdf/assets/themes/SOURCE.md) for the bundled PDF themes.

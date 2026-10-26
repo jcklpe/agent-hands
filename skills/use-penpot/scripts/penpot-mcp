@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# MCP stdio entrypoint for Penpot. Clients register this command; the server URL and key stay in setup-penpot's configuration.
+set -eu
+PENPOT_USE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PENPOT_SETUP_DIR="$(cd "${PENPOT_USE_DIR}/../setup-penpot" && pwd)"
+. "${PENPOT_SETUP_DIR}/scripts/config.sh"
+case "${1:-}" in
+    -h|--help|help) printf '%s\n' 'penpot-mcp: serve Penpot MCP tools over stdio for a registered MCP client' 'penpot-mcp --list-tools: open one session, print the tool names and close it' 'Configuration: setup-penpot/.env (PENPOT_MCP_SERVER_URL). The URL and key are never printed.'; exit 0 ;;
+    ''|--list-tools) ;;
+    *) _penpot_error 'Unknown option; run penpot-mcp --help'; exit 1 ;;
+esac
+_penpot_load_env
+url="$(_penpot_server_url)"
+# Pass the URL through the child environment, never as an argument, so it stays out of process listings.
+PENPOT_MCP_SERVER_URL="$url" _penpot_python "$PENPOT_USE_DIR" "${PENPOT_USE_DIR}/scripts/penpot_mcp_bridge.py" "$@"
