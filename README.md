@@ -56,7 +56,7 @@ The names below group related reads, writes, and comments where implemented. A `
 | Slack | [use-slack-lists](use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
 | Trello | [use-trello](use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
 | Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
-| Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a design file the user has connected, through Penpot's own MCP tools, and export images for visual checks. Provides the stdio connector clients register so the key stays out of client configuration. Writes act immediately. |
+| Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a connected file through Penpot's MCP tools and export images for visual checks. MCP writes act immediately. Also export design-token JSON from a local archive using a project-owned manifest, with preview and guarded execution; this offline command needs no credentials. |
 
 ### Local rendering
 | Skill | Purpose | Dependencies |

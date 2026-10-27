@@ -27,6 +27,9 @@ The real `.env` is ignored by this folder's [.gitignore](.gitignore). Check igno
 
 Report which pieces are installed, configured, discovered and verified as separate levels, without revealing the URL or key. Repeated setup must preserve existing configuration.
 
+## Offline design-token export
+The [use-penpot export guide](../use-penpot/references/token-export.md) documents a separate archive-to-JSON command. It needs Python 3.9+ on macOS or Linux, a local `.penpot` export and a project-owned manifest; it does not require MCP setup, an account key, uv or provider configuration. Do not create credentials merely to export from an archive.
+
 ## Operation boundary
 Setup owns initial connection, account/key establishment and repair. [use-penpot](../use-penpot/SKILL.md) owns normal file operations and their permission/verification checks. Arbitrary `execute_code` can write immediately; there is no generic dry-run or `--execute` flag. Credential access does not authorize a design change.
 
