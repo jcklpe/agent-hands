@@ -30,9 +30,9 @@ gh() {
         'api user') printf 'example-user' ;;
         'api graphql')
             case "$*" in
-                *'updateProjectV2ItemFieldValue'*) printf 'mutation' >> "$work/mutations"; printf '{}' ;;
-                *'organization(login:'*) printf '{"data":{"organization":{"projectV2":{"id":"PROJECT_NODE","field":{"id":"FIELD_NODE","options":[{"id":"OPTION_NODE","name":"Ready"}]}}}}}' ;;
-                *'node(id: $project)'*) printf '{"id":"ITEM_NODE","fieldValueByName":{"optionId":"OLD_OPTION","name":"Waiting"}}' ;;
+                *'updateProjectV2ItemFieldValue'*) printf 'mutation' >> "$work/mutations"; printf '{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"ITEM_NODE"}}}}' ;;
+                *'organization(login:'*) printf '{"data":{"organization":{"projectV2":{"id":"PROJECT_NODE","field":{"id":"FIELD_NODE","options":[{"id":"OPTION_NODE","name":"Ready"},{"id":"OLD_OPTION","name":"Waiting"}]}}}}}' ;;
+                *'node(id: $project)'*) printf '{"data":{"node":{"id":"PROJECT_NODE","items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"ITEM_NODE","content":{"id":"ISSUE_NODE"},"fieldValueByName":{"optionId":"OLD_OPTION","name":"Waiting"}}]}}}}' ;;
                 *) cat "${DISCUSSION_FIXTURE:?discussion fixture must be selected by its owning test}" | jq '[.]' ;;
             esac ;;
         *) printf 'Unexpected gh invocation\n' >&2; return 1 ;;
