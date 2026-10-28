@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. New installations keep private configuration there. Existing installations retain an adjacent `authorize-google/` directory as ignored private storage when its real env or account file exists; no executable or discoverable skill remains there. Explicit configuration overrides keep their existing precedence. Preserve that selected data root and existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 This provider skill owns shared account configuration, OAuth, and token refresh. Small Sheets response formatting and staged output-publication helpers are also shared by Google capabilities; they contain no account selection or remote requests. A use skill supplies its service operations; this skill supplies no generic API command. It requires Bash 3.2+, curl, jq, and uv or an explicitly selected Python 3.11+. Python uses only the standard library. Start with [setup-google-services](../SKILL.md) for first-time onboarding.
 

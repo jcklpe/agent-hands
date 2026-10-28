@@ -41,11 +41,7 @@ def config_dir():
     selected = os.environ.get("SLACK_ENV_FILE")
     if selected:
         return Path(selected).expanduser().resolve().parent
-    source = Path(__file__).resolve().parents[1]
-    previous = source.parent / "authorize-slack"
-    if (previous / ".env").is_file() or (previous / "slack-accounts.json").is_file():
-        return previous
-    return source
+    return Path(__file__).resolve().parents[1]
 
 
 def load_env():

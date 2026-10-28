@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. New installations keep private configuration there. Existing installations retain an adjacent `authorize-trello/` directory as ignored private storage when its real env or account file exists; no executable or discoverable skill remains there. Explicit configuration overrides keep their existing precedence. Preserve that selected data root and existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 Owns literal provider configuration and HTTP access. Requires Bash 3.2+, curl, jq, and ordinary Unix tools. No Python, uv, other provider, or personal workspace is required. See [setup-trello](../SKILL.md) for first-time setup.
 

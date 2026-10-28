@@ -68,14 +68,7 @@ _trello_write_http() {
 }
 
 
-# Keep existing private storage independent from the relocated provider source.
-_trello_config_dir() {
-    if [ -n "${TRELLO_CONFIG_DIR:-}" ]; then printf '%s\n' "$TRELLO_CONFIG_DIR"; return; fi
-    local previous="${TRELLO_AUTH_DIR}/../authorize-trello"
-    if [ -f "$previous/.env" ]; then
-        (cd "$previous" && pwd)
-    else printf '%s\n' "$TRELLO_AUTH_DIR"; fi
-}
+_trello_config_dir() { printf '%s\n' "${TRELLO_CONFIG_DIR:-$TRELLO_AUTH_DIR}"; }
 
 # Direct operation builders cannot accidentally bypass the preview controller.
 _trello_get() { _trello_get_http "$@"; }

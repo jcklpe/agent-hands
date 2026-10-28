@@ -81,7 +81,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 
 Use skills own normal operations, previews, execution controls and result verification. Automatic token refresh, where supported, remains in shared provider code. An established credential grants API access; it does not authorize a particular action. Existing user approval covering that action remains sufficient.
 
-New installations keep private configuration beside their setup owner. Existing installations retain their ignored private data roots and explicit path overrides; the setup references describe that selection. No old authorize skill or command alias is retained, and consolidation does not move credentials or change accounts.
+Each setup skill keeps its provider's private configuration beside its examples; an explicit configuration override can select another location.
 
 ```text
 agent-hands/

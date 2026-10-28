@@ -129,11 +129,4 @@ _github_export_cleanup() {
     rm -rf "$GITHUB_EXPORT_WORK"
 }
 
-# Keep existing private storage independent from the relocated provider source.
-_github_config_dir() {
-    if [ -n "${GITHUB_CONFIG_DIR:-}" ]; then printf '%s\n' "$GITHUB_CONFIG_DIR"; return; fi
-    local previous="${GITHUB_AUTH_DIR}/../authorize-github"
-    if [ -f "$previous/.env" ] || [ -f "$previous/github-repos.json" ]; then
-        (cd "$previous" && pwd)
-    else printf '%s\n' "$GITHUB_AUTH_DIR"; fi
-}
+_github_config_dir() { printf '%s\n' "${GITHUB_CONFIG_DIR:-$GITHUB_AUTH_DIR}"; }

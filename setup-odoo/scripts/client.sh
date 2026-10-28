@@ -149,11 +149,4 @@ _odoo_call() {
     _odoo_http "$alias" "/json/2/${model}/${method}" "$body"
 }
 
-# Keep existing private storage independent from the relocated provider source.
-_odoo_config_dir() {
-    if [ -n "${ODOO_CONFIG_DIR:-}" ]; then printf '%s\n' "$ODOO_CONFIG_DIR"; return; fi
-    local previous="${ODOO_AUTH_DIR}/../authorize-odoo"
-    if [ -f "$previous/.env" ] || [ -f "$previous/odoo-accounts.json" ]; then
-        (cd "$previous" && pwd)
-    else printf '%s\n' "$ODOO_AUTH_DIR"; fi
-}
+_odoo_config_dir() { printf '%s\n' "${ODOO_CONFIG_DIR:-$ODOO_AUTH_DIR}"; }

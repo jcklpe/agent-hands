@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. New installations keep private configuration there. Existing installations retain an adjacent `authorize-odoo/` directory as ignored private storage when its real env or account file exists; no executable or discoverable skill remains there. Explicit configuration overrides keep their existing precedence. Preserve that selected data root and existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 ## Scope and dependencies
 Own account selection, credential lookup, JSON-2 transport, and request pacing. [use-odoo-projects](../../use-odoo-projects/SKILL.md) owns supported project/task operations; [setup-odoo](../SKILL.md) owns first-time onboarding. Runtime: Bash 3.2+, jq, curl, sed/date/mktemp and ordinary Unix file utilities. No Python, other provider, or workspace skill is required.

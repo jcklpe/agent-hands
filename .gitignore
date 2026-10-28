@@ -5,11 +5,3 @@
 __pycache__/
 *.pyc
 .DS_Store
-
-# Retained private data roots from existing installations; executable support moved to setup skills.
-/authorize-google/
-/authorize-microsoft/
-/authorize-slack/
-/authorize-github/
-/authorize-trello/
-/authorize-odoo/

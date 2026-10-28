@@ -235,11 +235,4 @@ _google_get_url() {
 }
 
 
-# Keep existing private storage independent from the relocated provider source.
-_google_config_dir() {
-    if [ -n "${GOOGLE_CONFIG_DIR:-}" ]; then printf '%s\n' "$GOOGLE_CONFIG_DIR"; return; fi
-    local previous="${GOOGLE_AUTH_DIR}/../authorize-google"
-    if [ -f "$previous/.env" ] || [ -f "$previous/google-accounts.json" ]; then
-        (cd "$previous" && pwd)
-    else printf '%s\n' "$GOOGLE_AUTH_DIR"; fi
-}
+_google_config_dir() { printf '%s\n' "${GOOGLE_CONFIG_DIR:-$GOOGLE_AUTH_DIR}"; }

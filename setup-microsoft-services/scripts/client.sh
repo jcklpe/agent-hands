@@ -471,11 +471,4 @@ _m365_profile_email() {
 }
 
 
-# Keep existing private storage independent from the relocated provider source.
-_m365_config_dir() {
-    if [ -n "${M365_CONFIG_DIR:-}" ]; then printf '%s\n' "$M365_CONFIG_DIR"; return; fi
-    local previous="${M365_AUTH_DIR}/../authorize-microsoft"
-    if [ -f "$previous/.env" ] || [ -f "$previous/m365-accounts.json" ]; then
-        (cd "$previous" && pwd)
-    else printf '%s\n' "$M365_AUTH_DIR"; fi
-}
+_m365_config_dir() { printf '%s\n' "${M365_CONFIG_DIR:-$M365_AUTH_DIR}"; }
