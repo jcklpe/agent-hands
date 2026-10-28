@@ -53,7 +53,7 @@ Proposed acceptance criteria:
 - Update read help/skill fidelity notes to describe supported content and remaining omissions. Do not imply visual/layout parity or that Markdown body replacement preserves native chips.
 
 ## Runtime: distinguish environment friction from service failure
-The [Google provider helper](../../authorize-google/scripts/client.sh), `_google_python`, invokes an explicit `GOOGLE_PYTHON` when set, otherwise uses `uv run --project`. The [provider instructions](../../authorize-google/SKILL.md), [setup guide](../../setup-google-services/SKILL.md), and Python manifests require Python 3.11+. These facts explain why cache access and runtime selection matter; they do not prove a new runtime defect.
+The [Google provider helper](../../setup-google-services/scripts/client.sh), `_google_python`, invokes an explicit `GOOGLE_PYTHON` when set, otherwise uses `uv run --project`. The [setup guide](../../setup-google-services/SKILL.md) and Python manifests require Python 3.11+. These facts explain why cache access and runtime selection matter; they do not prove a new runtime defect.
 
 Proposal: consider concise diagnostic guidance that separates cache/filesystem denial, unsupported runtime selection, DNS/network failure, and provider authorization failure. For sandbox denials, the agent should follow its execution environment's approval mechanism for the exact authorized operation, not treat tool installation or a successful read elsewhere as blanket permission.
 
