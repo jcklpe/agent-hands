@@ -120,7 +120,7 @@ Commit workflow changes in the child first, then record its exact pin with relat
 Project Workflows supports contribution and documentation; service-only skill bundles still require only their declared capability/provider dependencies. Documentation destinations are configured for active spikes, scratch, archives, policies, and pinned issues; create content only where needed rather than adding empty folder scaffolding.
 
 ## MCP setup
-For an implemented MCP route, use its service guide: [setup-penpot](setup-penpot/SKILL.md) and [use-penpot](use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](setup-jasp/SKILL.md) documents the local application bridge. The latter two record configured installations and the live-verification gaps; they do not claim tested design or analysis workflows.
+For an implemented MCP route, use its service guide: [setup-penpot](setup-penpot/SKILL.md) and [use-penpot](use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](setup-jasp/SKILL.md) documents the local application bridge. The latter two record their verification evidence and remaining gaps; they do not claim tested design or analysis workflows.
 
 Choose the needed service and client. Each guide records prerequisites, registration, startup, verification, and remaining setup gaps. Client plugins are separate installations: their enabled state neither selects a vendor's standalone MCP server nor configures these CLI credentials. Restore those through the client's supported plugin setup and verify the authorized account separately.
 ## Checks and limitations

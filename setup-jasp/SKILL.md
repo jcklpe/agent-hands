@@ -12,7 +12,7 @@ Install the appropriate JASP build from [JASP](https://jasp-stats.org/) and enab
 The required JASP release/build and exact RPC-enable interface have not been established from the inspected client configuration. Confirm those before calling fresh-machine setup complete; an ordinary JASP installation alone is insufficient evidence.
 
 ## Register the bridge
-The following Codex stdio entry reproduces the observed package revision and SDK constraint without exporting personal configuration:
+The following Codex stdio entry pins the bridge revision and MCP SDK constraint:
 
 ```toml
 [mcp_servers.jasp]
@@ -28,7 +28,7 @@ Start JASP with its RPC server, then a fresh MCP client session. The inspected b
 Tools come from the running JASP version. Before analysis work, inspect its method schemas and analysis context; do not treat a saved list of tools as the current API. User authorization for an analysis is separate from registering this bridge. No dedicated use skill is supplied until an actual analysis workflow has been verified.
 
 ## Evidence and gaps
-On 2026-10-26 the Codex entry above existed and a local checkout of that bridge revision was available. Its manifest and implementation confirmed the runtime, endpoint default, dynamic discovery, and polling. That check did not establish a running JASP application, RPC reachability, successful tool discovery, or any completed analysis. New-machine setup still needs the JASP build/RPC-enable step resolved and a successful read-only check.
+The pinned revision's manifest and implementation confirm the runtime, endpoint default, dynamic discovery, and polling. On 2026-10-28, with JASP 0.98.8 on macOS listening on the default endpoint, the bridge discovered 15 RPC methods as tools and `jasp_ping` returned `pong`. No analysis workflow has been verified. The JASP build requirement and the step that enables its RPC server are not established, so new-machine setup still needs them resolved.
 
 ## Optional global discovery
 Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
