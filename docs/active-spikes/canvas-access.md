@@ -12,9 +12,9 @@ Select a maintained Canvas integration and design a bounded implementation of `s
 
 ## Scope and ownership
 - `setup-canvas` handles connection discovery, account selection, informed consent, connection verification and explicit course selection. It must not silently create credentials or expand access.
-- `use-canvas` handles repeatable, read-oriented retrieval for the selected courses, stable resource identities, coverage reporting, provenance and changes since the last successful snapshot.
+- `use-canvas` handles repeatable retrieval and deterministic export for the selected courses, stable resource identities, coverage reporting and provenance. Detecting changes between runs belongs to the consumer (user decision, 2026-10-27, below).
 - The consuming agent interprets changes and decides what belongs in its private notes or task/calendar systems. This integration does not own those policies or write to downstream systems automatically.
-- Initial implementation excludes submissions, grading, course edits, messaging and unattended write automation. Browser fallback is a separately approved action, not an automatic continuation after an API limitation.
+- The first slice is read-only. Writes are in scope later (user decision, 2026-10-27, below), each behind this repository's preview/execute gate; unattended write automation stays out. Browser fallback is a separately approved action, not an automatic continuation after an API limitation.
 
 ## Selection before construction
 Inventory maintained MCP candidates from their original repositories and documentation. Compare maintenance/release activity, license, client/runtime compatibility, installation and update burden, actual API coverage, pagination, error handling, testability, and the ability to restrict operations to the authorized scope. Read the code or tests where necessary; a tool name or README claim is not evidence of working behavior.
@@ -26,12 +26,14 @@ Use the [official Canvas API documentation](https://documentation.instructure.co
 | --- | --- |
 | Identity | Preserve stable course and item IDs; namespace by connection and resource type; avoid title-only identity and lossy numeric conversion. |
 | Coverage | Explicitly cover or report gaps for announcements, modules and module items, pages, files and assignments. Follow pagination rather than treating the first page as complete. |
-| Changes | Return a compact new/changed/removed-or-unavailable summary relative to the last successful baseline, with enough source detail for inspection. An unchanged result is distinct from an unperformed or partial check. |
+| Changes | Moved to the consumer (2026-10-27). Export with stable ordering and formatting so that two runs over unchanged content are byte-identical and a consumer's own sync can compare them. An unchanged result is distinct from an unperformed or partial check. |
 | Provenance | Record source URL, resource ID/type, retrieved/last-checked time, source update time when available, and retrieval coverage. Preserve useful links without exposing connection secrets. |
 | Deduplication | Recognize the same assignment, page or file referenced through multiple modules. Repeat runs must not emit duplicate items or downstream work. |
 | Partial failure | Preserve the last good data. Authentication errors, rate limits, missing pages, denied items and incomplete pagination are not proof of deletion; do not advance a failed portion's successful baseline. Define when removal is actually confirmed. |
 | Dates | Preserve original timestamps and timezone context. Distinguish due, availability and lock dates; verify effective dates and applicable overrides rather than assuming one course-wide deadline. |
 | External content | Identify external-tool links or embedded content that cannot be retrieved through the chosen integration. Report the limitation and source link; request approval before any browser fallback. |
+
+Since the 2026-10-27 decision, the baseline and removal language above applies to the consumer's sync; `use-canvas` owes it complete per-resource coverage reporting so a partial export is never read as deletions.
 
 This is a target contract, not a claim that every endpoint exposes an incremental cursor or that one “updated since” query covers all resource types. Evaluate per-resource change detection and the cost of complete snapshots where necessary. Define a consistent snapshot/baseline boundary so partial runs cannot erase data or create false changes.
 
@@ -73,6 +75,21 @@ Agent research from public repositories, GitHub metadata and vendor pages. Nothi
 **MCP versus a small client.** The surveyed MCP's advantages are real: it already handles Link-header pagination, Canvas wire quirks (classic versus New Quizzes, external-tool assignments), prompt-injection fencing and a stream of security fixes, with a large test suite. It is the quickest way to ask ad-hoc questions of a course. It does not provide what this spike's contract centres on: deterministic snapshots, stable baselines and change summaries. An MCP is driven by an agent call by call, which is token-heavy, nondeterministic in coverage and hard to rerun identically. It is also far broader than needed (educator, grading, messaging and code-execution tools; writes on by default over stdio) and ships breaking releases every few weeks. A small read-only client over the handful of endpoints that matter (courses, modules and items, pages, files, assignments with overrides, announcements) matches the existing native capabilities here, which are deterministic CLIs with bounded exports. The hard parts it would own are pagination, throttling and partial-failure semantics, all documented by the official API.
 
 **Revised proposal (still not a decision):** build `use-canvas` as a small read-only REST client with Markdown/JSON snapshots and deltas, behind `setup-canvas` token checks, and treat the community MCP as an optional companion for interactive questions rather than the retrieval backend. This supersedes the earlier MCP-first proposal in the candidate evaluation above.
+
+## User decisions and build recommendation — 2026-10-27
+**User decisions:**
+- Change detection belongs to the consumer, not `use-canvas`. The consumer pulls exports into its own source-snapshot folder, as it already does for other services, and compares at the next sync. No snapshot archive or delta engine lives here.
+- Writes are wanted eventually: the user finds the Canvas web interface hard to work in and expects to help build course content for someone else. A read-first slice is still the starting point.
+- An MCP is acceptable in principle, but the user is uneasy about the security of an unofficial one and leans toward building if the cost is reasonable.
+
+**Agent recommendation (the build-or-reuse choice is still the user's):** build `setup-canvas` and `use-canvas` here, in the same shape as the other native capabilities, and do not run the community MCP with a real token.
+1. A Canvas personal access token cannot be narrowed for ordinary users (scopes need an administrator-configured developer key), so any code holding it can act as the user everywhere: submit work, post, message and, where the account also holds a course-staff role, read student data. That token should be used only by code that has been read, is small, and changes only through reviewed commits here. The community server is large (educator, grading, messaging and code-execution tools), releases every few weeks, and would need a fresh review for each upgrade.
+2. The cost is known. The Trello capability has the same shape (export, preview/execute writes, synthetic tests) and is about 2,000 lines including tests. A read-first Canvas client covering courses, modules and items, pages, files, assignments with overrides, and announcements is a similar size.
+3. It fits the consumer pattern above: deterministic Markdown export that a private sync can compare, with no agent-driven MCP session in the loop.
+4. Writes slot into the existing preview/execute gate, which also limits the damage prompt injection can do through course content written by other people (posts, announcements).
+5. The community MCP stays useful as MIT-licensed reference code for Canvas quirks such as New Quizzes and external-tool assignments; attribute anything adapted from it.
+
+Revisit if Instructure ships its own MCP with institution-managed, scoped OAuth; that could replace the personal-token route. This supersedes the read-only and snapshot/delta parts of the revised proposal above.
 
 ## Public artifact boundary
 Use generic examples such as `example.instructure.com`, `course-123`, and `assignment-456`, and synthetic fixtures only. Do not add real account identifiers, institution/course identifiers, student material, personal paths, private source links, tokens, authentication files, or private consumer-policy documents. Review documentation, fixtures, logs and the full staged diff before publication; ignore rules alone are not a publication review.
