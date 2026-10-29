@@ -8,10 +8,11 @@ Opened: 2026-10-27. Slug: `canvas-access`.
 [Purpose and retrieval contract](canvas-access.md).
 
 ## Current state
-Design. The candidate survey and access routes are recorded in the concept, and the user decided on 2026-10-28 to build `setup-canvas` and `use-canvas` here, with writes in the first version. The [setup-canvas contract](canvas-access.md#setup-canvas-contract--agent-proposal-2026-10-28), the [use-canvas contract](canvas-access.md#use-canvas-contract--agent-proposal-2026-10-28) and the [implementation plan](#implementation-plan--agent-proposal-2026-10-28) are agent proposals written 2026-10-28. On 2026-10-29 the user accepted the full write set, ruled out a fixed file-size cap and settled the safeguards, history, grades, formats and package policy; the [G0 choices](#g0-choices) list what is still open, and implementation waits for those. No credentials have been created, no account connected, no live API call made and no implementation code written. Change detection stays out of scope.
+Design. The candidate survey and access routes are recorded in the concept, and the user decided on 2026-10-28 to build `setup-canvas` and `use-canvas` here, with writes in the first version. The [setup-canvas contract](canvas-access.md#setup-canvas-contract--agent-proposal-2026-10-28), the [use-canvas contract](canvas-access.md#use-canvas-contract--agent-proposal-2026-10-28) and the [implementation plan](#implementation-plan--agent-proposal-2026-10-28) are agent proposals written 2026-10-28. On 2026-10-29 the user accepted the course-content and learner write sets, ruled out a fixed file-size cap, and settled the safeguards, history, grades, formats, package policy and build stages. They then asked for the community MCP to be examined on its merits before building; that [re-examination](canvas-access.md#community-mcp-re-examined--2026-10-29) is written and recommends building, and implementation waits for the user's decision on it. No credentials have been created, no account connected, no live API call made and no implementation code written. Change detection stays out of scope.
 
 ## To do
 - [ ] Review the setup-canvas and use-canvas contracts and the implementation plan (user): trim the proposed write set, settle the open choices listed under gate G0, and approve or change the runtime and slices. Implementation waits for this. — Progress 2026-10-29: the user accepted all twelve proposed writes and rejected the 250 MiB upload cap, which is removed. Later the same day the user answered the remaining choices; see [G0 choices](#g0-choices) for the outcomes and what is still open.
+- [ ] Decide between building and the community MCP after reading the [re-examination](canvas-access.md#community-mcp-re-examined--2026-10-29) (user). Added 2026-10-29 at the user's request; the agent recommends building.
 - [ ] After the plan is approved, implement the selected smallest slice and add synthetic tests for multi-page retrieval, duplicate module references, unchanged reruns, changed dates, overrides, timezone edges, partial errors and external-tool gaps. — Plan 2026-10-28: three slices with stop points and the full synthetic case list are in the implementation plan below.
 - [ ] Run the automated tests and inspect outputs for false deletions, partial exports published as complete, duplicates and missing provenance.
 - [ ] With explicit authorization, run a read-only live smoke test. Keep real connection/configuration and private evidence outside the public tree; record generic coverage and limitations without claiming untested compatibility. — Scope change 2026-10-28: writes are in the first version, so gates G1 and G2 below split this into a read smoke test and a separately authorized write smoke test. Both also settle the concept's "to confirm in the live smoke test" list.
@@ -26,33 +27,34 @@ Not approved. It implements the [setup-canvas](canvas-access.md#setup-canvas-con
 - Each skill folder gets its own `pyproject.toml` (`requires-python = ">=3.11"`, `[tool.uv] package = false`) and `uv.lock`, as `setup-slack` and `use-slack-lists` do. Commands run as `uv run --project use-canvas python use-canvas/scripts/canvas.py …`. The lock pins exact versions with file hashes; upgrading a package is a reviewed commit.
 - HTTP, JSON, time zones and hashing use the standard library (`urllib.request`, `json`, `zoneinfo`, `hashlib`). `setup-slack` already talks to its API this way, it gives exact control over redirects and where the token goes, and no HTTP package would save meaningful work. `setup-canvas` therefore has no third-party dependencies.
 - `use-canvas` adds two widely used, MIT-licensed converters where hand-written code would be weaker: `markdownify` (HTML to Markdown, over `beautifulsoup4`) and `markdown-it-py` (Markdown to HTML; CommonMark with its table and strikethrough rules, no linkify extra). Their current releases on 2026-10-29 are `markdownify` 1.2.3, `beautifulsoup4` 4.15.0 and `markdown-it-py` 4.2.0; the lock records the exact resolved set, including their small dependencies (`soupsieve`, `six`, `typing-extensions`, `mdurl`). Any package loaded into the same program could in principle read the token, which is why the list stays this short.
-- No Canvas SDK and no MCP. The preview/execute gate has to show and control every request itself, so an SDK's endpoint wrappers would not replace the code that matters, and the community MCP remains reference code only.
+- No Canvas SDK and no MCP. The preview/execute gate has to show and control every request itself, so an SDK's endpoint wrappers would not replace the code that matters. The community MCP's case is weighed in the concept's [re-examination](canvas-access.md#community-mcp-re-examined--2026-10-29).
+- History compression uses the standard library's `gzip` with the modification time fixed at zero, so compressed months are byte-stable.
 - Time-zone conversion uses the system time-zone database, as `render-calendar-agenda` does. macOS and Linux provide it; native Windows would need the `tzdata` package and is unverified.
 - The transport disables automatic redirects and attaches the token with `add_unredirected_header`, so no redirect can carry it. Requests are sequential and time out after 60 seconds without data. API (JSON) responses over 16 MiB are refused; file uploads and downloads are not held in memory but stream to and from disk, with no fixed size cap.
-- Estimated size including tests: 3,000–4,000 lines, more than Trello's ~2,000 because of the write set and the upload transport. This is an estimate, not a measurement.
+- Estimated size including tests: 4,000–5,000 lines, more than Trello's ~2,000 because of the fifteen write commands, the upload transport and the history. This is an estimate, not a measurement.
 
 ### Files
 | Path | Contents |
 | --- | --- |
 | `setup-canvas/SKILL.md` | The setup procedure from the contract. Frontmatter description: "Install the Canvas capability, establish or repair account access with a user-created personal access token, select courses, and diagnose configuration or authentication. Owns the shared provider runtime used by use-canvas." |
 | `setup-canvas/references/account-access.md` | Configuration contract, precedence, failure states and reconnection. |
-| `setup-canvas/.env.example`, `setup-canvas/canvas-accounts.example.json` | Synthetic values only, including an empty `CANVAS_ACTIVITY_LOG=`. |
+| `setup-canvas/.env.example`, `setup-canvas/canvas-accounts.example.json` | Synthetic values only, including empty `CANVAS_HISTORY_DIR=` and `CANVAS_HISTORY_PLAIN_MONTHS=` entries. |
 | `setup-canvas/.gitignore` | `canvas-accounts.json`, `canvas-accounts.*.json`, `!canvas-accounts.example.json`; the root ignore already covers `.env`. |
 | `setup-canvas/pyproject.toml`, `setup-canvas/uv.lock` | As above. |
 | `setup-canvas/scripts/canvas_auth.py` | Literal configuration loading, account routing, origin validation, transport, pagination, read back-off, error classification and identity check. CLI: `accounts`, `check`, `whoami`. |
 | `setup-canvas/scripts/link-skills.py` | Optional global links for `use-canvas`, like the other setup owners. |
 | `setup-canvas/tests/test_config.py`, `setup-canvas/tests/test_transport.py` | Offline configuration and transport checks. |
-| `use-canvas/SKILL.md` | Reads, export, coverage meanings, the write gate and commands. Frontmatter description: "Read selected Canvas courses' modules, pages, files, assignments, announcements and events, export them as deterministic Markdown/JSON with coverage, or preview and execute supported page, assignment, module, announcement and file-upload changes." |
-| `use-canvas/.gitignore` | `canvas-activity.jsonl`. |
+| `use-canvas/SKILL.md` | Reads, export, coverage meanings, the write gate and commands. Frontmatter description: "Read selected Canvas courses' modules, pages, files, assignments, announcements and events, export them as deterministic Markdown/JSON with coverage, or preview and execute supported page, assignment, module, announcement, file, submission and discussion-reply changes." |
+| `use-canvas/.gitignore` | `canvas.history/`. |
 | `use-canvas/pyproject.toml`, `use-canvas/uv.lock` | As above, with `markdownify` and `markdown-it-py` as the only dependencies. |
 | `use-canvas/scripts/canvas.py` | CLI entry and dispatch; `--help` needs no configuration. |
 | `use-canvas/scripts/canvas_read.py` | Retrieval, normalisation, identity, deduplication and coverage. |
 | `use-canvas/scripts/canvas_export.py` | Deterministic JSON and Markdown writers and temporary-directory publication. |
 | `use-canvas/scripts/canvas_html.py` | HTML-to-Markdown and Markdown-to-HTML conversion through the pinned packages, embed markers, loss detection for edits, and external-content scanning. |
 | `use-canvas/scripts/canvas_write.py` | Plan builders for each write command, preview hash, execute controller and readback. |
-| `use-canvas/scripts/canvas_log.py` | The activity log: path resolution, owner-only creation, symlink refusal, and read and write records. |
+| `use-canvas/scripts/canvas_history.py` | The history: directory resolution, owner-only monthly files, symlink refusal, read/export/write records, the `history`, `history-prune` and `history-resolve` commands, and month compression. |
 | `use-canvas/tests/canvas_fixture.py` | A stateful synthetic Canvas behind an injected transport: `Link` pagination, roles, errors, throttling, a separate upload host and a request log. No network. |
-| `use-canvas/tests/fixtures/*.json` | Synthetic `course-123` with modules, pages, files, assignments, overrides, announcements and external tools. |
+| `use-canvas/tests/fixtures/*.json` | Synthetic `course-123` with modules, pages, files, assignments, overrides, submissions, announcements, discussions, a group (`group-77`) with pages and files, and external tools. |
 | `use-canvas/tests/test_reads.py`, `test_export.py`, `test_html.py`, `test_writes.py` | The cases below. |
 
 After implementation and verification, also update `README.md` (capability and setup tables), `setup-agent-hands/SKILL.md` (its list of implemented services) and `TODO.md`. Not before: the setup dialogue must not route to a capability that does not exist yet.
@@ -60,7 +62,7 @@ After implementation and verification, also update `README.md` (capability and s
 ### Slices and stop conditions
 1. `setup-canvas`: runtime, examples and offline tests. Stop when the tests pass, for review.
 2. `use-canvas` reads, export and coverage, with `courses`, `verify` and `download-file`. Stop when the tests pass, for review; then the read smoke test if gate G1 is granted.
-3. The approved write set. Stop when the tests pass, for review; then the write smoke test if gate G2 is granted.
+3. The approved write set: the twelve course-content commands, the three learner commands, and the group and personal contexts. Stop when the tests pass, for review; then the write smoke test if gate G2 is granted.
 
 Each slice is its own commit series with the `Spike: canvas-access` trailer. Stop and report instead of continuing when: an offline test cannot express a contract item (record the gap); a live check contradicts a "to confirm" item in a way that affects safety (token handling, `denied` versus `failed`, notifications); a slice runs past 1.5 times its share of the estimate; or setup finds token creation unavailable or forbidden by policy (no workaround).
 
@@ -68,7 +70,7 @@ Each slice is its own commit series with the `Spike: canvas-access` trailer. Sto
 Configuration and transport (`setup-canvas`):
 1. Literal parsing: quoted values stay literal, command substitutions never run, exported values win, a missing selected env file fails, and unknown or self-redirecting keys are refused without echoing values.
 2. `base_url`: `http`, paths, queries, fragments, user information and empty hosts are refused; host case and a trailing slash are normalised.
-3. The synthetic token never appears in stdout, stderr, exceptions, the activity log or any export.
+3. The synthetic token never appears in stdout, stderr, exceptions, the history or any export.
 4. `Authorization` goes only to the configured origin: a cross-origin or non-`/api/v1/` `next` link is refused, a redirect off the instance is not followed, and a same-origin redirect is followed once.
 5. `Link` parsing: any header-name case, several relations, missing `last`, a final page without `next`, a repeated `next` (cycle) and the 200-page cap each give the documented result.
 6. Throttling: a read that gets `429` backs off a bounded number of times through an injected clock, then marks its collection `failed`; a write that gets `429` stops without retry.
@@ -101,33 +103,40 @@ Writes (`use-canvas`):
 29. Notifications: `notify_of_update=false` is always sent unless `--notify`; `create-announcement` without `--notify-course` is refused at execute; `edit-announcement` on a posted announcement is refused.
 30. Upload: `on_duplicate` is always explicit; a name collision refuses by default; `--replace` with a different file ID refuses; the step-2 request carries no `Authorization` header and posts `upload_params` unchanged with the file last; a confirmation `Location` off the instance stops as uncertain without sending the token; a local file changed after preview refuses; a size mismatch on readback is uncertain; the upload body streams from disk rather than being read whole.
 31. Gate conditions: a concluded course and a permission reported `false` each refuse in preview; a course not selected for export can still be written to; an unreported permission shows as unknown, and a Canvas refusal is reported with no change made.
-32. Uncertain transport and the activity log: a network error after sending exits 3 and the log marks the step uncertain; an unwritable log refuses a write before sending but only warns on a read; `--activity-log`, then `CANVAS_ACTIVITY_LOG`, then the default path is used; a symlinked log is refused; records contain no body or token.
+32. Uncertain transport and the history: a network error after sending exits 3 and the history marks the step uncertain; an unwritable history refuses a write before sending but only warns on a read; `--history-dir`, then `CANVAS_HISTORY_DIR`, then the default location is used; a symlinked history directory or month file is refused; records contain no body or token.
 33. `--help` for both skills runs without configuration or network.
 34. Markdown bodies: a `.md` body is converted and the preview shows the resulting HTML; editing a page whose current HTML has an iframe or inline styles from a `.md` body refuses without `--accept-loss`, while an `.html` body is sent as is; a file that is not valid UTF-8 is refused.
+35. History files: records land in the month file for their UTC time with sorted keys and a schema version; `history` with a course and date range opens only the months in range; a new month compresses months older than the plain window into byte-identical `.jsonl.gz` on reruns; `history-prune` previews without deleting, deletes whole months only with `--execute`, and refuses a month with an unresolved uncertain write until `history-resolve` records the outcome.
+36. Submissions: the preview shows the attempt count, allowed attempts, due date and lateness; a submission made elsewhere after the preview changes the attempt count and refuses with zero writes; a locked assignment or an unaccepted type refuses; a file submission uploads through the submission-files endpoint without sending the token to the upload host; readback checks the new attempt.
+37. Submission comments and discussion replies: a repeated comment or an identical message already posted by the user refuses; a reply to an entry uses the replies endpoint; a group discussion uses the group path.
+38. Group and personal contexts: page create, edit and revert with `--group`, and uploads with `--group` or `--personal`, use the right paths and the same conflict checks and readback as course content.
+39. Informational images: a body with a non-decorative image keeps its HTML in the export; a body whose only images are marked decorative or are 32 pixels or smaller does not; reruns stay byte-identical.
 
 ### Rollback and recovery
 - Code: each slice is committed separately, so reverting its commits removes it. Nothing private is in Git, so a code rollback never touches configuration.
 - Local state: the token and account files stay untracked in `setup-canvas/`. To uninstall, the user deletes the token in Canvas; then the env value, the alias and any global links (which `link-skills.py` previews) are removed.
 - Exports: a failed run leaves the previous export in place, and the swap keeps the old directory until the new one is in position.
-- Remote changes have no automatic rollback. Page edits: `revert-page` to the revision ID recorded in the preview or the activity log. Assignment, module and module-item edits: run the edit again with the "before" values from the saved preview. Creations: unpublish with an edit, or the user removes the resource in Canvas; there is no delete command. Announcements: notifications cannot be recalled, though delayed posting leaves a window to edit. Overwritten files cannot be restored through this tool, which is why name collisions refuse by default.
+- Remote changes have no automatic rollback. Page edits: `revert-page` to the revision ID recorded in the preview or the history. Assignment, module and module-item edits: run the edit again with the "before" values from the saved preview. Creations: unpublish with an edit, or the user removes the resource in Canvas; there is no delete command. Announcements: notifications cannot be recalled, though delayed posting leaves a window to edit. Overwritten files cannot be restored through this tool, which is why name collisions refuse by default.
 
 ### G0 choices
 Decided by the user on 2026-10-29:
 - **Executing requires the preview's hash (`--expect`): accepted.** A preview prints a fingerprint of exactly what would be sent and of the Canvas state it was based on, and execution refuses unless it gets that fingerprint back and a fresh rebuild matches it. Canvas has no "save only if unchanged" request, so this is the main protection against overwriting changes someone else made after the preview, such as a groupmate or colleague editing the same page.
 - **Per-course write switch: declined.** Writes may target any course the account can change; the preview gate is the protection.
-- **Activity log: kept, with its location chosen by the consumer.** The tool provides the log of reads and writes and its setting; where that history is kept is the consuming workflow's decision, not the tool's.
+- **History: kept, structured, with tool-owned retention.** The tool records reads and writes in `canvas.history/`, one JSON Lines file per month, queried with `history` rather than read whole; old months compress deterministically, nothing is deleted without `history-prune --execute`, and the consuming workflow chooses the location.
 - **Grades: included by default.** Exports carry the user's own scores and grades.
-- **Markdown both ways: adopted.** Bodies export as Markdown with an HTML hash, and write commands accept Markdown or HTML. The 1 MiB body limit is dropped; bodies need only be valid UTF-8 text.
-- **Packages: well-known pinned packages are acceptable.** The plan uses them only for HTML and Markdown conversion; HTTP and token handling stay in the standard library. No Canvas SDK or MCP.
+- **Markdown both ways: adopted.** Bodies export as Markdown with an HTML hash, and write commands accept Markdown or HTML. The 1 MiB body limit is dropped; bodies need only be valid UTF-8 text. Bodies with informational images also keep their HTML.
+- **Packages: well-known pinned packages are acceptable.** The plan uses them only for HTML and Markdown conversion; HTTP and token handling stay in the standard library.
+- **Three slices with a review stop after each: accepted.** See [slices and stop conditions](#slices-and-stop-conditions).
+- **Learner-role writes: added.** Submitting assignments with submission comments, discussion replies, group pages, group files and personal files, on condition that building stays the chosen route.
 
 Still open:
-- **Three slices with a review stop after each.** See [slices and stop conditions](#slices-and-stop-conditions). Early review catches design problems before the larger write code is built on them; the alternative is one delivery with a single review at the end.
-- **Learner-role writes.** The accepted set is course-content writes, which Canvas gives to course staff and designers. Whether to add learner-role writes (submissions and submission comments, discussion replies, group pages and files, personal files, planner notes) is not yet decided.
+- **Build or the community MCP.** The user asked for the MCP to be examined on its merits; the concept's [re-examination](canvas-access.md#community-mcp-re-examined--2026-10-29) recommends building.
+- **Downloading informational images (agent suggestion).** Keeping a body's HTML preserves an image's link, alt text and layout, but not the picture: a Canvas file link needs the token to open, so an agent reading the export still cannot see the image. The suggestion is for `export` to also download informational images that are files in the same course or group into `files/` beside the body and link them locally, listing images on other hosts as gaps rather than fetching them. Not part of the plan unless the user accepts it.
 
 ### Approval gates
 | Gate | Needed before | The user decides |
 | --- | --- | --- |
-| G0 | Any implementation | Mostly decided 2026-10-29; still open are the slices and learner-role writes (see [G0 choices](#g0-choices)). Offline work needs no new access. |
+| G0 | Any implementation | Decided 2026-10-29 apart from the two open items in [G0 choices](#g0-choices): build versus the MCP, and the image-download suggestion. Offline work needs no new access. |
 | G1 | The first live call | The instance and alias, creating the token themselves, which courses and read commands the smoke test covers, and where its private output goes (outside this repository). |
 | G2 | The first live write | An exact course where test writes are acceptable (preferably one with no other members), which write commands to exercise, and each reviewed preview. Announcements only where nobody else is notified, or skipped. |
 | G3 | Global links or client registration | A separate installation choice, as for the other capabilities. |
