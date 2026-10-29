@@ -25,17 +25,18 @@ The user asked whether Penpot's personal access token could do what the plugin c
 
 Python's default HTTP client is refused by Penpot's Cloudflare front end on its client signature (error 1010); `curl` is accepted. Requests pass the token to `curl` through a configuration read from standard input, so it never appears in arguments or output.
 
-## Proposed board-copy tool
-Agent proposal, not yet adopted: a `use-penpot` script that copies boards between pages through the backend API, with the same preview and guarded execution as the token exporter.
+## Board-copy tool
+Adopted by the user on 2026-10-29 and built as `use-penpot/scripts/copy_boards.py`, with the token exporter's preview and guarded execution.
 
-1. Read each board's subtree with `get-page`.
-2. Give every copied shape a new ID, and remap parents, frames, child lists and prototype links. Links to boards that are also being copied point at the copies; links to anything else are reported for relinking.
-3. Keep component instances as instances, and never duplicate a component's main shape.
-4. Preview the plan, then write the shapes with `update-file` `add-obj` changes against the file's current revision, with a fresh session ID.
-5. Read the result back and compare it with the source.
+1. Read each top-level board's subtree with `get-page`, and the file's revision, version and features with `get-file`.
+2. Give every copied shape a new ID, derived from the file, target page, revision and source ID, so a preview and its execution produce the same plan. Remap parents and frames; child lists are rebuilt as the shapes are added in source order.
+3. Point links between copied boards at the copies, and drop and report links to anything else. Refuse a component's main shape.
+4. Execute only with the preview's `plan_sha256`, which covers the revision, so a file that changed since the preview is refused. Write all shapes in one `update-file` call with `add-obj` changes and a fresh session ID, then read the copies back.
 
-Risks: the backend API is internal and its data format can change between Penpot versions; an open editor can move the file's revision on, so a write has to retry from a fresh read; and a wrong change writes bad data into a shared file, although the server validates changes. Whether an open browser tab shows API writes immediately is unknown.
+**Live test, 2026-10-29.** Through the backend API alone, a temporary page was added, a 29-shape Workshop board was copied onto it, and the page was deleted again; the Workshop board was only read. Every copied shape matched its source in every field apart from its ID, with parents, frames and child order pointing at the copies. Re-running the executed plan was refused because the file's revision had moved on. Eighteen synthetic tests cover the transformation, refusals, digest, configuration parsing and keeping the token out of `curl`'s arguments.
+
+The backend API is internal to Penpot, and its data format can change between releases; the readback after each write is the guard against a silent mismatch.
 
 ## Open questions
-- Does a browser tab with the file open pick up backend changes live, or only after a reload?
+- Does a browser tab with the file open show backend writes live, or only after a reload? The MCP plugin was disconnected during the live test, so this is unchecked.
 - Which file features does `update-file` require for this file, and how stable are they across Penpot releases?
