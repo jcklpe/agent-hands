@@ -6,7 +6,7 @@ attention: live
 Opened: 2026-10-27. Slug: `canvas-access`.
 
 ## Purpose
-Select a maintained Canvas integration and design a bounded implementation of `setup-canvas` and `use-canvas`. Prefer reusing a maintained MCP backed by the official Canvas API over building a new server, custom CLI, or scraper. Research and selection come first; this document does not claim that any candidate or institution-specific authentication has been tested.
+Design and build `setup-canvas` and `use-canvas` in this repository: a small client of the official Canvas REST API that connects an account with a personal access token the user creates, exports selected courses deterministically with honest coverage, and makes gated writes. The [candidate evaluation](#candidate-evaluation--2026-10-27) and [access follow-up](#access-and-approach--follow-up-2026-10-27) record the survey of existing integrations that came before the [build decision](#scope-and-build-decisions). This document does not claim that any institution-specific authentication has been tested.
 
 [Work and verification](canvas-access.todo.md).
 
@@ -29,13 +29,11 @@ Use the [official Canvas API documentation](https://documentation.instructure.co
 | Changes | Moved to the consumer (2026-10-27). Export with stable ordering and formatting so that two runs over unchanged content are byte-identical and a consumer can compare them. An unchanged result is distinct from an unperformed or partial check. |
 | Provenance | Record source URL, resource ID/type, retrieved/last-checked time, source update time when available, and retrieval coverage. Preserve useful links without exposing connection secrets. |
 | Deduplication | Recognize the same assignment, page or file referenced through multiple modules. Repeat runs must not emit duplicate items or downstream work. |
-| Partial failure | Preserve the last good data. Authentication errors, rate limits, missing pages, denied items and incomplete pagination are not proof of deletion; do not advance a failed portion's successful baseline. Define when removal is actually confirmed. |
+| Partial failure | Authentication errors, rate limits, missing pages, denied items and incomplete pagination are not proof of deletion. Report them per resource and never let a partial export replace a complete one unasked. Only complete coverage supports a consumer's conclusion that something was removed. |
 | Dates | Preserve original timestamps and timezone context. Distinguish due, availability and lock dates; verify effective dates and applicable overrides rather than assuming one course-wide deadline. |
 | External content | Identify external-tool links or embedded content that cannot be retrieved through the chosen integration. Report the limitation and source link; request approval before any browser fallback. |
 
-Since the 2026-10-27 scope decision, the baseline and removal language above describes what a consumer needs; `use-canvas` owes it complete per-resource coverage reporting so a partial export is never read as deletions.
-
-This is a target contract, not a claim that every endpoint exposes an incremental cursor or that one “updated since” query covers all resource types. Evaluate per-resource change detection and the cost of complete snapshots where necessary. Define a consistent snapshot/baseline boundary so partial runs cannot erase data or create false changes.
+Not every endpoint offers an incremental cursor, and no single “updated since” query covers every resource type, so `use-canvas` reads complete current state on every run. Its [coverage statuses](#coverage) and all-or-nothing publication keep a partial run from looking like deletions.
 
 ## Deliverables and decision gates
 1. An evidence-linked comparison and selected approach, or an explicit no-fit result with the smallest justified alternative.
