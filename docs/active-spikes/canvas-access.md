@@ -78,6 +78,7 @@ Agent research from public repositories, GitHub metadata and vendor pages. Nothi
 - **Change detection is out of scope (2026-10-27).** `use-canvas` exports current state deterministically; comparing runs belongs to whatever consumes the export. No snapshot archive or delta engine lives here.
 - **Writes are in scope (2026-10-27) and in the first version (2026-10-28),** each behind this repository's preview/execute gate. The first version may carry a broad write set rather than a minimal one; the proposed set and recommendations are in the [use-canvas contract](#proposed-writes).
 - **Write set accepted, no file-size cap (2026-10-29).** All twelve commands in the [proposed writes](#proposed-writes) table are in the first version. Uploads and downloads have no fixed size cap: files stream to and from disk, and Canvas's own quota and size limits decide.
+- **Safeguards, history and formats (2026-10-29).** Executing a write requires the reviewed preview's hash. There is no per-course write switch: writes may target any course the account can change, protected by the preview gate. `use-canvas` keeps an activity log of reads and writes whose location the consumer chooses; the tool does not decide where that history lives. Exports include the user's own scores and grades. Markdown is the reading and writing format, so bodies convert between HTML and Markdown in both directions. Well-known third-party packages are acceptable when pinned and when they save real work; this does not reopen the community MCP, which stays reference code only.
 - **Build rather than reuse (decided 2026-10-28).** Build `setup-canvas` and `use-canvas` here, in the same shape as the other native capabilities, and do not run the community MCP with a real token. Reasons recorded with the decision:
   1. A Canvas personal access token cannot be narrowed for ordinary users (scopes need an administrator-configured developer key), so any code holding it can act as the user everywhere: submit work, post, message and, where the account also holds a course-staff role, read student data. That token should be used only by code that has been read, is small, and changes only through reviewed commits here. The community server is large (educator, grading, messaging and code-execution tools), releases every few weeks, and would need a fresh review for each upgrade.
   2. The cost is known. The Trello capability has the same shape (export, preview/execute writes, synthetic tests) and is about 2,000 lines including tests. A read-first Canvas client covering courses, modules and items, pages, files, assignments with overrides, and announcements is a similar size.
@@ -92,16 +93,16 @@ Proposed for the user's review; nothing here is implemented or approved. It foll
 
 ### Configuration
 Private configuration lives in the `setup-canvas/` folder beside its examples, in two ignored files:
-- `.env`: literal `CANVAS_*` assignments, one token variable per account (`CANVAS_TOKEN_EXAMPLE=`). It is parsed as data and never sourced. Exported variables take precedence; `CANVAS_ENV_FILE` or `CANVAS_CONFIG_DIR` selects another location, and a missing selected file fails. The file cannot redirect its own location or any account's host.
-- `canvas-accounts.json`: an `accounts` array. Each entry has `alias`, `base_url`, `user_id` (empty until first verified), `token_env`, an optional `token_expires` (`YYYY-MM-DD`, the expiry the user chose when creating the token) and `courses`, the explicit selection.
+- `.env`: literal `CANVAS_*` assignments: one token variable per account (`CANVAS_TOKEN_EXAMPLE=`) and, optionally, `CANVAS_ACTIVITY_LOG`, the [activity log](#write-gate)'s path. It is parsed as data and never sourced. Exported variables take precedence; `CANVAS_ENV_FILE` or `CANVAS_CONFIG_DIR` selects another location, and a missing selected file fails. The file cannot redirect its own location or any account's host.
+- `canvas-accounts.json`: an `accounts` array. Each entry has `alias`, `base_url`, `user_id` (empty until first verified), `token_env`, an optional `token_expires` (`YYYY-MM-DD`, the expiry the user chose when creating the token) and `courses`, the explicit selection of course IDs to export.
 
 ```json
-{"accounts": [{"alias": "example", "base_url": "https://example.instructure.com", "user_id": "", "token_env": "CANVAS_TOKEN_EXAMPLE", "token_expires": "2027-01-31", "courses": [{"id": "123", "write": false}]}]}
+{"accounts": [{"alias": "example", "base_url": "https://example.instructure.com", "user_id": "", "token_env": "CANVAS_TOKEN_EXAMPLE", "token_expires": "2027-01-31", "courses": ["123"]}]}
 ```
 
 `base_url` is the instance origin only: `https`, a host and an optional port, with no path, query, fragment or user information. The host is lower-cased and a trailing slash dropped. Institutions often use their own domains, so the host is not restricted to `instructure.com`. The token goes only to that origin, in an `Authorization: Bearer` header (the API documentation recommends the header over the query parameter), and never into a URL, command argument, log or error message.
 
-Course selection controls what `use-canvas` reads and where it may write. It does not narrow the token, which can still act everywhere the user can.
+Course selection controls what `use-canvas` exports. It is not a write restriction, and it does not narrow the token, which can still act everywhere the user can.
 
 ### Connecting an account
 1. Explain the trade-off first: a personal access token is password-equivalent, cannot be scoped without an administrator-configured developer key, and lets whoever holds the file act as the user across the whole instance. This capability calls only the endpoints in the `use-canvas` contract, but the token itself is not limited to them.
@@ -113,8 +114,8 @@ Course selection controls what `use-canvas` reads and where it may write. It doe
 ### Verification
 - `check ALIAS` (offline): configuration parses, `base_url` is valid, the token variable is set (never printed), `token_expires` has not passed (warning within 14 days), course IDs are well-formed, the env file is not group- or world-readable, and Python and the time-zone database are usable. No network request.
 - `whoami ALIAS` (one authorized read): `GET /api/v1/users/self` and `/api/v1/users/self/profile`. It prints the Canvas user ID, display name and time zone only, not email or login. With `user_id` empty it asks the user to confirm the identity before recording it; with `user_id` set, a mismatch is `identity_mismatch` and every later command refuses to run.
-- `use-canvas courses ALIAS` lists the user's courses (`GET /api/v1/courses`; active enrollments by default, `--all-states` adds completed ones) with ID, name, code, term, course state, the user's enrollment types and the course time zone. The user picks courses and the agent records only their IDs. `write` stays `false` unless the user names that course for writes.
-- `use-canvas verify ALIAS` reads each selected course, its visible navigation tabs and the user's course permissions, and reports per course: accessible or not, enrollment types, concluded or active, visible internal and external tabs, and the write flag. It reports local readiness, remote read access and write readiness separately, and never performs a test write.
+- `use-canvas courses ALIAS` lists the user's courses (`GET /api/v1/courses`; active enrollments by default, `--all-states` adds completed ones) with ID, name, code, term, course state, the user's enrollment types and the course time zone. The user picks courses and the agent records only their IDs.
+- `use-canvas verify ALIAS` reads each selected course, its visible navigation tabs and the user's course permissions, and reports per course: accessible or not, enrollment types, concluded or active, visible internal and external tabs, and which write families the reported permissions allow. It reports local readiness, remote read access and write readiness separately, and never performs a test write.
 
 ### Reconnection and removal
 An expired, revoked or regenerated token shows as `token_rejected` on the next request. The user creates or regenerates a token in their profile settings (if still permitted) and replaces the env value; `whoami` must then match the recorded `user_id`. A changed instance address updates `base_url` only after the user confirms it, followed by `whoami`. To disconnect, the user deletes the token in Canvas, and the env value and alias are then removed locally. Setup never moves or rewrites another account's entry.
@@ -136,27 +137,27 @@ An expired, revoked or regenerated token shows as `token_rejected` on the next r
 | `tz_data_missing` | `check` | Install time-zone data for the platform. |
 
 ## use-canvas contract — agent proposal, 2026-10-28
-Proposed for review; not implemented. The user accepted the write set and ruled out a fixed file-size cap on 2026-10-29; the rest awaits review. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
+Proposed for review; not implemented. The user settled the write set, file sizes, safeguards, history and formats on 2026-10-29 (see the scope and build decisions); what remains open is listed in the plan's [G0 choices](canvas-access.todo.md#g0-choices). `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
 
 ### Reads
 Requests are sequential (Canvas throttles parallel requests harder), send `Accept: application/json+canvas-string-ids` so every ID arrives as a string, ask for `per_page=100`, and follow the `Link` header's `rel="next"` URL as an opaque value. Header names are matched case-insensitively. A `next` URL on another origin or outside `/api/v1/` is refused. A repeated `next` URL, or more than 200 pages, marks that collection `failed`. `rel="last"` is optional in Canvas and never relied on.
 
 | Resource | Request (under `/api/v1`) | Notes |
 | --- | --- | --- |
-| Course | `GET /courses/:id?include[]=term&include[]=syllabus_body` | Name, code, state, `time_zone`, term, the user's enrollment types, syllabus HTML. |
+| Course | `GET /courses/:id?include[]=term&include[]=syllabus_body&include[]=total_scores` | Name, code, state, `time_zone`, term, the user's enrollment types and current course score and grade, syllabus. |
 | Navigation | `GET /courses/:id/tabs` | Which areas the user can see. External tabs become external-content gaps. |
 | Permissions | `GET /courses/:id/permissions?permissions[]=…` | Role-dependent coverage and write preflight. Exact permission names are to be confirmed against the current permissions list before implementation. |
 | Modules and items | `GET /courses/:id/modules?include[]=items&include[]=content_details`, then `GET /courses/:id/modules/:module_id/items?include[]=content_details` | Canvas may omit inline items when there are many, so the items endpoint is used whenever `items` is missing or shorter than `items_count`. |
 | Pages | `GET /courses/:id/pages?include[]=body` | A body missing from the listing is fetched by `page_id`. |
 | Files and folders | `GET /courses/:id/folders`, `GET /courses/:id/files` | Metadata only. If the listing is refused, files referenced from module items and HTML are fetched one by one (`GET /courses/:id/files/:file_id`), and coverage says so. |
 | Assignment groups | `GET /courses/:id/assignment_groups` | Names, positions, weights. |
-| Assignments | `GET /courses/:id/assignments?include[]=all_dates&include[]=submission&override_assignment_dates=true`, adding `include[]=overrides` where permissions allow | The user's effective dates, base and per-set dates where visible, the user's own submission status. |
+| Assignments | `GET /courses/:id/assignments?include[]=all_dates&include[]=submission&override_assignment_dates=true`, adding `include[]=overrides` where permissions allow | The user's effective dates, base and per-set dates where visible, and the user's own submission: status, attempt, score and grade. |
 | Announcements | `GET /courses/:id/discussion_topics?only_announcements=true` | Not `GET /announcements`, whose default window runs from 14 days ago to 28 days after that. |
 | Discussions | `GET /courses/:id/discussion_topics` | Topic prompts and settings. Replies are not read. |
 | Calendar events | `GET /calendar_events?context_codes[]=course_123&type=event&all_events=true` | Without `all_events` Canvas returns only today's events. At most 10 context codes per request. |
 | One file's content | `download-file ALIAS --course ID --file ID --output PATH` | Explicit output path; streams to disk; checks the received size against the file's metadata; optional `--max-bytes`; refuses to overwrite without `--force`. Not part of `export`. |
 
-Recommended for the first version: every row above. Proposed but off by default: the user's own scores and grades (`--include-grades`). Left out: discussion replies (other participants' posts), rosters and other users' data, conversations, quiz question content and analytics.
+Recommended for the first version: every row above, including the user's own scores and grades. Left out: discussion replies (other participants' posts), rosters and other users' data, conversations, quiz question content and analytics.
 
 A fatal error (`token_rejected`, `identity_mismatch`, invalid configuration) stops the whole run. Any other failure is recorded against its resource and the run continues.
 
@@ -185,8 +186,9 @@ Every file except `run.json` is a pure function of the normalized data and the f
 - Each record type has an explicit field allowlist; anything else Canvas returns is dropped. Fields that change merely because someone looked (`read_state`, `unread_count`, `subscribed`, `needs_grading_count`) and short-lived or access-bearing links (file `url`, `preview_url`, `thumbnail_url`, avatars) are excluded. Files are linked as `https://<host>/courses/123/files/456`.
 - Allowlisted fields are always present, `null` when Canvas omits them.
 - Arrays are sorted after retrieval, so neither response order nor page size matters: records by numeric ID; modules and module items by position, then ID; tabs by position; `all_dates` with the base entry first, then by title and ID; enumerations such as `submission_types` alphabetically. Numeric-string IDs sort by length and then text, which is numeric order without conversion.
-- JSON is UTF-8 with sorted keys, two-space indentation, LF line endings and a final newline. HTML stays verbatim in JSON. Timestamps are Canvas's UTC values as returned.
-- Markdown converts HTML with a small standard-library converter (headings, paragraphs, lists, links, emphasis, code; tables as text). Anything it cannot convert is marked rather than guessed. Dates render in the course time zone, falling back to the user's and then UTC, with the zone named once per file and the UTC value alongside. No text depends on the current time ("due in 3 days"). Per-resource files are named by ID, never by title. A change to the system time-zone database can shift rendered local times for future dates.
+- JSON is UTF-8 with sorted keys, two-space indentation, LF line endings and a final newline. Timestamps are Canvas's UTC values as returned.
+- Bodies (pages, syllabus, assignment descriptions, announcements, discussion prompts) are stored as Markdown, which is clearer and far cheaper for an agent to read than Canvas's HTML. Each body also records the SHA-256 of the original HTML, so a change that Markdown cannot show (styling, attributes) still changes the export. `--include-html` adds the raw HTML for consumers that need it.
+- HTML converts to Markdown through a pinned, widely used converter (see the plan's runtime and dependencies), so the same input and version always give the same output. Iframes, media embeds and anything else Markdown cannot represent become explicit markers that point at the external-content gaps, never silent omissions. Dates render in the course time zone, falling back to the user's and then UTC, with the zone named once per file and the UTC value alongside. No text depends on the current time ("due in 3 days"). Per-resource files are named by ID, never by title. A change to the system time-zone database can shift rendered local times for future dates.
 
 Publication is all-or-nothing per run. The export is assembled in a sibling temporary directory and swapped in only when no resource is `partial` or `failed`. Otherwise the previous export stays in place, the new coverage is printed, and the command exits non-zero. `--allow-partial` publishes anyway, with coverage recording what is missing. The output must be absent or a previous `use-canvas` export (recognised by its `index.json`); symlinks and other directories are refused. Remote reads are not a transaction: content can change during a run, and paging through a changing collection can skip an item without any sign.
 
@@ -221,14 +223,16 @@ Writes follow the Trello and Excel pattern:
 - Scalar fields are read back exactly. HTML fields are compared after whitespace and attribute-order normalisation; Canvas sanitises HTML on save, so a remaining difference is reported as `verified_with_sanitizer_changes` with the difference shown, never silently accepted.
 - Create commands first look for an existing resource with the same name in the same place and refuse unless `--allow-duplicate`. That makes a fresh preview after an uncertain create safe: if the earlier create landed, it now blocks the duplicate.
 - Previews say which writes can notify people. `notify_of_update` is always sent explicitly, `false` unless `--notify` is given. Announcements require `--notify-course` at execute time, like the calendar skills' invitation acknowledgements.
-- Writes need a selected course with `"write": true`, a matching `user_id` and a course that has not concluded. A permission Canvas reports as `false` refuses in preview; one it does not report is shown as unknown, and Canvas decides.
-- A private audit file (`canvas-writes.jsonl` beside the skill, ignored, owner-only) records the command, target IDs, preview hash and each step's outcome before and after sending, never bodies or tokens. An unwritable audit file refuses the write before anything is sent, as in the Excel capability.
-- HTML bodies come from files (`--body-file`, UTF-8, at most 1 MiB); there is no Markdown-to-HTML conversion. Date inputs need an explicit offset or `--tz ZONE`; naive times, nonexistent local times and ambiguous ones (the repeated hour when clocks go back) are refused. Previews show both the local and the UTC value.
+- Writes need a matching `user_id` and a course that has not concluded. They are not limited to the courses selected for export. A permission Canvas reports as `false` refuses in preview; one it does not report is shown as unknown, and Canvas decides.
+- Every command appends one line to a private activity log, never including bodies or tokens. A read records the command, course, resource families, record counts and coverage outcome; an export also records its output path. A write records the command, target IDs, preview hash and each step's outcome (sent, verified, uncertain) before and after sending, so an interrupted write shows which steps landed and which IDs were created, and page edits keep the revision IDs `revert-page` needs. The consumer chooses where this history lives: `--activity-log PATH`, else `CANVAS_ACTIVITY_LOG` from the setup `.env` or environment, else an ignored, owner-only `canvas-activity.jsonl` beside the skill. An unwritable log refuses a write before anything is sent; for a read it is a warning. The Microsoft Files, Excel and Planner capabilities keep similar write logs.
+- Bodies come from a file (`--body-file`): `.md` is converted to HTML (CommonMark with tables) and `.html` is sent as is. The file must be valid UTF-8 text; there is no size limit beyond Canvas's own. The preview shows the converted HTML. When an edit would replace HTML that Markdown cannot represent (iframes, embedded media, inline styles), the preview lists what would be lost and refuses unless `--accept-loss` is given or the body is supplied as `.html`. Date inputs need an explicit offset or `--tz ZONE`; naive times, nonexistent local times and ambiguous ones (the repeated hour when clocks go back) are refused. Previews show both the local and the UTC value.
 - New pages, assignments and modules are unpublished unless `--published` is given.
 - No delete command. Unpublishing is an ordinary edit, and page edits can be undone with `revert-page`.
 
 ### Proposed writes
 One command per row, all behind the gate above. Request paths are under `/api/v1/courses/:course_id`. The user accepted this set for the first version on 2026-10-29.
+
+These are course-content writes. Canvas's default roles give them to teachers, TAs and designers; for a learner role it refuses almost all of them, the exception being edits to course pages whose editing roles include students. Learner-role writes (submissions and submission comments, discussion replies, group pages and files, personal files, planner notes) are not in this set.
 
 | Command | Request | Preview shows and checks | Readback | In v1 |
 | --- | --- | --- | --- | --- |
@@ -247,7 +251,7 @@ One command per row, all behind the gate above. Request paths are under `/api/v1
 
 Upload transport: step 1 goes to the instance with the token. Step 2 posts `upload_params` unchanged, with the file as the last multipart field, to `upload_url`, which may be another host, and **without** the token. Step 3 follows the returned `Location` only when it is on the instance origin, with the token; any other location stops as uncertain. Automatic redirects are disabled throughout, so the token can never follow a redirect off the instance.
 
-Considered and left out of the first version: assignment overrides (useful for dates, but they need section and roster reads the first version does not make), submissions (they consume attempts and cannot be withdrawn), discussion replies (visible to other participants, and they notify), personal files, calendar events and planner notes, marking module items done, file renames and moves, external-tool items, quizzes, grading, messaging, and any deletion.
+Considered and left out of the first version: assignment overrides (useful for dates, but they need section and roster reads the first version does not make), submissions (they consume attempts and cannot be withdrawn), discussion replies (visible to other participants, and they notify), group pages and files, personal files, calendar events and planner notes, marking module items done, file renames and moves, external-tool items, quizzes, grading, messaging, and any deletion.
 
 ### Example preview
 `edit-page example --course 123 --page 789 --title 'Week 1 overview' --body-file week-1.html --json` prints:
@@ -257,7 +261,7 @@ Considered and left out of the first version: assignment overrides (useful for d
   "mode": "preview",
   "command": "edit-page",
   "account": {"alias": "example", "origin": "https://example.instructure.com", "user_id": "1001"},
-  "course": {"id": "123", "name": "Example Course", "enrollment_types": ["teacher"], "state": "available", "write": true},
+  "course": {"id": "123", "name": "Example Course", "enrollment_types": ["teacher"], "state": "available"},
   "permissions": {"<page update permission>": true},
   "target": {"type": "page", "page_id": "789", "url": "week-1", "updated_at": "2026-10-20T15:04:05Z", "latest_revision_id": "12", "html_url": "https://example.instructure.com/courses/123/pages/week-1"},
   "changes": [
