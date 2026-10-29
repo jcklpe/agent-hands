@@ -33,10 +33,9 @@ Adopted by the user on 2026-10-29 and built as `use-penpot/scripts/copy_boards.p
 3. Point links between copied boards at the copies, and drop and report links to anything else. Refuse a component's main shape.
 4. Execute only with the preview's `plan_sha256`, which covers the revision, so a file that changed since the preview is refused. Write all shapes in one `update-file` call with `add-obj` changes and a fresh session ID, then read the copies back.
 
-**Live test, 2026-10-29.** Through the backend API alone, a temporary page was added, a 29-shape Workshop board was copied onto it, and the page was deleted again; the Workshop board was only read. Every copied shape matched its source in every field apart from its ID, with parents, frames and child order pointing at the copies. Re-running the executed plan was refused because the file's revision had moved on. Eighteen synthetic tests cover the transformation, refusals, digest, configuration parsing and keeping the token out of `curl`'s arguments.
+**Live test, 2026-10-29.** Through the backend API alone, a temporary page was added, a 29-shape Workshop board was copied onto it, and the page was deleted again; the Workshop board was only read. Every copied shape matched its source in every field apart from its ID, with parents, frames and child order pointing at the copies. Re-running the executed plan was refused because the file's revision had moved on. A second run the same day, with the MCP plugin connected, showed that the user's open editor picks up the new page and copy without a reload, and an image export of the copy matched the source board. Eighteen synthetic tests cover the transformation, refusals, digest, configuration parsing and keeping the token out of `curl`'s arguments.
 
 The backend API is internal to Penpot, and its data format can change between releases; the readback after each write is the guard against a silent mismatch.
 
 ## Open questions
-- Does a browser tab with the file open show backend writes live, or only after a reload? The MCP plugin was disconnected during the live test, so this is unchecked.
 - Which file features does `update-file` require for this file, and how stable are they across Penpot releases?
