@@ -77,6 +77,7 @@ Agent research from public repositories, GitHub metadata and vendor pages. Nothi
 ## Scope and build decisions
 - **Change detection is out of scope (2026-10-27).** `use-canvas` exports current state deterministically; comparing runs belongs to whatever consumes the export. No snapshot archive or delta engine lives here.
 - **Writes are in scope (2026-10-27) and in the first version (2026-10-28),** each behind this repository's preview/execute gate. The first version may carry a broad write set rather than a minimal one; the proposed set and recommendations are in the [use-canvas contract](#proposed-writes).
+- **Write set accepted, no file-size cap (2026-10-29).** All twelve commands in the [proposed writes](#proposed-writes) table are in the first version. Uploads and downloads have no fixed size cap: files stream to and from disk, and Canvas's own quota and size limits decide.
 - **Build rather than reuse (decided 2026-10-28).** Build `setup-canvas` and `use-canvas` here, in the same shape as the other native capabilities, and do not run the community MCP with a real token. Reasons recorded with the decision:
   1. A Canvas personal access token cannot be narrowed for ordinary users (scopes need an administrator-configured developer key), so any code holding it can act as the user everywhere: submit work, post, message and, where the account also holds a course-staff role, read student data. That token should be used only by code that has been read, is small, and changes only through reviewed commits here. The community server is large (educator, grading, messaging and code-execution tools), releases every few weeks, and would need a fresh review for each upgrade.
   2. The cost is known. The Trello capability has the same shape (export, preview/execute writes, synthetic tests) and is about 2,000 lines including tests. A read-first Canvas client covering courses, modules and items, pages, files, assignments with overrides, and announcements is a similar size.
@@ -135,7 +136,7 @@ An expired, revoked or regenerated token shows as `token_rejected` on the next r
 | `tz_data_missing` | `check` | Install time-zone data for the platform. |
 
 ## use-canvas contract — agent proposal, 2026-10-28
-Proposed for review; not implemented or approved. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
+Proposed for review; not implemented. The user accepted the write set and ruled out a fixed file-size cap on 2026-10-29; the rest awaits review. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
 
 ### Reads
 Requests are sequential (Canvas throttles parallel requests harder), send `Accept: application/json+canvas-string-ids` so every ID arrives as a string, ask for `per_page=100`, and follow the `Link` header's `rel="next"` URL as an opaque value. Header names are matched case-insensitively. A `next` URL on another origin or outside `/api/v1/` is refused. A repeated `next` URL, or more than 200 pages, marks that collection `failed`. `rel="last"` is optional in Canvas and never relied on.
@@ -153,7 +154,7 @@ Requests are sequential (Canvas throttles parallel requests harder), send `Accep
 | Announcements | `GET /courses/:id/discussion_topics?only_announcements=true` | Not `GET /announcements`, whose default window runs from 14 days ago to 28 days after that. |
 | Discussions | `GET /courses/:id/discussion_topics` | Topic prompts and settings. Replies are not read. |
 | Calendar events | `GET /calendar_events?context_codes[]=course_123&type=event&all_events=true` | Without `all_events` Canvas returns only today's events. At most 10 context codes per request. |
-| One file's content | `download-file ALIAS --course ID --file ID --output PATH` | Explicit output path and size cap; refuses to overwrite without `--force`. Not part of `export`. |
+| One file's content | `download-file ALIAS --course ID --file ID --output PATH` | Explicit output path; streams to disk; checks the received size against the file's metadata; optional `--max-bytes`; refuses to overwrite without `--force`. Not part of `export`. |
 
 Recommended for the first version: every row above. Proposed but off by default: the user's own scores and grades (`--include-grades`). Left out: discussion replies (other participants' posts), rosters and other users' data, conversations, quiz question content and analytics.
 
@@ -227,9 +228,9 @@ Writes follow the Trello and Excel pattern:
 - No delete command. Unpublishing is an ordinary edit, and page edits can be undone with `revert-page`.
 
 ### Proposed writes
-One command per row, all behind the gate above. Request paths are under `/api/v1/courses/:course_id`.
+One command per row, all behind the gate above. Request paths are under `/api/v1/courses/:course_id`. The user accepted this set for the first version on 2026-10-29.
 
-| Command | Request | Preview shows and checks | Readback | Recommend for v1 |
+| Command | Request | Preview shows and checks | Readback | In v1 |
 | --- | --- | --- | --- | --- |
 | `create-page` | `POST /pages` | Title, body digest and diff from empty, `published`, `editing_roles`, `front_page` (and the page it would replace). Refuses an existing page with the same title. | `GET /pages/:page_id`: title, body, published, slug. | Yes |
 | `edit-page` | `PUT /pages/:page_id` | Before → after for each changed field, and a body diff. Conflict check on `updated_at`, body and latest revision ID. Warns that a title change changes the slug. | The same fields, and that the latest revision advanced. | Yes |
@@ -242,7 +243,7 @@ One command per row, all behind the gate above. Request paths are under `/api/v1
 | `edit-module-item` | `PUT /modules/:module_id/items/:id` | Before → after for title, position, indent, `published`, completion requirement, or a move to another module in the course. | Sent fields and `module_id`. | Yes |
 | `create-announcement` | `POST /discussion_topics` with `is_announcement` | Title, message diff, immediate or delayed posting time, and that course members can be notified. Requires `--notify-course`. Refuses an existing announcement with the same title and message. | Topic fields, and that it appears in the announcements listing. | Yes |
 | `edit-announcement` | `PUT /discussion_topics/:id` | Before → after. Refused once the announcement has posted, because whether Canvas notifies again on edit is unconfirmed. | Sent fields. | Yes, before posting only |
-| `upload-file` | `POST /files`, then the returned `upload_url`, then the confirmation `Location` | Local path, size, SHA-256, content type, destination folder and any file already holding that name. A name collision refuses unless `--replace FILE_ID` (that exact file, `on_duplicate=overwrite`) or `--rename-on-conflict` (`on_duplicate=rename`). `on_duplicate` is always sent, because Canvas defaults to overwrite. The local file's digest is part of the hash. At most 250 MiB. | `GET /files/:id`: name, size, folder, content type. `--verify-content` also downloads the file and compares digests. | Yes |
+| `upload-file` | `POST /files`, then the returned `upload_url`, then the confirmation `Location` | Local path, size, SHA-256, content type, destination folder and any file already holding that name. A name collision refuses unless `--replace FILE_ID` (that exact file, `on_duplicate=overwrite`) or `--rename-on-conflict` (`on_duplicate=rename`). `on_duplicate` is always sent, because Canvas defaults to overwrite. The local file's digest is part of the hash. No fixed size cap: the file streams from disk, and the preview shows its size against the course's remaining quota where Canvas reports it to this user. | `GET /files/:id`: name, size, folder, content type. `--verify-content` also downloads the file and compares digests. | Yes |
 
 Upload transport: step 1 goes to the instance with the token. Step 2 posts `upload_params` unchanged, with the file as the last multipart field, to `upload_url`, which may be another host, and **without** the token. Step 3 follows the returned `Location` only when it is on the instance origin, with the token; any other location stops as uncertain. Automatic redirects are disabled throughout, so the token can never follow a redirect off the instance.
 
@@ -275,7 +276,7 @@ Considered and left out of the first version: assignment overrides (useful for d
 Without `--json` the same content prints as text, ending with `No writes sent. To apply this reviewed plan, repeat with --execute --expect <hash>`. A verified execution prints `{"mode": "executed", "preview_hash": "<64 hex>", "verified_steps": [{"step": 1, "id": "789", "readback": "verified"}], "warnings": []}`.
 
 ### To confirm in the live smoke test
-The status and body Canvas returns for hidden navigation areas and disabled features; whether `include[]=overrides` is ignored or refused for roles that cannot manage assignments; whether string IDs are honoured on every endpoint used; whether the pages listing returns full bodies with `include[]=body`; the current names of the permissions checked; how Canvas sanitises page and assignment HTML; whether a renamed page's old slug still resolves; how to confirm a topic is an announcement, since the topic object has no such field; the upload confirmation's status codes on the instance; and the practical `per_page` maximum.
+The status and body Canvas returns for hidden navigation areas and disabled features; whether `include[]=overrides` is ignored or refused for roles that cannot manage assignments; whether string IDs are honoured on every endpoint used; whether the pages listing returns full bodies with `include[]=body`; the current names of the permissions checked; how Canvas sanitises page and assignment HTML; whether a renamed page's old slug still resolves; how to confirm a topic is an announcement, since the topic object has no such field; the upload confirmation's status codes on the instance; which roles can read the course file quota; and the practical `per_page` maximum.
 
 ## Public artifact boundary
 Use generic examples such as `example.instructure.com`, `course-123`, and `assignment-456`, and synthetic fixtures only. Do not add real account identifiers, institution/course identifiers, student material, personal paths, private source links, tokens, authentication files, or private consumer-policy documents. Review documentation, fixtures, logs and the full staged diff before publication; ignore rules alone are not a publication review.
