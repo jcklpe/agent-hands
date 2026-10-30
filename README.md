@@ -54,6 +54,7 @@ The names below group related reads, writes, and comments where implemented. A `
 | GitHub | [use-github-projects](use-github-projects/SKILL.md) | Read configured Projects v2 boards and move an issue between Status options. |
 | Slack | [use-slack-messages](use-slack-messages/SKILL.md) | Read/search conversations, resolve people/channels, and send messages, replies, or DMs as the user. |
 | Slack | [use-slack-lists](use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
+| Canvas | [use-canvas](use-canvas/SKILL.md) | Read/export selected courses with resource coverage, download files and informational images, and query private operation history. Remote writes are not implemented yet; live access remains unverified. |
 | Trello | [use-trello](use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
 | Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
 | Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a connected file through Penpot's MCP tools and export images for visual checks. MCP writes act immediately. Also export design-token JSON from a local archive using a project-owned manifest, with preview and guarded execution; this offline command needs no credentials. |
@@ -75,6 +76,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 | Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) |
 | GitHub | [setup-github](setup-github/SKILL.md) |
 | Slack | [setup-slack](setup-slack/SKILL.md) |
+| Canvas | [setup-canvas](setup-canvas/SKILL.md) |
 | Trello | [setup-trello](setup-trello/SKILL.md) |
 | Odoo | [setup-odoo](setup-odoo/SKILL.md) |
 | Penpot | [setup-penpot](setup-penpot/SKILL.md) |

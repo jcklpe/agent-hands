@@ -1,0 +1,16 @@
+{
+  "course": {"id":"123","name":"Example Course","course_code":"EX-101","workflow_state":"available","time_zone":"America/Chicago","term":{"id":"1","name":"Example term"},"syllabus_body":"<p>Example syllabus.</p>","enrollments":[{"user_id":"1001","type":"student","enrollment_state":"active","computed_current_score":92.5,"computed_current_grade":"A"}]},
+  "tabs": [{"id":"modules","label":"Modules","type":"internal","position":1},{"id":"context_external_tool_1","label":"External tool","type":"external","position":2,"html_url":"https://tools.example.net/launch"}],
+  "modules": [{"id":"10","name":"Week 1","position":1,"items_count":2,"items":[]},{"id":"11","name":"Week 2","position":2,"items_count":1,"items":[{"id":"103","type":"Assignment","content_id":"456","title":"Example assignment","position":1}]}],
+  "items": [{"id":"101","type":"Page","page_url":"overview","title":"Overview","position":1},{"id":"102","type":"Assignment","content_id":"456","title":"Example assignment","position":2}],
+  "pages": [{"page_id":"789","url":"overview","title":"Overview","updated_at":"2026-10-01T10:00:00Z","body":"<h2>Read this</h2><p>Untrusted course content.</p><img src=\"/courses/123/files/900/download?verifier=ephemeral\" alt=\"A diagram\" width=\"400\" height=\"200\"><iframe src=\"https://media.example.net/embed/1\"></iframe>"}],
+  "folders": [{"id":"80","name":"Course files","full_name":"Course files"}],
+  "files": [{"id":"900","folder_id":"80","display_name":"diagram.png","filename":"diagram.png","content-type":"image/png","size":380,"url":"https://example.instructure.com/files/900/download?verifier=ephemeral","thumbnail_url":"https://temporary.example.net/thumb"}],
+  "assignment_groups": [{"id":"40","name":"Practice","position":1,"group_weight":25}],
+  "assignments": [{"id":"456","name":"Example assignment","description":"<p>Answer the question.</p>","due_at":"2026-11-01T07:30:00Z","unlock_at":"2026-10-01T00:00:00Z","lock_at":null,"assignment_group_id":"40","submission_types":["online_text_entry"],"has_overrides":true,"allowed_attempts":3,"all_dates":[{"base":true,"title":"Base","due_at":"2026-11-01T07:00:00Z"},{"id":"60","title":"Section B","due_at":"2026-11-01T07:30:00Z"}],"submission":{"id":"555","user_id":"1001","attempt":1,"score":9,"grade":"9","workflow_state":"graded","body":"Not exported","submission_comments":[{"comment":"Not exported"}]}}],
+  "announcements": [{"id":"111","title":"Old announcement","posted_at":"2026-09-01T12:00:00Z","message":"<p>Old enough to catch a default date-window bug.</p>"}],
+  "discussions": [{"id":"222","title":"Discussion prompt","message":"<p>Share an example.</p>","read_state":"unread","replies":[{"message":"Other participants are not exported"}]}],
+  "groups": [{"id":"77","name":"Example project group","course_id":"123"},{"id":"78","name":"Other course group","course_id":"999"}],
+  "group_pages": [{"page_id":"790","url":"group-overview","title":"Group overview","body":"<p>Shared group context.</p>"}],
+  "calendar_events": [{"id":"333","context_code":"course_123","title":"Example session","start_at":"2026-11-01T07:30:00Z","end_at":"2026-11-01T08:30:00Z","description":"<p>Bring a question.</p>"}]
+}

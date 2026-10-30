@@ -3,7 +3,7 @@ name: setup-canvas
 description: "Install the Canvas capability, establish or repair account access with a user-created personal access token, select courses, and diagnose configuration or authentication. Owns the shared provider runtime used by use-canvas."
 ---
 # Setup Canvas
-Read this skill's [account-access reference](references/account-access.md) before configuring anything. This setup owns the Canvas configuration, the token's storage and the provider runtime (`scripts/canvas_auth.py`) that `use-canvas` loads. `use-canvas` is not implemented yet, so only the local check and the identity read below exist; course listing, `verify`, exports and writes arrive with it. Setup never writes to Canvas.
+Read this skill's [account-access reference](references/account-access.md) before configuring anything. This setup owns the Canvas configuration, the token's storage and the provider runtime (`scripts/canvas_auth.py`) that `use-canvas` loads. [use-canvas](../use-canvas/SKILL.md) supplies course listing, `verify`, exports, downloads and operation history; Canvas writes are not implemented yet. Setup never writes to Canvas.
 
 ## Runtime
 Python 3.11 or later with only its standard library; no Bash or third-party package is needed. If uv is missing, follow the [official installer](https://docs.astral.sh/uv/getting-started/installation/) within setup authorization; uv can provision a compatible Python for this folder's manifest. From the collection root:
@@ -28,7 +28,10 @@ Report local readiness, the identity read and anything still unverified separate
 A `token_rejected` error means Canvas refused the token: it expired, was revoked or was regenerated. The user creates or regenerates one in their profile settings (if still permitted), replaces the `.env` value and updates `token_expires`; `whoami` must then match the recorded `user_id`. A changed instance address updates `base_url` only after the user confirms it, followed by `whoami`. To disconnect, the user deletes the token in Canvas, then remove the `.env` value and the alias. Never move or rewrite another account's entry.
 
 ## Account access and shared runtime
-This setup skill owns the provider runtime, examples and tests that `use-canvas` will load: configuration parsing, the token's origin-only transport, pagination, throttling back-off, error kinds and the identity check. Normal operations will not require rerunning setup. Keep credential establishment separate from permission for each Canvas action, and preserve existing user approval within its stated scope.
+This setup skill owns the provider runtime, examples and tests that `use-canvas` loads: configuration parsing, the token's origin-only transport, pagination, throttling back-off, error kinds and the identity check. Normal operations do not require rerunning setup. Keep credential establishment separate from permission for each Canvas action, and preserve existing user approval within its stated scope.
+
+## Optional global discovery
+If the user requests global skill links, use `python3 setup-canvas/scripts/link-skills.py --client codex` or `--client claude` to preview the Canvas selection, then add `--execute` only within the requested installation scope. This shared linker also requires the sibling `setup-agent-hands/scripts/skill_links.py`. Direct checkout use needs no links.
 
 ## Offline checks
-From the collection root, `python3 setup-canvas/tests/test_config.py` and `python3 setup-canvas/tests/test_transport.py` check literal configuration, account validation, the local check, where the token goes, pagination, redirects, throttling, error kinds and identity with synthetic data, plus the real transport against a loopback server. They do not establish live access, institution policy or token availability.
+From the collection root, `uv run --project setup-canvas python setup-canvas/tests/test_config.py` and `uv run --project setup-canvas python setup-canvas/tests/test_transport.py` check literal configuration, account validation, the local check, where the token goes, pagination, redirects, throttling, error kinds and identity with synthetic data, plus the real transport against a loopback server. They do not establish live access, institution policy or token availability.

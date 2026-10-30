@@ -116,7 +116,7 @@ Agent reading of `vishalsachdev/canvas-mcp` at release v1.16.0 (`main` at `bbf53
 Findings from its code that the contracts below adopt: discussion topics and the syllabus have no `updated_at` (measured live by that project), so their edits are conflict-checked by body hash; Canvas can quietly create a plain discussion instead of an announcement when the token lacks permission, so announcement readback checks the announcements listing; and its upload-confirmation token leak is the case this design's upload transport refuses.
 
 ## setup-canvas contract — agent proposal, 2026-10-28
-Proposed for the user's review; nothing here is implemented or approved. It follows the existing setup skills: setup owns installation, account selection, credentials, reconnection and the provider runtime that `use-canvas` loads, and it never writes to Canvas. The [implementation plan](canvas-access.todo.md#implementation-plan--agent-proposal-2026-10-28) turns it into files and tests.
+Implemented in slice 1 and approved by the user on 2026-10-30; live account verification remains pending. It follows the existing setup skills: setup owns installation, account selection, credentials, reconnection and the provider runtime that `use-canvas` loads, and it never writes to Canvas. The [implementation plan](canvas-access.todo.md#implementation-plan--agent-proposal-2026-10-28) turns it into files and tests.
 
 ### Configuration
 Private configuration lives in the `setup-canvas/` folder beside its examples, in two ignored files:
@@ -165,7 +165,7 @@ An expired, revoked or regenerated token shows as `token_rejected` on the next r
 | `config_insecure` | `check` | Restrict the env file to its owner (`chmod 600`). |
 
 ## use-canvas contract — agent proposal, 2026-10-28
-Proposed for review; not implemented. The user settled every design choice it raised by 2026-10-29 (see the scope and build decisions and the plan's [G0 choices](canvas-access.todo.md#g0-choices)); it stays labelled a proposal until the code exists. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
+The user settled every design choice by 2026-10-29 (see the scope and build decisions and the plan's [G0 choices](canvas-access.todo.md#g0-choices)). Reads, export, coverage, downloads and history are implemented in slice 2, awaiting user review as of 2026-10-30. The write contract remains the plan for slice 3. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.
 
 ### Reads
 Requests are sequential (Canvas throttles parallel requests harder), send `Accept: application/json+canvas-string-ids` so every ID arrives as a string, ask for `per_page=100`, and follow the `Link` header's `rel="next"` URL as an opaque value. Header names are matched case-insensitively. A `next` URL on another origin or outside `/api/v1/` is refused. A repeated `next` URL, or more than 200 pages, marks that collection `failed`. `rel="last"` is optional in Canvas and never relied on.
@@ -174,9 +174,9 @@ Requests are sequential (Canvas throttles parallel requests harder), send `Accep
 | --- | --- | --- |
 | Course | `GET /courses/:id?include[]=term&include[]=syllabus_body&include[]=total_scores` | Name, code, state, `time_zone`, term, the user's enrollment types and current course score and grade, syllabus. |
 | Navigation | `GET /courses/:id/tabs` | Which areas the user can see. External tabs become external-content gaps. |
-| Permissions | `GET /courses/:id/permissions?permissions[]=…` | Role-dependent coverage and write preflight. Exact permission names are to be confirmed against the current permissions list before implementation. |
+| Permissions | `GET /courses/:id/permissions?permissions[]=…` | Role-dependent coverage and write preflight. Names used by the read report were checked against the official permission list on 2026-10-30; institution-specific responses remain unverified. |
 | Modules and items | `GET /courses/:id/modules?include[]=items&include[]=content_details`, then `GET /courses/:id/modules/:module_id/items?include[]=content_details` | Canvas may omit inline items when there are many, so the items endpoint is used whenever `items` is missing or shorter than `items_count`. |
-| Pages | `GET /courses/:id/pages?include[]=body` | A body missing from the listing is fetched by `page_id`. |
+| Pages | `GET /courses/:id/pages?include[]=body` | A body missing from the listing is fetched by explicit `page_id:ID` addressing. |
 | Files and folders | `GET /courses/:id/folders`, `GET /courses/:id/files` | Metadata only. If the listing is refused, files referenced from module items and HTML are fetched one by one (`GET /courses/:id/files/:file_id`), and coverage says so. |
 | Assignment groups | `GET /courses/:id/assignment_groups` | Names, positions, weights. |
 | Assignments | `GET /courses/:id/assignments?include[]=all_dates&include[]=submission&override_assignment_dates=true`, adding `include[]=overrides` where permissions allow | The user's effective dates, base and per-set dates where visible, and the user's own submission: status, attempt, score and grade. |
@@ -237,7 +237,7 @@ Publication is all-or-nothing per run. The export is assembled in a sibling temp
 | `partial` | Some records retrieved and some not; the missing identities are listed. |
 | `failed` | The family could not be read: network or server error, malformed data, throttling after retries, page cap or cursor cycle. |
 
-Each entry carries the record count, pages read, HTTP status where relevant, any fallback used (`referenced_only` for files) and notes. Classification follows the HTTP status and Canvas's documented error bodies. `use-canvas` never infers deletion; a consumer keeps its previous data for anything not `complete`.
+Each entry carries the record count, HTTP status where relevant, any fallback used (`referenced_only` for files) and notes. Pages read and request counts live in `run.json` so page-size changes do not alter deterministic coverage. Classification follows the HTTP status and Canvas's documented error bodies. `use-canvas` never infers deletion; a consumer keeps its previous data for anything not `complete`.
 
 ### Provenance, dates and external content
 Every record carries its identity, API path, `html_url` (or a constructed web link) and Canvas's `created_at` and `updated_at` where provided. `index.json` records the instance origin and the user whose view this is; `run.json` records when the run started and finished, which is the retrieved or last-checked time.
@@ -250,7 +250,7 @@ Remote text is untrusted data. Titles and bodies are exported as content and nev
 
 ### Write gate
 Writes follow the Trello and Excel pattern:
-- Every write command previews by default. Preview only reads: identity, course selection and `write` flag, course state, the user's permission booleans, the current target and everything the plan depends on. It prints the plan and a `preview_hash` and sends nothing.
+- Every write command previews by default. Preview only reads: identity, course state, the user's permission booleans, the current target and everything the plan depends on. It prints the plan and a `preview_hash` and sends nothing.
 - `--execute` requires `--expect HASH`, as `use-excel-workbooks` does. Execution rebuilds the plan from fresh reads; any difference in the plan or its dependency reads, including a target someone else edited after the preview, refuses with no writes sent. Canvas offers no conditional request (`If-Match`) for these resources, so a change landing between that re-read and the write is still possible; readback is what detects it.
 - Each request is sent once, in order, and read back before the next. Nothing is retried. A refusal before any write exits 1 and says no writes were sent. A request that may have landed (network error, malformed response, failed readback) stops the sequence with exit 3, `PARTIAL or uncertain`, the verified prior steps and their IDs, and the uncertain step. A step that creates a resource passes its ID to later steps. Nothing is transactional and there is no rollback.
 - Scalar fields are read back exactly. HTML fields are compared after whitespace and attribute-order normalisation; Canvas sanitises HTML on save, so a remaining difference is reported as `verified_with_sanitizer_changes` with the difference shown, never silently accepted.

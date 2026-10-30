@@ -1,0 +1,9 @@
+[project]
+name = "agent-hands-use-canvas"
+version = "0.1.0"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+dependencies = ["markdownify==1.2.3", "markdown-it-py==4.2.0"]
+
+[tool.uv]
+package = false
