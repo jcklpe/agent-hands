@@ -22,7 +22,7 @@ For Penpot, use [setup-penpot](../setup-penpot/SKILL.md). Its configuration is o
 
 For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on setup-slack provider support and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
 
-For Canvas, use [setup-canvas](../setup-canvas/SKILL.md) with [use-canvas](../use-canvas/SKILL.md). The setup runtime uses Python 3.11+ with the standard library, and the use skill has its own locked conversion packages. The user creates and enters their token; confirm identity and explicit course selection before reads. Reads/exports/history are implemented and tested offline; Canvas writes and live validation remain pending.
+For Canvas, use [setup-canvas](../setup-canvas/SKILL.md) with [use-canvas](../use-canvas/SKILL.md). The setup runtime uses Python 3.11+ with the standard library, and the use skill has its own locked conversion packages. The user creates and enters their token; confirm identity and explicit course selection before reads. Reads/exports/history and fifteen bounded write commands are implemented and tested offline. Writes require their own concrete preview approval and execution hash; live validation remains pending.
 
 For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; mutation previews also require `shasum`. Writes require `--execute`, and no live mutation is part of a routine setup check.
 

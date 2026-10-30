@@ -2,7 +2,7 @@
 The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 ## Scope and dependencies
-`scripts/canvas_auth.py` owns configuration parsing, account routing, the API transport, pagination, read throttling back-off, error classification and the identity check. [setup-canvas](../SKILL.md) owns onboarding; [use-canvas](../../use-canvas/SKILL.md) owns reads, exports, downloads and operation history on top of it; gated Canvas writes remain a later slice. Python 3.11 or later with only its standard library. No Bash, other provider or personal workspace is required.
+`scripts/canvas_auth.py` owns configuration parsing, account routing, the API transport, pagination, read throttling back-off, error classification and the identity check. [setup-canvas](../SKILL.md) owns onboarding; [use-canvas](../../use-canvas/SKILL.md) owns reads, exports, downloads and operation history on top of it; supported Canvas writes use its reviewed preview/execute gate. Python 3.11 or later with only its standard library. No Bash, other provider or personal workspace is required.
 
 ## Configuration contract
 Two private files in the selected configuration directory, both ignored, copied from the adjacent [.env.example](../.env.example) and [canvas-accounts.example.json](../canvas-accounts.example.json) only when absent:

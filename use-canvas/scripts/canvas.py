@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read selected Canvas courses, export snapshots, download files and query private history."""
+"""Read/export Canvas courses and preview or execute supported changes with private history."""
 import argparse
 import datetime as dt
 import json
@@ -54,6 +54,8 @@ def parser():
             outcome = command.add_mutually_exclusive_group(required=True)
             outcome.add_argument("--landed", action="store_true")
             outcome.add_argument("--not-landed", action="store_true")
+    from canvas_write import add_commands
+    add_commands(commands,canvas_id)
     return root
 
 
@@ -77,7 +79,7 @@ def log_read(history, **fields):
         print("WARNING: Canvas operation history could not be recorded; the read result is still available.", file=sys.stderr)
 
 
-def main(argv=None, transport=None, downloader=None, now=None):
+def main(argv=None, transport=None, downloader=None, now=None, upload_sender=None):
     args = parser().parse_args(argv)
     acct, history = None, None
     try:
@@ -103,6 +105,13 @@ def main(argv=None, transport=None, downloader=None, now=None):
         from canvas_export import export, download
         reader = Reader(client, include_html=getattr(args, "include_html", False))
         reader.identity()
+        from canvas_write import COMMANDS,run_write
+        if args.command in COMMANDS:
+            value,code=run_write(reader,args,history,now,upload_sender,downloader)
+            emit(value,args.json)
+            if value.get("mode")=="preview" and not args.json:
+                print("No writes sent. To apply this reviewed plan, repeat with --execute --expect "+value["preview_hash"])
+            return code
         ids = []
         if args.command in {"export", "verify"}:
             ids = sorted(set(args.course or acct.courses), key=numeric)
@@ -145,7 +154,7 @@ def main(argv=None, transport=None, downloader=None, now=None):
         return code
     except (auth.CanvasError, OSError, ValueError) as error:
         if acct and history and not args.command.startswith("history"):
-            log_read(history, account=acct.alias, command=args.command, kind="export" if args.command == "export" else "read", course_ids=[], outcome="failed")
+            log_read(history, account=acct.alias, command=args.command, kind="write" if hasattr(args,"expect") else "export" if args.command == "export" else "read", course_ids=[], outcome="refused" if hasattr(args,"expect") else "failed")
         if isinstance(error, auth.CanvasError):
             return auth.fail(error)
         print("ERROR: Canvas operation failed while processing local files or malformed data.", file=sys.stderr)

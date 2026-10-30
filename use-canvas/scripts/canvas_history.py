@@ -14,7 +14,7 @@ from canvas_auth import CanvasError, setting
 UTC = dt.timezone.utc
 MONTH = re.compile(r"^\d{4}-(?:0[1-9]|1[0-2])$")
 MONTH_FILE = re.compile(r"^(\d{4}-(?:0[1-9]|1[0-2]))\.jsonl(\.gz)?$")
-FIELDS = {"command", "account", "kind", "course_ids", "families", "counts", "coverage", "outcome", "output", "target_ids", "preview_hash", "steps", "resolves"}
+FIELDS = {"operation_id", "command", "account", "kind", "course_ids", "families", "counts", "coverage", "outcome", "output", "target_ids", "preview_hash", "steps", "resolves"}
 
 
 def json_line(value):
@@ -87,11 +87,23 @@ class History:
                     raise CanvasError("config_invalid", "History dates must use YYYY-MM-DD") from None
         if since and until and since > until:
             raise CanvasError("config_invalid", "History start date is after its end date")
-        for path in self.files(since, until):
+        paths = self.files(since, until)
+        resolutions = {}
+        for path in paths:
             opener = gzip.open if path.suffix == ".gz" else open
             with opener(path, "rt", encoding="utf-8") as stream:
                 for line in stream:
                     row = json.loads(line)
+                    if row.get("resolves") and row.get("outcome") in {"verified", "verified_with_sanitizer_changes", "landed", "not_landed"}:
+                        resolutions[(row.get("account"), row["resolves"])] = (row["outcome"], row["record_id"])
+        for path in paths:
+            opener = gzip.open if path.suffix == ".gz" else open
+            with opener(path, "rt", encoding="utf-8") as stream:
+                for line in stream:
+                    row = json.loads(line)
+                    resolved = resolutions.get((row.get("account"), row["record_id"]))
+                    if row.get("kind") == "write" and row.get("outcome") == "uncertain" and resolved:
+                        row.update(recorded_outcome="uncertain", outcome=resolved[0], resolved_by=resolved[1])
                     if since and row["time"][:10] < since or until and row["time"][:10] > until:
                         continue
                     if account and row.get("account") != account or course and course not in row.get("course_ids", []):
@@ -146,7 +158,7 @@ class History:
             raise CanvasError("config_invalid", "History cutoff must use YYYY-MM")
         with self.locked():
             rows = list(self.rows())
-            resolved = {r.get("resolves") for r in rows if r.get("command") == "history-resolve"}
+            resolved = {r.get("resolves") for r in rows if r.get("resolves") and r.get("outcome") in {"landed", "not_landed", "verified", "verified_with_sanitizer_changes"}}
             uncertain = {r["record_id"] for r in rows if r.get("kind") == "write" and r.get("outcome") == "uncertain"}
             chosen = []
             for path in self.files():

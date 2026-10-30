@@ -3,7 +3,7 @@ name: setup-canvas
 description: "Install the Canvas capability, establish or repair account access with a user-created personal access token, select courses, and diagnose configuration or authentication. Owns the shared provider runtime used by use-canvas."
 ---
 # Setup Canvas
-Read this skill's [account-access reference](references/account-access.md) before configuring anything. This setup owns the Canvas configuration, the token's storage and the provider runtime (`scripts/canvas_auth.py`) that `use-canvas` loads. [use-canvas](../use-canvas/SKILL.md) supplies course listing, `verify`, exports, downloads and operation history; Canvas writes are not implemented yet. Setup never writes to Canvas.
+Read this skill's [account-access reference](references/account-access.md) before configuring anything. This setup owns the Canvas configuration, the token's storage and the provider runtime (`scripts/canvas_auth.py`) that `use-canvas` loads. [use-canvas](../use-canvas/SKILL.md) supplies course listing, `verify`, exports, downloads and operation history; supported Canvas writes use a separate preview, approval and execution gate. Setup never writes to Canvas.
 
 ## Runtime
 Python 3.11 or later with only its standard library; no Bash or third-party package is needed. If uv is missing, follow the [official installer](https://docs.astral.sh/uv/getting-started/installation/) within setup authorization; uv can provision a compatible Python for this folder's manifest. From the collection root:
