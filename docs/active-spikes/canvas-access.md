@@ -156,12 +156,13 @@ An expired, revoked or regenerated token shows as `token_rejected` on the next r
 | `token_expired_local` | `check`, from `token_expires` | The user creates or regenerates a token. |
 | `token_creation_unavailable`, `policy_forbids` | The user's report in steps 2–3 | Stop. No workaround is offered. |
 | `network_error` | Any live request | Check connectivity and the host. Only throttled reads are retried, a bounded number of times. |
-| `token_rejected` | `401` with an authentication challenge or Canvas's invalid-token error | Reconnect as above. A run stops before publishing any export. |
+| `token_rejected` | Canvas's invalid-token error, or a `401` with an authentication challenge and no permission message | Reconnect as above. A run stops before publishing any export. |
 | `identity_mismatch` | `whoami`, and before every export or write | Check the alias and token; nothing proceeds. |
 | `course_denied`, `course_not_found` | `verify` | Remove the course, or the user checks their enrollment. |
 | `course_concluded` | `verify` | Reads continue; writes are refused. |
 | `throttled` | `429` | Reads back off a bounded number of times; writes stop without retry. |
 | `tz_data_missing` | `check` | Install time-zone data for the platform. |
+| `config_insecure` | `check` | Restrict the env file to its owner (`chmod 600`). |
 
 ## use-canvas contract — agent proposal, 2026-10-28
 Proposed for review; not implemented. The user settled every design choice it raised by 2026-10-29 (see the scope and build decisions and the plan's [G0 choices](canvas-access.todo.md#g0-choices)); it stays labelled a proposal until the code exists. `use-canvas` owns reads, deterministic export and gated writes for the selected courses of a configured account. It loads the `setup-canvas` runtime and needs no other capability. Behaviour described as documented comes from the Canvas API documentation read on 2026-10-28; points that need a live check are listed at the end of this section.

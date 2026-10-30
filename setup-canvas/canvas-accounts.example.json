@@ -1,0 +1,12 @@
+{
+  "accounts": [
+    {
+      "alias": "example",
+      "base_url": "https://example.instructure.com",
+      "user_id": "",
+      "token_env": "CANVAS_TOKEN_EXAMPLE",
+      "token_expires": "2027-01-31",
+      "courses": ["123"]
+    }
+  ]
+}
