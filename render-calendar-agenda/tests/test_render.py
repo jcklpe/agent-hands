@@ -46,6 +46,70 @@ class RenderChecks(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.output.read_text().count('Example invitation'), 2)
 
+    def test_timed_point_events_merge_and_render_in_both_formats(self):
+        google_event = self.google['calendars'][0]['events']['items'][0]
+        microsoft_event = self.microsoft['calendars'][0]['events'][0]
+        google_event['end'] = copy.deepcopy(google_event['start'])
+        microsoft_event['end'] = copy.deepcopy(microsoft_event['start'])
+        for extra in [[], ['--compact']]:
+            with self.subTest(format=extra):
+                result = self.run_render([self.google, self.microsoft], '--force', *extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                output = self.output.read_text()
+                self.assertIn('09:00-09:00', output)
+                self.assertEqual(output.count('Example invitation'), 1)
+
+    def test_point_events_use_inclusive_lower_and_exclusive_upper_bounds(self):
+        event = self.google['calendars'][0]['events']['items'][0]
+        del event['iCalUID']
+        event['summary'] = 'Point marker'
+        cases = [('2029-12-31T23:59:59Z', False), (START, True), ('2030-01-31T23:59:59Z', True), (END, False)]
+        for moment, present in cases:
+            event['start'] = dict(dateTime=moment)
+            event['end'] = dict(dateTime=moment)
+            for extra in [[], ['--compact']]:
+                with self.subTest(moment=moment, format=extra):
+                    result = self.run_render([self.google, self.microsoft], '--force', *extra)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual('Point marker' in self.output.read_text(), present)
+
+    def test_negative_timed_duration_preserves_existing_output(self):
+        self.output.write_text('previous')
+        event = self.google['calendars'][0]['events']['items'][0]
+        event['end'] = dict(dateTime='2030-01-02T14:00:00Z')
+        result = self.run_render([self.google, self.microsoft], '--force')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.output.read_text(), 'previous')
+
+    def test_all_day_intervals_require_positive_duration(self):
+        event = self.google['calendars'][0]['events']['items'][0]
+        del event['iCalUID']
+        event['summary'] = 'All-day marker'
+        event['start'] = dict(date='2030-01-02')
+        for end, valid in [('2030-01-01', False), ('2030-01-02', False), ('2030-01-03', True)]:
+            with self.subTest(end=end):
+                self.output.write_text('previous')
+                event['end'] = dict(date=end)
+                result = self.run_render([self.google, self.microsoft], '--force')
+                self.assertEqual(result.returncode == 0, valid, result.stderr)
+                if valid:
+                    self.assertIn('All-day marker', self.output.read_text())
+                else:
+                    self.assertEqual(self.output.read_text(), 'previous')
+
+    def test_positive_duration_overlap_boundaries_are_unchanged(self):
+        event = self.google['calendars'][0]['events']['items'][0]
+        del event['iCalUID']
+        event['summary'] = 'Interval marker'
+        cases = [('2029-12-31T23:00:00Z', START, False), (START, '2030-01-01T01:00:00Z', True), (END, '2030-02-01T01:00:00Z', False)]
+        for start, end, present in cases:
+            with self.subTest(start=start, end=end):
+                event['start'] = dict(dateTime=start)
+                event['end'] = dict(dateTime=end)
+                result = self.run_render([self.google, self.microsoft], '--force')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual('Interval marker' in self.output.read_text(), present)
+
     def test_missing_source_preserves_old_output_unless_explicit(self):
         self.output.write_text('previous')
         result = self.run_render([self.google], '--force')

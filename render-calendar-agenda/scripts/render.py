@@ -78,9 +78,9 @@ def load_bundle(path, zone, lower, upper):
                 ends = datetime.combine(date.fromisoformat(end["date"]), datetime.min.time(), zone)
             else:
                 begins, ends = instant(start["dateTime"]), instant(end["dateTime"])
-            if ends <= begins:
-                raise ValueError("Event end must follow start")
-            if ends <= lower or begins >= upper:
+            if ends < begins or ("date" in start and ends == begins):
+                raise ValueError("Event end must follow start; timed point events may have equal bounds")
+            if (ends == begins and begins < lower) or (ends > begins and ends <= lower) or begins >= upper:
                 continue
             # Provider-local IDs must not merge lookalikes across accounts; a shared iCalendar UID still can.
             event["id"] = namespace + ":" + event.get("id", "")
