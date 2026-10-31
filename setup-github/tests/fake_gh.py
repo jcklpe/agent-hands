@@ -111,7 +111,11 @@ def main():
             if variables["id"] != value["id"]:
                 respond({"data": {"node": None}})
             respond({"data": {"node": value}})
-        value = {"id": pr["node_id"], "number": pr["number"], "headRefOid": pr["head"]["sha"], "baseRefOid": pr["base"]["sha"], "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN", "reviewDecision": "APPROVED", "autoMergeRequest": None, "mergeQueueEntry": None, "stack": None, "closingIssuesReferences": {"nodes": [], "pageInfo": {"hasNextPage": False}}}
+        if "mergeCommit" in query:
+            value = {"id": pr["node_id"], "number": pr["number"], "merged": pr["merged"], "headRefOid": pr["head"]["sha"], "mergeCommit": {"oid": state["merge_sha"]} if pr["merged"] else None}
+            value.update(state.get("merge_result", {}))
+            respond({"data": {"repository": {"pullRequest": value}}})
+        value = {"id": pr["node_id"], "number": pr["number"], "headRefOid": pr["head"]["sha"], "baseRefOid": pr["base"]["sha"], "baseRef": {"name": pr["base"]["ref"], "target": {"oid": state["base"]}}, "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN", "reviewDecision": "APPROVED", "autoMergeRequest": None, "mergeQueueEntry": None, "stack": None, "closingIssuesReferences": {"nodes": [], "pageInfo": {"hasNextPage": False}}}
         value.update(state.get("merge_metadata", {}))
         respond({"data": {"repository": {"pullRequest": value}}})
     if route == prefix + "/issues" and method == "GET":
@@ -130,7 +134,7 @@ def main():
         value["url"] = "https://api.github.com/" + prefix + ("/pulls/" if is_pr else "/issues/") + str(number)
         if is_pr:
             value["issue_url"] = "https://api.github.com/" + prefix + "/issues/" + str(number)
-            value.update(draft=payload["draft"], head={"sha": state["head"], "ref": payload["head"].split(":", 1)[1], "repo": {"full_name": "example-owner/example-project"}}, base={"sha": state["base"], "ref": payload["base"], "repo": {"full_name": "example-owner/example-project"}}, merged=False, merge_commit_sha=None, requested_reviewers=[], requested_teams=[], commits=2, changed_files=1)
+            value.update(draft=payload["draft"], head={"sha": state["head"], "ref": payload["head"].split(":", 1)[1], "repo": {"full_name": "example-owner/example-project"}}, base={"sha": state["base"], "ref": payload["base"], "repo": {"full_name": "example-owner/example-project"}}, merged=False, requested_reviewers=[], requested_teams=[], commits=2, changed_files=1)
             value["head"]["repo"]["full_name"] = payload["head"].split(":", 1)[0] + "/" + payload["head_repo"]
         state[key][str(number)] = value
         respond(value, 201)
@@ -195,13 +199,13 @@ def main():
             if method == "GET":
                 if state.get("async_still_pending"):
                     respond({"status": "pending", "details": {"uuid": "merge-request-1"}})
-                pr.update(merged=True, state="closed", merge_commit_sha=state["merge_sha"])
+                pr.update(merged=True, state="closed")
                 respond({"status": "merged", "details": {"sha": state["merge_sha"]}})
             if payload["sha"] != pr["head"]["sha"]:
                 respond({"message": "Head moved"}, 409)
             if state.get("async_pending"):
                 respond({"status": "pending", "details": {"uuid": "merge-request-1"}}, 202)
-            pr.update(merged=True, state="closed", merge_commit_sha=state["merge_sha"])
+            pr.update(merged=True, state="closed")
             respond({"status": "merged", "details": {"sha": state["merge_sha"]}})
     if route.startswith(prefix + "/issues/") and route.endswith("/labels") and method == "PUT":
         number = route.split("/")[-2]
