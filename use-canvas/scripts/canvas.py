@@ -113,9 +113,11 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             acct = client.account
             print("Canvas credential renewed and saved; the previous credential retains its original expiry.", file=sys.stderr)
         from canvas_write import COMMANDS,run_write
-        if args.command in {'smoke-session', 'cleanup-smoke'}:
-            from canvas_smoke import prepare, cleanup
-            value, code = prepare(reader, args, history) if args.command == 'smoke-session' else cleanup(reader, args, history, downloader)
+        if args.command in {'smoke-session', 'cleanup-smoke', 'verify-smoke-cleanup'}:
+            from canvas_smoke import prepare, cleanup, verify_cleanup
+            if args.command == 'smoke-session': value, code = prepare(reader, args, history)
+            elif args.command == 'cleanup-smoke': value, code = cleanup(reader, args, history, downloader)
+            else: value, code = verify_cleanup(reader, args, history, downloader)
             emit(value, args.json)
             return code
         if args.command in COMMANDS:

@@ -22,8 +22,9 @@ def refuse(message):
 
 
 def add_commands(commands, canvas_id):
-    for name in ('smoke-session', 'cleanup-smoke'):
-        p = commands.add_parser(name, help='prepare private test provenance' if name == 'smoke-session' else 'preview deletion of unchanged recorded test creations')
+    for name in ('smoke-session', 'cleanup-smoke', 'verify-smoke-cleanup'):
+        description = {'smoke-session': 'prepare private test provenance', 'cleanup-smoke': 'preview deletion of unchanged recorded test creations', 'verify-smoke-cleanup': 'verify absence after a pending cleanup without sending mutations'}[name]
+        p = commands.add_parser(name, help=description)
         p.add_argument('alias')
         p.add_argument('--history-dir', type=Path)
         p.add_argument('--json', action='store_true')
@@ -31,6 +32,7 @@ def add_commands(commands, canvas_id):
             p.add_argument('--course', type=canvas_id, required=True)
         else:
             p.add_argument('--session', required=True)
+        if name == 'cleanup-smoke':
             p.add_argument('--execute', action='store_true')
             p.add_argument('--expect')
 
@@ -212,12 +214,35 @@ class Session:
         if self.data['pending']:
             refuse('Session has an interrupted or uncertain action; inspect it before any further mutation or cleanup')
         if self.data['closed']: refuse('Smoke session is closed')
+        self.check_state()
+
+    def check_state(self):
         current, _ = inventory(self.reader, self.base, self.data['owned'])
         if current != self.data['baseline']:
             refuse('Original inventory or order differs, or an unrecorded object exists; no deletion is safe')
         for row in self.data['owned']:
             if not row.get('deleted') and (not row.get('snapshot') or self.snapshot(row) != row['snapshot']):
                 refuse('A test object changed or lacks verified readback; no mutation is safe')
+
+    def confirm_absent(self, row, allow_page_denial=False):
+        try:
+            self.reader.object(row['path'])
+        except CanvasError as error:
+            status = error.status
+            if status == 403 and error.kind == 'denied' and row['kind'] == 'page' and allow_page_denial:
+                permissions = self.reader.object(self.base + '/permissions', {'permissions[]': ['manage_wiki_update']})
+                if permissions.get('manage_wiki_update') is not True:
+                    refuse('Denied page read without explicit page-edit permission cannot prove absence')
+            elif status != 404:
+                raise
+        else:
+            refuse('Test object is still readable; no absence was established')
+        row['deleted'] = True
+        if row['kind'] == 'item': self.refresh_parent(row)
+        # An object read denial never proves absence alone: require the complete scoped inventory and baseline.
+        self.check_state()
+        row['removal_evidence'] = {'object_read_status': status, 'complete_inventory_absence': True, 'original_inventory_preserved': True}
+        return row['removal_evidence']
 
     def attach(self, builder):
         a = builder.args
@@ -315,25 +340,22 @@ def cleanup(reader, args, history, downloader=None):
         try:
             for row in targets:
                 context(reader, session.data); session.check()
-                session.data['pending'] = {'command': 'cleanup-smoke', 'kind': row['kind'], 'id': row['id']}
+                session.data['pending'] = {'command': 'cleanup-smoke', 'kind': row['kind'], 'id': row['id'], 'operation_id': operation}
                 session.store.save(session.data)
                 active = journal('uncertain', row=row)
+                session.data['pending']['record_id'] = active
+                session.store.save(session.data)
                 sent += 1
                 phase = 'sending'
-                parse_json(reader.client.request('DELETE', row['path']))
+                response = parse_json(reader.client.request('DELETE', row['path']))
                 phase = 'after_send'
-                try:
-                    reader.object(row['path'])
-                except CanvasError as error:
-                    if error.status != 404: raise
-                else:
-                    refuse('Deleted test object is still readable')
-                row['deleted'] = True
-                if row['kind'] == 'item':
-                    session.refresh_parent(row)
-                current, _ = inventory(reader, session.base, session.data['owned'])
-                if current != session.data['baseline']:
-                    refuse('Inventory or original order differs after deletion')
+                if row['kind'] == 'page' and isinstance(response, dict) and response.get('page_id') is not None and str(response['page_id']) != row['id']:
+                    refuse('Delete acknowledgment returned a different page ID')
+                page_ack = row['kind'] == 'page' and isinstance(response, dict) and str(response.get('page_id')) == row['id']
+                session.data['pending']['delete_acknowledged'] = True
+                session.data['pending']['page_id_acknowledged'] = page_ack
+                session.store.save(session.data)
+                session.confirm_absent(row, allow_page_denial=page_ack)
                 session.data['pending'] = None
                 session.store.save(session.data)
                 journal('verified', resolves=active, row=row)
@@ -348,4 +370,26 @@ def cleanup(reader, args, history, downloader=None):
             if active and phase == 'sending' and isinstance(error, CanvasError) and error.status in {400, 401, 403, 404, 409, 422, 429}:
                 try: journal('not_landed', resolves=active)
                 except OSError: pass
-            return {'mode': 'executed', 'outcome': 'PARTIAL or uncertain' if sent else 'refused', 'writes_sent': sent, 'removed': removed, 'baseline_restored': False, 'error_kind': error.kind if isinstance(error, CanvasError) else 'transport_or_history_error', 'session': args.session}, 3 if sent else 1
+            return {'mode': 'executed', 'outcome': 'PARTIAL or uncertain' if sent else 'refused', 'writes_sent': sent, 'removed': removed, 'baseline_restored': False, 'error_kind': error.kind if isinstance(error, CanvasError) else 'transport_or_history_error', 'error_status': error.status if isinstance(error, CanvasError) else None, 'phase': phase, 'session': args.session}, 3 if sent else 1
+
+
+def verify_cleanup(reader, args, history, downloader=None):
+    """Resolve only a recorded pending deletion by fresh absence checks; never send another mutation."""
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        pending = session.data['pending']
+        if session.data['closed'] or not pending or pending.get('command') != 'cleanup-smoke':
+            refuse('Verification requires this signed session\'s pending cleanup deletion')
+        row = session.own(pending['kind'], pending['id'])
+        if not row.get('snapshot'): refuse('Pending target lacks verified creation provenance')
+        markers = [r for r in history.rows(account=reader.client.account.alias, course=session.data['binding']['course_id'], kind='write') if r.get('command') == 'cleanup-smoke' and r.get('target_ids') == [row['id']] and (r.get('outcome') == 'uncertain' or r.get('recorded_outcome') == 'uncertain')]
+        if pending.get('record_id'): markers = [r for r in markers if r['record_id'] == pending['record_id']]
+        if pending.get('operation_id'): markers = [r for r in markers if r.get('operation_id') == pending['operation_id']]
+        if len(markers) != 1: refuse('The pending deletion does not have one unambiguous durable history marker')
+        # This is an observation of absence after an interrupted deletion, not proof of which actor removed it.
+        evidence = session.confirm_absent(row, allow_page_denial=True)
+        session.data['pending'] = None
+        session.data['closed'] = all(r.get('deleted') for r in session.data['owned'])
+        history._append({'schema_version': 1, 'record_id': uuid.uuid4().hex, 'operation_id': markers[0]['operation_id'], 'time': history.now.isoformat(), 'kind': 'write', 'command': 'verify-smoke-cleanup', 'account': reader.client.account.alias, 'course_ids': [session.data['binding']['course_id']], 'outcome': 'verified', 'resolves': markers[0]['record_id'], 'target_ids': [row['id']], 'coverage': evidence})
+        session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified_absent', 'session': args.session, 'verified_absent': [{'kind': row['kind'], 'id': row['id']}], 'evidence': evidence, 'baseline_restored': session.data['closed'], 'session_closed': session.data['closed'], 'writes_sent': 0}, 0

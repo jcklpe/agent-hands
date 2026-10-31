@@ -10,7 +10,7 @@ from canvas_write_fixture import WriteFixture, NOW, reply
 from canvas_auth import CanvasError
 from canvas_history import History
 from canvas_write import run_write
-from canvas_smoke import DELETE_PERMISSIONS, Session, Store, prepare, cleanup
+from canvas_smoke import DELETE_PERMISSIONS, Session, Store, prepare, cleanup, verify_cleanup
 import canvas
 
 
@@ -20,11 +20,12 @@ class SmokeFixture(WriteFixture):
         self.data['course']['workflow_state'] = 'unpublished'
         self.permissions.update({k: True for k in DELETE_PERMISSIONS})
         self.deleted = set()
+        self.deleted_read_status = 404
 
     def send(self, method, url, headers, body=None, token=None):
         from urllib.parse import urlsplit
         path = urlsplit(url).path
-        if method == 'GET' and path in self.deleted: return reply({'message': 'missing'}, 404)
+        if method == 'GET' and path in self.deleted: return reply({'message': 'missing'}, self.deleted_read_status)
         return super().send(method, url, headers, body, token)
 
     def mutate(self, method, path, fields):
@@ -43,7 +44,7 @@ class SmokeFixture(WriteFixture):
                 self.data[tail[0]][:] = [r for r in self.data[tail[0]] if r[key] != tail[1].removeprefix('page_id:')]
                 if tail[0] == 'modules':
                     for index, row in enumerate(self.data['modules'], 1): row['position'] = index
-        return {'deleted': True}
+        return {'page_id': bits[-1].removeprefix('page_id:')} if '/pages/' in path else {'deleted': True}
 
     def download(self, client, meta, output, **kwargs):
         value = b'synthetic smoke file'
@@ -238,16 +239,126 @@ class SmokeTest(unittest.TestCase):
 
     def test_delete_readback_denied_is_not_treated_as_absent(self):
         pid = self.create_page(); path = '/api/v1/courses/123/pages/page_id:' + pid
-        sender = self.fixture.send
-        def denied(method, url, headers, body=None, token=None):
-            if method == 'GET' and path in self.fixture.deleted and path in url:
-                return reply({'message': 'denied'}, 403)
-            return sender(method, url, headers, body, token)
-        self.fixture.send = denied
+        self.fixture.deleted_read_status = 403
+        mutate = self.fixture.mutate
+        def listed(method, target, fields):
+            value = copy.deepcopy(self.fixture.data['pages'][-1])
+            result = mutate(method, target, fields)
+            if method == 'DELETE': self.fixture.data['pages'].append(value)
+            return result
+        self.fixture.mutate = listed
         args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
         args.execute = True; args.expect = plan['preview_hash']
         result, code = cleanup(self.reader, args, self.history)
         self.assertEqual(code, 3); self.assertFalse(result['baseline_restored'])
+        self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
+
+    def test_page403_after_exact_delete_ack_requires_inventory_absence(self):
+        self.create_page(); self.fixture.deleted_read_status = 403
+        result = self.clean()
+        self.assertTrue(result['baseline_restored'])
+        row = Store(self.history, self.sid).load()['owned'][0]
+        self.assertEqual(row['removal_evidence']['object_read_status'], 403)
+        self.assertTrue(row['removal_evidence']['complete_inventory_absence'])
+
+    def test_page403_with_unknown_edit_permission_stops_verification(self):
+        self.create_page(); self.fixture.deleted_read_status = 403
+        mutate = self.fixture.mutate
+        def revoked(method, path, fields):
+            result = mutate(method, path, fields)
+            if method == 'DELETE': self.fixture.permissions.pop('manage_wiki_update')
+            return result
+        self.fixture.mutate = revoked
+        args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
+        args.execute = True; args.expect = plan['preview_hash']
+        result, code = cleanup(self.reader, args, self.history)
+        self.assertEqual(code, 3); self.assertFalse(result['baseline_restored'])
+
+    def pending_delete(self):
+        pid = self.create_page(); self.fixture.deleted_read_status = 403
+        self.fixture.fail_after.add('/api/v1/courses/123/pages/page_id:' + pid)
+        args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
+        args.execute = True; args.expect = plan['preview_hash']
+        result, code = cleanup(self.reader, args, self.history)
+        self.assertEqual(code, 3)
+        return pid
+
+    def verify_pending(self):
+        args = canvas.parser().parse_args(['verify-smoke-cleanup', 'example', '--session', self.sid])
+        return verify_cleanup(self.reader, args, self.history, self.fixture.download)
+
+    def test_read_only_reconciliation_closes_pending_deleted_page(self):
+        pid = self.pending_delete()
+        before = len(self.fixture.writes)
+        result, code = self.verify_pending()
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0)
+        self.assertEqual(result['verified_absent'], [{'kind': 'page', 'id': pid}])
+        self.assertTrue(result['session_closed']); self.assertTrue(result['baseline_restored'])
+        self.assertEqual(len(self.fixture.writes), before)
+        receipt = Store(self.history, self.sid).load()
+        self.assertIsNone(receipt['pending']); self.assertTrue(receipt['closed'])
+        self.assertFalse(any(r['outcome'] == 'uncertain' for r in self.history.rows()))
+
+    def test_reconciliation_never_adopts_pending_creation(self):
+        self.fixture.fail_after.add('/api/v1/courses/123/pages')
+        args = self.args('create-page', '--title', self.prefix + ' page')
+        plan, _ = self.run_write(args); args.execute = True; args.expect = plan['preview_hash']
+        self.assertEqual(self.run_write(args)[1], 3)
+        before = len(self.fixture.writes)
+        with self.assertRaises(CanvasError): self.verify_pending()
+        self.assertEqual(len(self.fixture.writes), before)
+
+    def test_reconciliation_requires_baseline_and_complete_inventory(self):
+        self.pending_delete()
+        self.fixture.data['folders'].append({'id': '100000', 'name': 'Foreign folder'})
+        with self.assertRaises(CanvasError): self.verify_pending()
+        self.fixture.data['folders'].pop()
+        self.fixture.failures['/api/v1/courses/123/pages'] = (403, {})
+        with self.assertRaises(CanvasError): self.verify_pending()
+        self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
+
+    def test_reconciliation_rejects_still_readable_target(self):
+        self.fixture.fail_before['/api/v1/courses/123/pages/page_id:10001'] = 403
+        self.create_page()
+        args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
+        args.execute = True; args.expect = plan['preview_hash']
+        self.assertEqual(cleanup(self.reader, args, self.history)[1], 3)
+        with self.assertRaises(CanvasError): self.verify_pending()
+        self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
+
+    def test_reconciliation_of_legacy_pending_marker_remains_exact(self):
+        self.pending_delete()
+        store = Store(self.history, self.sid); data = store.load()
+        data['pending'].pop('record_id'); data['pending'].pop('operation_id')
+        store.save(data)
+        self.assertTrue(self.verify_pending()[0]['session_closed'])
+
+    def test_reconciliation_does_not_claim_full_cleanup_with_live_targets(self):
+        self.create_page()
+        mid = self.write('create-module', '--name', self.prefix + ' module')['target_ids']['module.id']
+        self.fixture.fail_after.add('/api/v1/courses/123/modules/' + mid)
+        args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
+        args.execute = True; args.expect = plan['preview_hash']
+        self.assertEqual(cleanup(self.reader, args, self.history)[1], 3)
+        before = len(self.fixture.writes)
+        result, code = self.verify_pending()
+        self.assertEqual(code, 0); self.assertEqual(len(self.fixture.writes), before)
+        self.assertFalse(result['session_closed']); self.assertFalse(result['baseline_restored'])
+        self.assertTrue(result['evidence']['original_inventory_preserved'])
+        self.assertIsNone(Store(self.history, self.sid).load()['pending'])
+
+    def test_page403_without_exact_ack_and_token_failure_stay_uncertain(self):
+        self.create_page(); self.fixture.deleted_read_status = 403
+        mutate = self.fixture.mutate
+        def missing_ack(method, path, fields):
+            value = mutate(method, path, fields)
+            return {'deleted': True} if method == 'DELETE' else value
+        self.fixture.mutate = missing_ack
+        args = self.cleanup_args(); plan, _ = cleanup(self.reader, args, self.history)
+        args.execute = True; args.expect = plan['preview_hash']
+        self.assertEqual(cleanup(self.reader, args, self.history)[1], 3)
+        self.fixture.deleted_read_status = 401
+        with self.assertRaises(CanvasError): self.verify_pending()
         self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
 
     def test_missing_from_course_collection_and_folder_side_effect_refuse(self):
