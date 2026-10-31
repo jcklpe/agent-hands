@@ -23,12 +23,12 @@ Implementation surfaces: `setup-github/SKILL.md`, `setup-github/references/accou
 ## Current State Overview
 The complete selected issue/PR collaboration implementation is present and offline-verified. Existing setup/use skills were extended; no aggregate skill or Project Workflows runtime dependency was added. Exact reads, issue lifecycle operations, PR preparation/metadata/readiness/base changes, conversation/formal/inline feedback, replies, thread resolution and separately discussed integration use default previews, actor/target checks, stale-state fingerprints, independent readback and project-owned ignored recovery state.
 
-No live GitHub write, credential change, installation, push, publication or consumer pin update was performed. The companion Project Workflows plan was read and left unchanged. The repository-wide documentation migration and other providers' work remain outside this checkpoint.
+The selected live pilot uses Agent Hands itself. Approved creation of [issue #1](https://github.com/jcklpe/agent-hands/issues/1) succeeded and exact inspection and read-only recovery independently verified it. The project selects the ignored `.project-coordination/github/` journal through `--state-dir`. Further issue and PR mutations remain subject to individual previews and approval. No credential change, installation, push, code publication or consumer pin update was performed. The companion Project Workflows plan was read and left unchanged. The repository-wide documentation migration and other providers' work remain outside this checkpoint.
 
 ## To Do
-The authorized implementation is complete. These subsequent activities retain their original scope and require separately selected targets/acceptance:
+The authorized implementation is complete. Live validation is in progress on Agent Hands; the remaining activities retain their selected targets and per-action approval boundary:
 
-- [ ] If later authorized, run a bounded pilot on an explicitly selected test repository/action set, distinguishing offline verification, real access, client discovery and live mutation evidence. Do not infer that authorization from this checklist.
+- [ ] Continue the bounded Agent Hands pilot with individually reviewed issue edits/comments/lifecycle and PR operations, distinguishing offline verification, real access, client discovery and live mutation evidence. The next issue-body update and comment are previews only; PR validation needs a human-published contribution branch.
 - [ ] After both workstreams are accepted, hand off a separate consumer inventory/pilot/rollout plan with optional adapter selection and exact published source revisions. Do not change consumer repositories or pins within this spike checkpoint.
 
 ## Ready for Human QA
@@ -78,3 +78,11 @@ Offline checks on 2026-10-30:
 - Bash syntax, changed frontmatter and relative resources, TOML parsing/resolved destinations and whitespace checks pass. The bundled quick validator could not load its PyYAML dependency; the three changed skill frontmatters and linked resources were directly checked instead. No dependency was installed to bypass that limitation.
 
 The native guides and README capability rows match the implemented command set. The companion's v1 mapping is in the setup runtime reference. Existing write callers must adopt fingerprint/operation-ID/actor guards and select their own ignored state location; no consumer guidance/pin/installation is silently updated here. Consumer inventory, pilot/rollout and publication remain later scoped work after both owning workstreams are accepted. The root index is a shared dirty file and its unrelated migration/provider changes must not enter this checkpoint. The spike remains live; implementation completion does not authorize closure or archival.
+
+### Live validation — 2026-10-31
+- Authenticated account/target reads and native open issue/PR exports succeeded. Before creation the exports were empty; the refreshed issue export contains issue #1.
+- The approved creation preview sent zero mutations. Execution sent one creation request for `Validate GitHub collaboration operations on Agent Hands` at [issue #1](https://github.com/jcklpe/agent-hands/issues/1). Execution readback and a separate exact issue inspection matched the approved title/body and account, confirmed open state and no labels/assignees, and reported complete comment coverage with zero comments.
+- Read-only recovery reconciled the created issue through fresh GitHub reads with zero additional mutations. This proves reconciliation of a successful creation; it does not simulate a lost response or permission failure against the live service.
+- The project selected `.project-coordination/github/` through `--state-dir` and ignored `/.project-coordination/` before execution. Directory permissions are 0700 and record permissions are 0600. No `.agent-hands/` directory was created. Private transport records remain outside tracked project documentation.
+- The only published branch observed was `main`; the local collaboration implementation was unpublished. PR creation preview refused the mismatched expected head before sending a mutation. No branch was pushed and no PR was created.
+- Native previews for the next issue-body update and literal-text comment both succeeded with zero mutations. They remain held for user review. Issue close/reopen, PR preparation/feedback/integration, actual notification delivery and fresh-client/collaborator access remain unverified live.
