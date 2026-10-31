@@ -1,9 +1,9 @@
 ---
 name: use-github-pull-requests
-description: "Read open GitHub pull requests and their retrieved comments, or export them to Markdown for a bounded review."
+description: "Inspect PR code and discussion, prepare or update PRs, submit explicit feedback, resolve threads and deliberately integrate reviewed contributions with readback and recovery."
 ---
 # Use GitHub Pull Requests
-Requires sibling [setup-github](../setup-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
+Requires sibling [setup-github](../setup-github/SKILL.md), Bash 3.2+, gh, jq and Python 3.11+. This skill's uv manifest or an explicit `GITHUB_PYTHON` selects Python for collaboration and Markdown rendering. No other use skill, provider, personal workspace or Project Workflows installation is needed.
 
 From the collection root:
 ```sh
@@ -14,8 +14,12 @@ An alias may replace `OWNER/REPO`; `list-repos` shows configured aliases. An exp
 
 Issue/PR collection stops below its 300-item cap; a cap hit or detail-read failure preserves the previous output. Comments are the payload returned by gh, not a guarantee of every possible thread.
 
-## Scope
-This capability reads/exports open PR metadata, body, labels, assignees, and the comments returned by gh. It does not retrieve the code diff or promise full review-thread history. It creates no PRs, posts no reviews/comments, merges nothing, and never pushes. Use another explicitly authorized capability for those operations; this skill is not a generic gh escape hatch.
+## Collaboration and integration
+Read [PR collaboration](references/collaboration.md) and the linked setup runtime contract for exact open/closed/merged reads, selected diff/files/commits/check/review/thread evidence, creation from published refs, edits/readiness, comments, all three formal review events, inline feedback/replies and thread resolution. Use `--json` and selected read fields for structured agent context; always inspect coverage and revision stability. Legacy exports remain metadata-only with the limits above.
+
+Mutations preview by default and require an authorized unchanged proposal plus `--actor LOGIN --execute --expect FINGERPRINT --operation-id ID`. The operated project owns the ignored private journal, selected through `--project` or `--state-dir`. Prefer UTF-8 body files. Fresh state/identity checks and independent readback do not turn uncertain sends into safe failures; use `recover` before retries.
+
+Merge is a separately discussed integration step, with explicit method/head, `--integration-discussed`, fresh preview and the usual execution guards. Use consumer-supplied `--preserve-history` and `--require-path` requirements when applicable. Queue/auto-merge, stacked PRs, branch deletion, rule bypass and unsupported rule evidence refuse. This skill never pushes, changes protection/settings or infers project acceptance/spike closure from GitHub state. No generic API escape hatch is exposed.
 
 ## Verification
-Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Shared configuration, publication, and issue/PR rendering checks live under `../setup-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.
+Run `GITHUB_TEST_PYTHON=python3.13 bash tests/test-operations.sh` from this skill folder, selecting an installed Python 3.11+. Shared configuration, publication and rendering checks live under `../setup-github/tests/`. The integrated stateful collaboration suite covers both domains, including isolated runtime deployments; fixtures do not establish live access, real repository-rule behavior or successful real merges.

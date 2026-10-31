@@ -50,7 +50,7 @@ _github_load_env() {
         case "$line" in ''|\#*) continue ;; esac
         case "$line" in *=*) ;; *) _github_error 'Invalid GitHub env assignment'; return 1 ;; esac
         key="$(_github_trim "${line%%=*}")"; value="$(_github_trim "${line#*=}")"
-        case "$key" in GITHUB_REPOS_PATH|GH_TOKEN|GH_HOST) ;; *) _github_error 'Unsupported GitHub configuration key'; return 1 ;; esac
+        case "$key" in GITHUB_REPOS_PATH|GH_TOKEN|GH_HOST|GITHUB_EXPECTED_ACTOR) ;; *) _github_error 'Unsupported GitHub configuration key'; return 1 ;; esac
         case "$value" in
             \"*) case "$value" in *\") value="${value#\"}"; value="${value%\"}" ;; *) _github_error 'Unclosed configuration quote'; return 1 ;; esac ;;
             \'*) case "$value" in *\') value="${value#\'}"; value="${value%\'}" ;; *) _github_error 'Unclosed configuration quote'; return 1 ;; esac ;;
@@ -130,3 +130,5 @@ _github_export_cleanup() {
 }
 
 _github_config_dir() { printf '%s\n' "${GITHUB_CONFIG_DIR:-$GITHUB_AUTH_DIR}"; }
+
+_github_collaboration() { _github_render_file "${GITHUB_USE_DIR}/scripts/collaborate.py" "$@"; }

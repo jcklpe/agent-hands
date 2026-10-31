@@ -9,7 +9,8 @@ command_name="${1:-help}"
 case "$command_name" in
     help|--help|-h)
         printf 'GitHub issues: export REPO_OR_ALIAS --output DIRECTORY; list-repos\n'
-        printf 'create-issue --repo REPO_OR_ALIAS --title TEXT [--body TEXT | --body-file FILE] [--label NAME]... [--assignee LOGIN]... [--assign-me] [--execute | --dry-run]\n'
+        printf 'Collaboration: read-issue, create-issue, edit-issue, comment-issue, close-issue, reopen-issue, recover\n'
+        printf 'Use COMMAND --help for exact inputs; writes preview by default and execute with --actor, --expect and --operation-id.\n'
         exit 0 ;;
 esac
 _github_load_env || exit 1
@@ -26,6 +27,6 @@ case "$command_name" in
         done
         [ -n "$repo" ] && [ -n "$output" ] || { _github_error 'export requires REPO_OR_ALIAS --output DIRECTORY'; exit 1; }
         _github_export_items "$repo" issue "$output" ;;
-    create-issue) _github_create_issue "$@" ;;
+    read-issue|create-issue|edit-issue|comment-issue|close-issue|reopen-issue|recover) _github_collaboration "$command_name" "$@" ;;
     *) _github_error "Unknown command: $command_name"; exit 1 ;;
 esac

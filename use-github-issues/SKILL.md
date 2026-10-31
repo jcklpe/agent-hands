@@ -1,9 +1,9 @@
 ---
 name: use-github-issues
-description: "Read open GitHub issues and their retrieved comments, export Markdown, or create an explicitly requested issue with a dry-run plan."
+description: "Inspect or export GitHub issues; create, edit, comment, close or reopen exact issues with reviewed previews, readback and recovery."
 ---
 # Use GitHub Issues
-Requires sibling [setup-github](../setup-github/SKILL.md); see [setup-github](../setup-github/SKILL.md). Bash/gh/jq handle requests, and Python 3.11+ renders Markdown through this skill's uv manifest or an explicit `GITHUB_PYTHON`. No other use skill, provider, or personal workspace is needed.
+Requires sibling [setup-github](../setup-github/SKILL.md), Bash 3.2+, gh, jq and Python 3.11+. This skill's uv manifest or an explicit `GITHUB_PYTHON` selects Python for collaboration and Markdown rendering. No other use skill, provider, personal workspace or Project Workflows installation is needed.
 
 From the collection root:
 ```sh
@@ -14,10 +14,10 @@ An alias may replace `OWNER/REPO`; `list-repos` shows configured aliases. An exp
 
 Issue/PR collection stops below its 300-item cap; a cap hit or detail-read failure preserves the previous output. Comments are the payload returned by gh, not a guarantee of every possible thread.
 
-## Create an issue
-`create-issue --repo OWNER/REPO --title TEXT [--body TEXT | --body-file FILE] [--label NAME]... [--assignee LOGIN]... [--assign-me] [--execute | --dry-run]` previews by default. It shows the selected repository, title, complete supplied body, labels, and assignees. File inputs preserve multiline content; labels/assignees are passed literally without interpreting backslash escapes.
+## Exact collaboration operations
+Read [issue collaboration](references/collaboration.md) and the linked setup runtime contract for exact reads, creation, edits, comments, close/reopen and recovery. Use each command's `--help`. Structured `--json` and readable previews come from the same result. Exact reads include closed issues and explicit comment coverage; legacy exports retain the limits above.
 
-Execution requires `--execute` and a user request covering the actual repository and final content. Existing approval covers its stated scope. The tool checks repository reachability, creates one issue, and reports gh's returned URL; it does not independently read back the complete result. A failed send may have an uncertain outcome: inspect before retrying. No existing-issue edit/close/delete/comment, repository creation, or push command is added by this skill.
+Every mutation previews by default. Execute an authorized unchanged proposal with its `--actor LOGIN`, `--execute --expect FINGERPRINT --operation-id ID`, and the matching `--project` checkout or explicit private `--state-dir`. The project journal must be ignored and writable before sending. Existing approval covers its actual scope; flags/fingerprints do not create approval. Prefer UTF-8 body files for literal prose. Changed relevant state refuses; an uncertain send requires `recover` rather than another attempt. Independent readback verifies the intended fields/result IDs. No deletion, repository creation or push is exposed.
 
 ## Verification
-Run `bash tests/test-operations.sh` from this skill folder for synthetic request checks. Shared configuration, publication, and issue/PR rendering checks live under `../setup-github/tests/`. Tests need only this capability and its authorization sibling; they do not establish live account access or successful writes.
+Run `GITHUB_TEST_PYTHON=python3.13 bash tests/test-operations.sh` from this skill folder, selecting an installed Python 3.11+. Shared configuration, publication and rendering checks live under `../setup-github/tests/`. The integrated stateful collaboration suite covers both domains, including isolated runtime deployments; fixtures do not establish live access or successful real writes.

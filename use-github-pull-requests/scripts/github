@@ -9,7 +9,8 @@ command_name="${1:-help}"
 case "$command_name" in
     help|--help|-h)
         printf 'GitHub pull-requests: export REPO_OR_ALIAS --output DIRECTORY; list-repos\n'
-        printf 'This capability has no write command.\n'
+        printf 'Collaboration: read-pr, read-thread, create-pr, edit-pr, close-pr, reopen-pr, comment-pr, review-pr, inline-comment, reply-review-comment, resolve-thread, unresolve-thread, assess-merge, merge-pr, recover\n'
+        printf 'Use COMMAND --help for exact inputs; writes preview by default and execute with --actor, --expect and --operation-id.\n'
         exit 0 ;;
 esac
 _github_load_env || exit 1
@@ -26,5 +27,6 @@ case "$command_name" in
         done
         [ -n "$repo" ] && [ -n "$output" ] || { _github_error 'export requires REPO_OR_ALIAS --output DIRECTORY'; exit 1; }
         _github_export_items "$repo" pr "$output" ;;
+    read-pr|read-thread|create-pr|edit-pr|close-pr|reopen-pr|comment-pr|review-pr|inline-comment|reply-review-comment|resolve-thread|unresolve-thread|assess-merge|merge-pr|recover) _github_collaboration "$command_name" "$@" ;;
     *) _github_error "Unknown command: $command_name"; exit 1 ;;
 esac

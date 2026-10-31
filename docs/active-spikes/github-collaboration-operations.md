@@ -1,0 +1,129 @@
+---
+attention: live
+---
+
+# GitHub Collaboration Operations
+Opened: 2026-10-30. Slug: `github-collaboration-operations`. [Task record](github-collaboration-operations.todo.md).
+
+## Purpose and authorization
+Extend Agent Hands' existing GitHub capabilities so an optional project collaboration workflow can read the contribution being discussed, update shared issues, prepare pull requests and submit deliberately authorized feedback or integration actions. Implementation and associated spike updates are authorized. Installation, credential changes, live GitHub writes, pushes, consumer rollout and spike closure require their own scope.
+
+The user has settled the separation of responsibilities: Project Workflows owns platform-neutral collaboration practices; Agent Hands owns the mechanics of a chosen service. GitHub is the first adapter. Future GitLab, Gitea, Codeberg and Forgejo setup/use capabilities are possible adapters, not implementations or packaging commitments in this spike. No aggregate `use-github` skill exists today; reuse and extend the existing setup and domain skills before proposing another layer.
+
+Forge coordination is optional. Local/private projects can use their documents, spikes, QA and handoffs without remote issues, contribution branches, pull requests, credentials or provider setup. An absent or disabled coordination selection stays fully local; installed skills, credentials and configured remotes do not activate it. Neither a Project Workflows adoption nor reading this spike enables a GitHub integration. Branching, publication and integration requirements apply only when the selected project and contribution actually use them.
+
+## Accepted implementation direction
+Build the complete bounded collaboration toolset in this workstream, including inline review comments and thread resolution, rather than automatically deferring useful collaboration features. Extend the existing setup, issues and pull-request skills; do not introduce an aggregate skill or service framework. Keep every action separately invocable. Merge support is a separate integration operation following human/agent discussion of the actual contribution, current checks, review evidence, interactions and intended history; no successful earlier operation implies permission to merge.
+
+Use official gh authentication/transport and select direct commands or fixed API requests according to targeting, revision binding and verifiable results. Provide structured JSON as a first-class interface and readable previews from the same data. Bind execution to the concrete preview with a fingerprint over actor, target, payload and relevant observed state; stale state refuses, while existing authorization remains valid within its actual scope. Report pagination, diff and permission limits explicitly.
+
+Recovery state belongs with the operated project, in an explicitly ignored private location selected by that project. Agent Hands owns writing durable intent before transmission, verified/uncertain outcome records and reconciliation before retries. Project Workflows may document/configure the location but is optional at runtime. Worktrees share the project journal and serialized access; operations without a checkout require an explicit private state directory. Keep tokens and full bodies out of journal records. Retain project reasoning in spike documents rather than treating the transport journal as a second task tracker.
+
+## Companion work and boundaries
+The companion Project Workflows plan is `docs/active-spikes/human-agent-contributions.md` with its paired `.todo.md` in the [Project Workflows repository](https://github.com/jcklpe/project-workflows). That agent owns its edits; this spike records the provider side and does not rewrite the companion files. The stable repository/path reference identifies the local planning artifact even while it remains unpublished; it does not claim the new plan is available on the remote.
+
+| Owner | Responsibility |
+| --- | --- |
+| Project Workflows | Contribution boundaries, ownership, acceptance evidence, local records, meaningful coordination updates, review/integration semantics, optional choice of a forge, and any required preservation of original commits. |
+| Agent Hands `setup-github` | Runtime/dependency setup, selected host and effective authenticated identity, access diagnosis, configuration, and small shared GitHub request helpers. |
+| Agent Hands `use-github-issues` | Bounded issue reads/create/edit/comment/state changes, exact GitHub targets, preview/execute transport, response validation and readback. |
+| Agent Hands `use-github-pull-requests` | Bounded PR metadata/diff/check/review reads and selected create/edit/comment/review/merge operations, with GitHub-specific revision and state checks. |
+| Consuming project | Whether to use a forge, which adapter/source/revision to adopt, permitted actions and audience, actual targets, merge/history policy, local validation and publication responsibility. |
+
+Do not put issue schemas, PR lifecycle rules or a GitHub installation into shared Project Workflows merely to expose an operation. Conversely, Agent Hands must not decide how many issues/PRs a spike needs, who owns a contribution, whether a spike is complete, or which merge/history policy a project adopts. A GitHub issue closing or PR merging is service state, not proof of local project acceptance.
+
+## Pre-implementation baseline and non-duplication
+The table records the baseline before this implementation. Current supported commands and guarantees are documented in the owning skills and the implementation handoff below. Inspected the maintained setup/use guides, entrypoints, operations, shared client/collector and synthetic tests on 2026-10-30. These are local source observations, not a live account/access check.
+
+| Capability | Current evidence | Missing boundary for collaboration |
+| --- | --- | --- |
+| Setup/account | `setup-github` preserves gh authentication; `_github_ready` checks `gh auth status`. Optional alias JSON is not a write allowlist. | No expected-user identity pin; selected host/effective account must be established and checked for writes without printing credentials or switching accounts. |
+| Issue reads | Export selects open issues, refuses a list reaching the 300-item cap, and reads each issue's body and comments returned by gh. | Explicit single-target reads including closed state, revision evidence, bounded comment continuation/coverage and mutation readback. |
+| Issue create | One issue after default preview plus `--execute`; literal/file body inputs, labels and assignees; returns gh's URL. | No independent full-result readback or durable duplicate/uncertain-send reconciliation. Preserve existing callers when strengthening it. |
+| Existing issues | No command for edit, comment or closure. | Title/body and selected metadata updates, new comments and explicit close/reopen with readback. |
+| PR reads | Open-PR metadata/body and gh-returned conversation comments only. | Exact base/head/repositories and commit IDs, code diff/file coverage, checks, reviews and review-thread coverage; explicit closed/merged target reads. |
+| PR writes | None; its operations file only loads the shared collector. | Create, bounded description/metadata updates, conversation comment, review submission and separately gated merge. |
+
+Related live spikes do not already own these gaps. [GitHub Project Move Reliability](github-project-move.md) repairs a bounded Projects v2 Status move; preserve it without expanding board operations here. [Setup and Use Contracts](setup-use-contracts.md) supplies reusable preview/execute, stale-state and uncertain-result lessons. [CLI Review Feedback](cli-review-feedback.md) records successful GitHub reads but proposes Drive/Docs improvements. Existing historical service docs do not supersede current native contracts. Preserve the unrelated uncommitted documentation migration and its pending privacy review.
+
+## Adapter mapping for Agent Hands handoff contract v1
+The companion plan's **Agent Hands handoff contract v1** at `docs/active-spikes/human-agent-contributions.md#agent-hands-handoff-contract-v1` is the shared semantic boundary. Its parts are selection/capabilities, read context, prepare a change, execute within scope, outcome/evidence, and integration/history. This provider-side mapping was reconciled with that contract on 2026-10-30. Both spikes must reconcile later shared semantic changes; GitHub command syntax and exact serialization stay here.
+
+The labels below refine the requested operation scope under v1. They are documentation labels, not new CLI verbs, a required plugin protocol or claims of implemented support. No shared runtime or schema generator is needed.
+
+| Semantic capability | GitHub owner and required result |
+| --- | --- |
+| Inspect coordination item | Issues: one resolved issue, current fields/state, comment coverage and freshness evidence. |
+| Create/update coordination item | Issues: preview or verified issue identity, exact changed fields and any independently verified partial result. |
+| Add coordination comment | Issues or PRs: exact parent identity, supplied body, created comment ID/URL and duplicate/recovery evidence. |
+| Close/reopen coordination item | Issues: explicit intended state and reason; verify state without inferring project completion. |
+| Inspect contribution | PRs: base/head identities and revisions, bounded diff/files/commits/checks/reviews, and completeness limits. |
+| Create/update contribution | PRs: explicit existing remote head/base, previewed title/body/draft/metadata and verified resulting PR state. |
+| Submit contribution review | PRs: explicit review event/body and reviewed head, followed by review ID/state/commit readback. |
+| Integrate contribution | PRs: explicitly requested merge mode and expected head, effective rule/check evidence, resulting merge state/commit or precise blocked/uncertain state. |
+
+Each selected capability must document five things in its owning use skill: supported/unsupported scope; required host/account/repository/item and revision inputs; preview and authorization semantics; evidence returned with coverage limits; and recovery after failure. The caller supplies project intent and authorization; the provider resolves service identifiers and refuses ambiguous or unavailable routes. Do not make Project Workflows contain GitHub flags, API shapes or assumptions that all forges can express the same operation atomically. Unsupported capabilities are reported so the caller can use local records or an explicitly selected manual route without silently switching tools.
+
+For a mutation, the reviewable plan binds the effective actor/host, repository and resource identity, exact content/field changes or review event/merge mode, relevant baseline fields/head, and visible side effects such as notifications, review requests and automatic issue closure. Missing flags retain unspecified fields; explicit clears must be distinct. Record a digest or equivalent concrete plan identity and invalidate it if the payload or relevant state changes. A CLI execution flag is a transport gate, not evidence that the user authorized the action. Existing authorization covering that exact action suffices; do not re-ask merely because a provider is used.
+
+Preserve v1's distinguishable preview, success, blocked, unsupported, failed and uncertain outcomes. Refine success as verified applied or verified already satisfied; distinguish partial completion, known not sent and sent-but-uncertain evidence. Include stable target/result IDs, revision evidence and the reconciliation action. A nonzero transport exit after a send or failed readback is not proof nothing changed. Exact exit codes/output schema are implementation choices to document and test, not an additional orchestration framework to build now.
+
+## Proposed bounded service scope
+### Reads and issue work
+Add exact issue and PR reads with explicit host/repo/item selection, including closed/merged records needed for readback. Keep existing bulk export behavior and its cap; new targeted reads need their own bounded pagination and honest coverage. PR inspection should expose base/head repositories/ref names/OIDs, commits/files/diff, check conclusions and review evidence, distinguishing conversation comments from inline review threads. Never call metadata-only output a code review or a truncated diff complete. Binary/large diffs and incomplete permission-dependent reads remain visible limits.
+
+Issue edits start with title/body and explicit add/remove labels/assignees, plus close/reopen state and close reason. A new comment is an append action. Comment editing/deletion, transfers, repository creation, milestones/projects automation and arbitrary API operations remain out of scope. Use one exact issue per mutation. Closing an issue with an optional comment is a compound operation: prefer separate bounded steps and report partial completion rather than pretending both are atomic. Reopening is an explicit action, never automatic rollback.
+
+### PR creation, updates and review
+Creation requires a head already published by the human/authorized publication owner, explicit head repository/ref and expected commit, explicit base repository/ref, exact title/body and draft state. Check for an existing matching PR before sending, then independently read back the returned PR identity and intended content/refs. Resolve and preview selected labels, assignees or reviewer requests rather than inheriting shell cwd or implicit defaults. Description/title/draft/selected-metadata updates and explicit base retargeting are included because collaboration continues after creation. Branch updates/pushes remain outside the command set.
+
+Conversation comments and formal reviews are distinct. Formal review events are comment, approve or request changes; the caller selects the event and supplies the exact body and reviewed head. An instruction to inspect or draft a review does not authorize submitting one. Bind review evidence to its commit ID and revalidate the head; where the CLI cannot bind the submission safely, use a narrow official API call. Inline line-anchored review comments, replies and thread resolve/unresolve are included. Review dismissal and batch pending-review workflows remain outside the selected operations. Verify anchors against the inspected revision and resolve each thread through its actual PR parent.
+
+### Merge assessment and gate
+Merge support is a final, independently deliverable stage, not a prerequisite for Issues/PRs or local Project Workflows. Carry the chosen project's merge/history constraints as inputs and expose supported GitHub modes and effects. For the companion workflow's history-preserving pilot, reject squash/rebase substitution, verify the expected original commits remain reachable after integration, and retain tracked workflow docs. That pilot requirement must not become a universal Agent Hands policy about every consumer's merge strategy.
+
+Before any later merge, obtain action-specific authority covering the actual PR/head/base and requested method; inspect current repository rules, required checks/reviews, mergeability and relevant target movement. Use the expected-head server guard where available and revalidate relevant base state; document any remaining race instead of promising an unavailable base compare-and-swap. Refuse an unexpected queue/auto-merge outcome, protection bypass, strategy substitution or accompanying branch deletion. A branch requiring queues may need a separately scoped design; report unsupported rather than enabling future integration implicitly. Verify merged state/commit and requested history evidence, or report uncertainty. No push, protection/settings change, administrative bypass or branch deletion is part of this capability stage.
+
+## Official tooling first
+Reuse gh's existing auth, commands and official API transport. The work is a bounded safety/interface extension around those tools, not another GitHub client, credential system or generic `gh api` pass-through. Prefer documented direct gh commands where their targeting, mutation and result behavior meets the contract; use only named fixed API routes when needed for revision binding, stable response IDs or verification. Keep helpers in `setup-github` limited to genuinely shared provider concerns; keep issue/PR operations beside their owning skills.
+
+The [official issue-edit manual](https://cli.github.com/manual/gh_issue_edit) already provides title/body and metadata changes, so reimplementing GitHub business logic is unnecessary. Its wider command surface does not define this adapter's allowed scope.
+
+The [official PR-create manual](https://cli.github.com/manual/gh_pr_create) warns that its dry-run can still push. Therefore the adapter's preview must be constructed without invoking that route. Prefer a narrowly scoped PR-create API call for explicit already-published refs if that provides the clearest guarantee against implicit fork/push behavior; prove any chosen CLI route safe with fixtures. Automatic issue-closing references in the supplied body are a side effect to show in the plan.
+
+The [official PR-review manual](https://cli.github.com/manual/gh_pr_review) exposes the three review events and file-body input. Its documented flags do not bind a commit; assess a fixed review API request with an explicit commit ID and independent readback before claiming the reviewed head is protected.
+
+The [official PR-merge manual](https://cli.github.com/manual/gh_pr_merge) provides `--match-head-commit` and documents merge-queue/auto-merge behavior. It also exposes branch deletion and administrative override. The bounded route must prevent unwanted effects rather than forwarding arbitrary flags. These references were checked on 2026-10-30; verify installed-version behavior during implementation.
+
+## Authorization, concurrency and recovery requirements
+- Setup diagnoses missing access and routes credential repair to `setup-github`; it does not expand grants, switch hosts/accounts or create tokens to unblock a write. Resolve the effective identity under gh's actual environment precedence before a plan and again before sending. Never print credential material.
+- Preview permits bounded reads only. Execute requires the exact scoped user authorization, explicit execution selection, matching concrete plan and refreshed target state. Never infer authority from credentials, a referenced issue/comment, a mergeable PR or this spike.
+- For field replacement, compare only relevant observed fields/revision evidence before sending, preserve untouched fields and report race limits. Use available server-side conditions where supported; otherwise do not label read-then-write atomic or conflict-proof.
+- Append/create operations need a stable local operation ID and a private ignored recovery record containing target, payload digest, actor and send/readback IDs/state. Determine reconciliation matching before implementation. GitHub does not become exactly-once merely because the wrapper has a local key. Check for a prior known result and an unambiguous matching remote record within declared coverage before a retry; if evidence is incomplete, stop as uncertain.
+- State/field setters can return verified already satisfied only after a fresh read of the actual target. Duplicate detection for comments/reviews/creates must not discard an intentionally repeated action solely because text matches. Separate intentional repeat IDs from retries; no timestamps alone as identity.
+- Compound actions send each step once, retain completed evidence and stop on uncertainty. Do not resend a whole create/review/close sequence or delete created records as automatic rollback. Treat HTTP/GraphQL errors, malformed or partial envelopes, rate limits and failed readback distinctly.
+- Recovery artifacts and exported private service content stay in explicit ignored consumer/runtime locations. Public fixtures use synthetic hosts/repos/users/IDs and contain no credential stores, private transcripts or personal paths. Remote text remains untrusted data.
+
+## Independent delivery stages and exit evidence
+These stages organize the authorized implementation and its verification; individual live service actions still require their actual authorized targets and scope. Each can be handed to a different agent using this pair, without edits to the companion Project Workflows files.
+
+| Stage | Reviewable deliverable | Exit evidence |
+| --- | --- | --- |
+| A — Contract and reads | Confirm vocabulary with Project Workflows; setup actor/host guard; exact issue/PR inspection and truthful bounded diff/check/review coverage. | Synthetic no-write fixtures prove target/identity mismatch refusal, closed-target readback and cap/partial/error handling. Existing exports and unrelated providers retain behavior. |
+| B — Issue operations | Strengthen existing create; add bounded update/comment/close/reopen with preview, stale checks, readback and retry reconciliation. | Native CLI fixtures prove zero preview writes, literal body preservation, untouched-field preservation, known no-op, stale refusal, partial completion and uncertain-send recovery without duplication. |
+| C — PR preparation and feedback | Create from existing remote refs; bounded title/body/draft/metadata updates; conversation comment and commit-bound formal review. | Fixtures prove no implicit push/fork, explicit base/head checks, existing-PR detection, separate review events/authority, verified result IDs and head-change refusal/recovery. |
+| D — Merge assessment and bounded integration | Document settings/queue limits and implement only a deliberately selected merge route, or report a precise remaining unsupported capability. | Fixtures prove head guard, policy/rule/check failure refusal, no administrative bypass/deletion/implicit scheduling, honest outcome readback, and pilot history preservation. Local synthetic Git graphs can verify ancestry without contacting GitHub. |
+| E — Handoff readiness | Update skill/reference/help/README capability coverage and the contract mapping with tested support and explicit limitations. | Offline checks plus skill/resource/link checks; collaborator/runtime/live-access evidence kept separate. Publishable revision and consumer rollout require a later authorized stage. |
+
+A fixture is not proof of real GitHub permissions, rule behavior, fresh-client discovery or live success. A later pilot must identify a permitted test repository and each read/write action; this planning request supplies none. Project Workflows can develop its neutral guidance and no-forge examples independently; adapter integration becomes ready only for the capabilities actually delivered. Consumer updates follow both workstreams' accepted results, then a separate inventory/pilot/rollout with each project's optional adapter choice and exact available source revision. Do not update any consumer pins now.
+
+## Implementation handoff
+The existing setup, issues and PR skills now expose the selected collaboration operations. Shared identity, gh transport, fingerprints, journal locking and recovery live in `setup-github/scripts/collaboration.py`; issue and PR semantics live in each use skill's `scripts/collaborate.py`. Legacy exports remain available. Detailed supported capabilities, result/exit semantics, bounds and recovery instructions are in [the runtime contract](../../setup-github/references/collaboration.md), [issue operations](../../use-github-issues/references/collaboration.md) and [PR operations](../../use-github-pull-requests/references/collaboration.md).
+
+The selected merge route uses the documented direct asynchronous endpoint with `merge_action=direct_merge`, `bypass_rules=false` and an explicit expected head. Pending results are polled read-only; queued/stacked/automatic-deletion or unsupported-rule cases refuse. Human/agent integration discussion and a separate concrete merge preview remain mandatory workflow steps. Consumer-supplied original-commit/document requirements are verified after integration. Base/settings movement after the final read remains a documented server race.
+
+Recovery defaults to the operated project's ignored `.agent-hands/github/` in its primary worktree, including separate Git metadata/submodule layouts; linked worktrees share that journal and lock. `--state-dir` supports an explicit ignored project location or a private location when no checkout exists. No Project Workflows runtime dependency, provider-repository journal, new aggregate skill or consumer pin change is introduced.
+
+Structured JSON is first-class, with selectable read families and explicit coverage. Targeted collections default to 20 pages/2,000 items and returned patches to 2,000,000 bytes; limits are configurable. Issue creation keeps its payload inputs but strengthens execution to require the concrete preview fingerprint, operation ID and expected actor. Consumers using the old bare execute form need to adopt those flags in their own authorized update.
+
+Offline evidence and remaining live/platform limits are recorded in the task document. Live pilot, fresh-client/collaborator access, publication and consumer rollout remain separately scoped. The companion Project Workflows owner can consume the documented v1 mapping and configure the project-owned state location without embedding GitHub request mechanics in neutral guidance.

@@ -9,3 +9,4 @@ _github_config_ready
 _github_export_items example-owner/example-project pr "$work/output" > /dev/null
 grep -q 'Open Pull Requests' "$work/output/pull-requests.md"
 printf 'PASS: pull-request export\n'
+"${GITHUB_TEST_PYTHON:-python3}" -B "$SKILL_DIR/../setup-github/tests/test_collaboration.py" --domain pull-requests
