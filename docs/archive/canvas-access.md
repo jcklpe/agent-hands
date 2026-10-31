@@ -1,11 +1,13 @@
 ---
-attention: live
+attention: historical
 ---
 
 # Canvas setup and repeatable retrieval
 Opened: 2026-10-27. Slug: `canvas-access`.
 
-## V1 acceptance and closure review — 2026-10-31
+Historical record. Closed: 2026-10-31. Slug: `canvas-access`. V1 was accepted by the user; this document preserves the design and implementation history. Current instructions and verification limits belong to [Setup Canvas](../../setup-canvas/SKILL.md), [Use Canvas](../../use-canvas/SKILL.md) and their references. No successor spike was opened; publication/history disposition remains separate.
+
+## V1 acceptance and closure — 2026-10-31
 The user accepted v1 and requested global installation for Codex and Claude plus documentation and closure review. The three implementation slices, selected-account onboarding/read export, opt-in credential renewal, ordinary content writes and isolated announcement/revert/learner tests are complete for the verified scope. Both skills are installed globally through the packaged Canvas entrypoint. Installer/entrypoint checks passed against a clean tracked-file package; fresh client-conversation discovery remains unverified.
 
 Maintained guidance is owned by [Setup Canvas](../../setup-canvas/SKILL.md), [account access](../../setup-canvas/references/account-access.md), [token renewal](../../setup-canvas/references/token-renewal.md), [Use Canvas](../../use-canvas/SKILL.md), the [write guide](../../use-canvas/references/writes.md) and [test-cluster cleanup](../../use-canvas/references/test-cluster.md). These skill references own current mechanics and limits. This pair preserves the design and implementation history. No successor spike is opened by acceptance.
