@@ -4,7 +4,7 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Canvas reads/exports, Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Canvas reads/exports and bounded writes, Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Setup dialogue
 Begin by asking what the user wants to do. Resolve the selected service and capabilities, then ask which supported local agent clients they use and whether they want those skills linked for global discovery. Offer direct checkout use without links as an equal choice. Reuse choices already supplied; ask only what is missing, in short steps rather than a form with placeholders. Keep global skill discovery, runtime installation, account authorization and MCP registration as separate choices.
@@ -22,7 +22,7 @@ For Penpot, use [setup-penpot](../setup-penpot/SKILL.md). Its configuration is o
 
 For Slack, use [setup-slack](../setup-slack/SKILL.md). Select messaging, Lists, or both; each depends on setup-slack provider support and has its own uv manifest/lock. Their Python entrypoints use only the standard library.
 
-For Canvas, use [setup-canvas](../setup-canvas/SKILL.md) with [use-canvas](../use-canvas/SKILL.md). The setup runtime uses Python 3.11+ with the standard library, and the use skill has its own locked conversion packages. The user creates and enters their token; confirm identity and explicit course selection before reads. Reads/exports/history and fifteen bounded write commands are implemented and tested offline. Writes require their own concrete preview approval and execution hash; live validation remains pending.
+For Canvas, use [setup-canvas](../setup-canvas/SKILL.md) with [use-canvas](../use-canvas/SKILL.md). The setup runtime uses Python 3.11+ with the standard library, and the use skill has its own locked conversion packages. The user creates and enters the initial token for their own development/testing connection; confirm identity and explicit course selection before course reads. Canvas requires OAuth for applications used by others; general-user OAuth onboarding is not implemented. Reads/exports/history and fifteen bounded write commands are implemented. Selected-course reads/exports and opt-in successor-token renewal passed a live smoke test; course-content writes require their own concrete preview approval and execution hash and remain unverified live.
 
 For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; mutation previews also require `shasum`. Writes require `--execute`, and no live mutation is part of a routine setup check.
 

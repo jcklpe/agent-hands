@@ -105,6 +105,11 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
         from canvas_export import export, download
         reader = Reader(client, include_html=getattr(args, "include_html", False))
         reader.identity()
+        from canvas_tokens import maintain
+        renewed = maintain(client, now)
+        if renewed:
+            acct = client.account
+            print("Canvas credential renewed and saved; the previous credential retains its original expiry.", file=sys.stderr)
         from canvas_write import COMMANDS,run_write
         if args.command in COMMANDS:
             value,code=run_write(reader,args,history,now,upload_sender,downloader)

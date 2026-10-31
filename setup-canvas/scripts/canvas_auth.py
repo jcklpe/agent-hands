@@ -2,6 +2,7 @@
 """Canvas account configuration, bounded API transport, pagination and identity checks."""
 import argparse
 import datetime
+import hmac
 import http.client
 import json
 import os
@@ -16,6 +17,9 @@ import zoneinfo
 from dataclasses import dataclass
 from pathlib import Path
 
+if __name__ == "__main__":
+    sys.modules["canvas_auth"] = sys.modules[__name__]
+
 SETUP_DIR = Path(__file__).resolve().parents[1]
 ACCOUNTS_FILE = "canvas-accounts.json"
 API_PREFIX = "/api/v1/"
@@ -29,7 +33,7 @@ READ_RETRIES = 3
 MAX_RETRY_DELAY_SECONDS = 60
 EXPIRY_WARNING_DAYS = 14
 RESERVED_KEYS = {"CANVAS_ENV_FILE", "CANVAS_CONFIG_DIR", "CANVAS_BASE_URL", "CANVAS_API_URL"}
-ACCOUNT_KEYS = {"alias", "base_url", "user_id", "token_env", "token_expires", "courses"}
+ACCOUNT_KEYS = {"alias", "base_url", "user_id", "token_env", "token_expires", "courses", "token_renewal"}
 INVALID_TOKEN_MARKERS = ("invalid access token", "invalid_token", "expired", "revoked")
 NOT_AUTHORIZED_MARKERS = ("not authorized", "unauthorized")
 
@@ -169,6 +173,7 @@ class Account:
     token_env: str
     token_expires: datetime.date | None
     courses: tuple
+    token_renewal: dict | None = None
 
 
 def accounts_path():
@@ -218,7 +223,14 @@ def _parse_account(entry, position):
         if course in selected:
             raise CanvasError("config_invalid", f"Alias '{alias}': course {course} is listed twice")
         selected.append(course)
-    return Account(alias, base_url, user_id, token_env, expires, tuple(selected))
+    renewal = entry.get("token_renewal")
+    if renewal is not None:
+        if not isinstance(renewal, dict) or set(renewal) != {"enabled", "lifetime_days", "before_days"} or type(renewal.get("enabled")) is not bool:
+            raise CanvasError("config_invalid", f"Alias '{alias}': token_renewal needs enabled, lifetime_days and before_days")
+        lifetime, before = renewal.get("lifetime_days"), renewal.get("before_days")
+        if type(lifetime) is not int or type(before) is not int or not 2 <= lifetime <= 90 or not 1 <= before < lifetime:
+            raise CanvasError("config_invalid", f"Alias '{alias}': renewal lifetime must be 2–90 days and before_days must be positive and smaller")
+    return Account(alias, base_url, user_id, token_env, expires, tuple(selected), renewal)
 
 
 def load_accounts():
@@ -562,6 +574,38 @@ def verify_identity(client):
     return user
 
 
+def current_token_record(client):
+    """Identify the client's own token. The returned provider record is private and must never be printed."""
+    verify_identity(client)
+    candidates = {client._token[:5], client._token.rsplit("~", 1)[-1][:5]}
+    matches = []
+    for item in client.paginate("/api/v1/users/self/user_generated_tokens").items:
+        if not isinstance(item, dict):
+            raise CanvasError("malformed", "Canvas returned an invalid token metadata record")
+        hint = item.get("token_hint")
+        visible = item.get("visible_token")
+        if not isinstance(hint, str) and isinstance(visible, str) and visible.endswith("..."):
+            hint = visible[:-3].rsplit("~", 1)[-1]
+        if isinstance(hint, str) and hint.isascii() and len(hint) == 5 and any(hmac.compare_digest(hint, candidate) for candidate in candidates):
+            matches.append(item)
+    if len(matches) != 1:
+        raise CanvasError("token_metadata_unavailable", "The current token could not be uniquely identified in the user's token metadata")
+    item = matches[0]
+    if id_string(item.get("user_id")) != client.account.user_id:
+        raise CanvasError("identity_mismatch", "Canvas returned token metadata for another user")
+    return item
+
+
+def token_status(client):
+    """Return only metadata for this client's own manually generated token, never token material."""
+    item = current_token_record(client)
+    return {"token_id": id_string(item.get("id")), "user_id": client.account.user_id,
+            "created_at": item.get("created_at"), "expires_at": item.get("expires_at"),
+            "workflow_state": item.get("workflow_state"),
+            "can_manually_regenerate": item.get("can_manually_regenerate") if isinstance(item.get("can_manually_regenerate"), bool) else None,
+            "renewal_write_access": "not_checked"}
+
+
 # Local checks -----------------------------------------------------------------
 
 def check_runtime():
@@ -633,13 +677,30 @@ def cmd_whoami(alias, transport, today):
     return 0
 
 
+def cmd_token_status(alias, transport, today):
+    check_runtime()
+    check_env_permissions()
+    acct = account(alias)
+    check_expiry(acct, today)
+    print(json.dumps(token_status(Client(acct, transport)), indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv=None, transport=None, today=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("accounts", help="list configured aliases without token values or network access")
-    for name, text in (("check", "check local configuration without network access"), ("whoami", "read the token's Canvas user (one authorized read)")):
+    for name, text in (("check", "check local configuration without network access"), ("whoami", "read the token's Canvas user (one authorized read)"), ("token-status", "read only metadata for the currently configured token")):
         command = sub.add_parser(name, help=text)
         command.add_argument("alias")
+    renewal = sub.add_parser("token-renew", help="preview or execute replacement of this account's token; optionally enable renewal during use")
+    renewal.add_argument("alias")
+    renewal.add_argument("--lifetime-days", type=int, default=90)
+    renewal.add_argument("--before-days", type=int, default=14)
+    renewal.add_argument("--enable-auto", action="store_true")
+    renewal.add_argument("--execute", action="store_true")
+    renewal.add_argument("--expect")
+    renewal.add_argument("--recover", action="store_true")
     args = parser.parse_args(argv)
     today = today or datetime.date.today()
     try:
@@ -648,6 +709,11 @@ def main(argv=None, transport=None, today=None):
             return cmd_accounts()
         if args.command == "check":
             return cmd_check(args.alias, today)
+        if args.command == "token-status":
+            return cmd_token_status(args.alias, transport, today)
+        if args.command == "token-renew":
+            from canvas_tokens import run
+            return run(args, transport)
         return cmd_whoami(args.alias, transport, today)
     except CanvasError as exc:
         return fail(exc)
