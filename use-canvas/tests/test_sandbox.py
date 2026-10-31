@@ -30,7 +30,7 @@ class SandboxFixture(SmokeFixture):
         self.permissions['use_student_view'] = True
         self.sections = [{'id': '88', 'course_id': '123'}]
         self.learners = []; self.enrollments = []; self.personal_files = []
-        self.topic_entries = {}; self.submissions = {}; self.submission_sequence = 30000
+        self.topic_entries = {}; self.submissions = {}; self.submission_sequence = 30000; self.file_users = {}
         self.actor = None; self.learner_creation_requests = 0
         self.fail_learner_response = False
         self.fail_actor_identity = False
@@ -57,7 +57,9 @@ class SandboxFixture(SmokeFixture):
         if path == '/api/v1/users/self' and self.actor:
             return {'id': self.actor, 'name': 'Test Student'}
         if path == '/api/v1/users/self/files' and self.actor:
-            return [r for r in self.data['files'] if r['id'] in self.personal_files]
+            return [r for r in self.data['files'] if r['id'] in self.personal_files and self.file_users.get(r['id'], self.actor) == self.actor]
+        if path.startswith('/api/v1/users/') and path.rsplit('/', 1)[1].isdigit():
+            return next(r for r in self.learners if r['id'] == path.rsplit('/', 1)[1])
         if path == base + '/users':
             assert params['enrollment_type[]'] == ['student_view']
             return [r for r in self.learners if any(e['user_id'] == r['id'] and e['enrollment_state'] == 'active' for e in self.enrollments)]
@@ -140,6 +142,7 @@ class SandboxFixture(SmokeFixture):
         response = super().upload_sender(*args)
         fid = str(self.sequence)
         self.personal_files.append(fid); self.file_context[fid] = ('users', 'self')
+        self.file_users[fid] = self.actor
         response.headers['location'] = response.header('location').replace(ORIGIN, TEST_ORIGIN)
         return response
 
@@ -533,6 +536,9 @@ class SandboxTest(unittest.TestCase):
         self.assertTrue(self.cleanup()[0]['baseline_restored'])
 
     def test_submitted_attachment_refusal_is_resolved_as_not_removed_and_blocks_retries(self):
+        self.fixture.data['assignments'] = []; self.fixture.data['discussions'] = []
+        self.prepared, _ = sandbox.prepare(self.reader, canvas.parser().parse_args(['test-session', 'example', '--course', '123']), self.history)
+        self.sid = self.prepared['session']; self.prefix = self.prepared['prefix']
         self.learner()
         group = self.prepared['existing_containers']['assignment_group'][0]['id']
         aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_upload', '--assignment-group', group, '--published')['target_ids']['assignment.id']
@@ -557,6 +563,34 @@ class SandboxTest(unittest.TestCase):
         self.assertFalse(any(r['outcome'] == 'uncertain' for r in self.history.rows()))
         with self.assertRaises(auth.CanvasError): self.cleanup()
         self.assertTrue(self.fixture.personal_files)
+        args = canvas.parser().parse_args(['prepare-test-reset', 'example', '--session', self.sid])
+        plan, code = sandbox.prepare_reset(self.reader, args, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertEqual(plan['writes_sent'], 0)
+        args.execute = True; args.expect = plan['preview_hash']
+        armed, code = sandbox.prepare_reset(self.reader, args, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertTrue(armed['browser_action_still_required']); self.assertEqual(len(self.fixture.writes), writes)
+        inspect = canvas.parser().parse_args(['inspect-test-reset', 'example', '--session', self.sid])
+        with self.assertRaises(auth.CanvasError): sandbox.inspect_reset(self.reader, inspect, self.history)
+        self.fixture.enrollments[0]['enrollment_state'] = 'deleted'
+        self.fixture.learners.append({'id': '2002', 'name': 'Test Student'})
+        self.fixture.enrollments.append({'id': '90001', 'user_id': '2002', 'type': 'StudentViewEnrollment', 'course_id': '123', 'course_section_id': '88', 'enrollment_state': 'active'})
+        inspected, code = sandbox.inspect_reset(self.reader, inspect, self.history)
+        self.assertEqual(code, 0); self.assertEqual(inspected['replacement']['id'], '2002'); self.assertEqual(inspected['writes_sent'], 0)
+        self.assertEqual(len(self.fixture.writes), writes)
+        verify = canvas.parser().parse_args(['verify-test-reset', 'example', '--session', self.sid])
+        with self.assertRaises(auth.CanvasError): sandbox.verify_reset(self.reader, verify, self.history, self.fixture.download)
+        file_id = self.fixture.personal_files[0]
+        def retired_owner(method, url, headers, body=None, token=None):
+            parts = urlsplit(url); actor = parse_qs(parts.query).get('as_user_id', [None])[0]
+            if actor == '2001': return reply({'message': 'Retired test identity'}, 401)
+            if parts.path == '/api/v1/users/2001': return reply({'message': 'Missing'}, 404)
+            if parts.path == '/api/v1/files/' + file_id: return reply({'message': 'Retired owner file'}, 403)
+            return protected(method, url, headers, body, token)
+        self.fixture.send = retired_owner
+        verified, code = sandbox.verify_reset(self.reader, verify, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertFalse(verified['content_purge_verified']); self.assertEqual(len(self.fixture.writes), writes)
+        final, code = self.cleanup(); self.assertEqual(code, 0, final); self.assertEqual(final['writes_sent'], 1); self.assertTrue(final['baseline_restored'])
+        self.assertTrue(Store(self.history, self.sid).load()['closed'])
 
 
 if __name__ == '__main__': unittest.main()

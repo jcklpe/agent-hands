@@ -14,7 +14,7 @@ import canvas_auth as auth
 from canvas_smoke import Store, binding, context, inventory, listing, refuse
 from canvas_write import digest, stable
 
-COMMANDS = ('test-session', 'prepare-test-learner', 'verify-test-learner', 'verify-test-submission', 'verify-test-upload', 'verify-test-file-touch', 'verify-test-cleanup-refusal', 'cleanup-test', 'verify-test-cleanup', 'test-status')
+COMMANDS = ('test-session', 'prepare-test-learner', 'verify-test-learner', 'verify-test-submission', 'verify-test-upload', 'verify-test-file-touch', 'verify-test-cleanup-refusal', 'prepare-test-reset', 'inspect-test-reset', 'verify-test-reset', 'cleanup-test', 'verify-test-cleanup', 'test-status')
 LEARNER_COMMANDS = {'submit-assignment', 'comment-submission', 'reply-discussion'}
 
 
@@ -24,7 +24,7 @@ def add_commands(commands, canvas_id):
         p.add_argument('alias'); p.add_argument('--history-dir', type=Path); p.add_argument('--json', action='store_true')
         if name == 'test-session': p.add_argument('--course', type=canvas_id, required=True)
         else: p.add_argument('--session', required=True)
-        if name in {'prepare-test-learner', 'cleanup-test'}:
+        if name in {'prepare-test-learner', 'cleanup-test', 'prepare-test-reset'}:
             p.add_argument('--execute', action='store_true'); p.add_argument('--expect')
         if name == 'test-status': p.add_argument('--inspect-owned', action='store_true')
         if name in {'verify-test-submission', 'verify-test-upload'}: p.add_argument('--preview-file', type=Path, required=True)
@@ -247,7 +247,8 @@ class Session:
         if extra != self.data['baseline_extra']: refuse('Original topics, sections or Test Student enrollments changed')
         for row in self.data['owned']:
             if not row.get('deleted') and (not row.get('snapshot') or self.snapshot(row) != row['snapshot']): refuse('Recorded test ' + row['kind'] + ' changed or lacks a verified receipt')
-        enrollment_cleanup_started = any(r.get('deleted') for r in enrollments)
+        removed_enrollments = {r['id'] for r in enrollments if r.get('deleted')}
+        enrollment_cleanup_started = bool(learner and set(learner['enrollments']) & removed_enrollments)
         if enrollment_cleanup_started and (not learner.get('files_restored') or any(r['kind'] == 'attachment' and not r.get('deleted') for r in self.data['owned'])): refuse('Learner enrollment cleanup requires verified file restoration first')
         if learner and not enrollment_cleanup_started:
             files = self.learner_reader().client.paginate('/api/v1/users/self/files').items
@@ -613,6 +614,104 @@ def verify_cleanup_refusal(reader, args, history, downloader=None):
         session.data['cleanup_blocker'] = {'kind': 'submitted_attachment_delete_refused', 'id': row['id'], 'refusal_marker': pending['marker'], 'requires': 'Separately reviewed Test Student reset or another supported cleanup route; do not repeat direct file deletion'}
         session.data['pending'] = None; session.store.save(session.data)
         return {'mode': 'verified', 'outcome': 'verified_not_removed', 'writes_sent': 0, 'course_content_baseline_restored': True, 'full_cleanup_complete': False, 'session_closed': False, 'remaining': [{'kind': r['kind'], 'id': r['id']} for r in session.data['owned'] if not r.get('deleted')], 'cleanup_blocker': session.data['cleanup_blocker']}, 0
+
+
+def prepare_reset(reader, args, history, downloader=None):
+    with history.locked():
+        session = Session(reader, history, args.session, downloader); session.check()
+        learner = session.data.get('learner') or {}
+        blocker = session.data.get('cleanup_blocker') or {}
+        if learner.get('preexisting') is not False or learner.get('baseline_files') != [] or blocker.get('kind') != 'submitted_attachment_delete_refused' or session.data['baseline']['assignment'] or session.data['baseline_extra']['discussion']: refuse('Reset preparation requires this new, initially empty Test Student and its protected attachment in an initially assignment/discussion-free course')
+        remaining = [r for r in session.data['owned'] if not r.get('deleted')]
+        if {r['kind'] for r in remaining} != {'enrollment', 'attachment'} or len([r for r in remaining if r['kind'] == 'attachment']) != 1 or any(r['kind'] == 'enrollment' and r['user'] != learner['id'] for r in remaining): refuse('Only the recorded submitted attachment and newly created enrollments may remain')
+        file = session.own('attachment', blocker['id'])
+        plan = {'command': 'prepare-test-reset', 'session': args.session, 'binding': session.data['binding'], 'state_hash': digest(session.data), 'old_learner_id': learner['id'], 'old_enrollment_ids': learner['enrollments'], 'attachment': {'id': file['id'], 'bytes': file['bytes'], 'sha256': file['sha256']}, 'browser_course_url': reader.client.origin + '/courses/' + session.data['binding']['course_id'], 'effects': ['The separately approved browser Reset Student action replaces only this course Test Student and clears its test submission activity', 'Inspect the replacement identity and old attachment before further cleanup; do not repeat an uncertain reset', 'No browser action or Canvas mutation is sent by this preparation command']}
+        plan['preview_hash'] = digest(plan)
+        if not args.execute: return {'mode': 'preview', **plan, 'writes_sent': 0}, 0
+        if args.expect != plan['preview_hash']: refuse('Reset preparation requires its fresh reviewed preview hash')
+        operation = uuid.uuid4().hex
+        session.data['pending'] = {'command': 'reset-test-student', 'operation': operation, 'before_state_hash': plan['state_hash'], 'old_learner_id': learner['id'], 'old_enrollment_ids': list(learner['enrollments'])}
+        session.store.save(session.data)
+        marker = journal(session, 'reset-test-student', operation, 'uncertain', plan['preview_hash'], target_ids=[learner['id']])
+        session.data['pending']['marker'] = marker; session.store.save(session.data)
+        return {'mode': 'armed', 'session': args.session, 'operation': operation, 'browser_course_url': plan['browser_course_url'], 'preview_hash': plan['preview_hash'], 'writes_sent': 0, 'browser_action_still_required': True}, 0
+
+
+def inspect_reset(reader, args, history, downloader=None):
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        pending = session.data['pending'] or {}
+        if pending.get('command') != 'reset-test-student' or not pending.get('marker'): refuse('An explicitly armed browser reset is required')
+        after = access(reader, session.base)
+        old = pending['old_learner_id']
+        if after['sections'] != session.data['baseline_extra']['sections'] or len(after['learners']) != 1 or after['learners'] == [old] or not after['enrollments'] or set(after['enrollments']) & set(pending['old_enrollment_ids']): refuse('One replacement Test Student and new enrollments in the unchanged sections are required')
+        uid = after['learners'][0]
+        if fake_enrollments(reader, session.base, old, True): refuse('The original Test Student still has an active enrollment')
+        rows = fake_enrollments(reader, session.base, uid)
+        if sorted(str(r['course_section_id']) for r in rows) != after['sections']: refuse('Replacement enrollments differ from the existing sections')
+        replacement = {'id': uid, 'enrollments': after['enrollments'], 'sections': after['sections']}
+        if pending.get('replacement') and pending['replacement'] != replacement: refuse('The already recorded replacement Test Student changed; do not adopt another reset')
+        pending['replacement'] = replacement; session.store.save(session.data)
+        file = session.own('attachment', session.data['cleanup_blocker']['id'])
+        actor = ActorClient(reader.client, session)
+        result = {'mode': 'inspection', 'session': args.session, 'old_learner_id': old, 'replacement': pending['replacement'], 'writes_sent': 0, 'old_actor': {}}
+        for path in ('/api/v1/users/self', '/api/v1/users/self/files', file['path']):
+            try:
+                record = actor.get(path)
+                if isinstance(record, list): value = {'status': 'accessible', 'file_ids': [auth.id_string(r['id']) for r in record]}
+                else: value = {'status': 'accessible', **{k: record[k] for k in ('id', 'workflow_state', 'display_name', 'size', 'content-type', 'created_at', 'updated_at') if k in record}}
+                result['old_actor'][path] = value
+            except auth.CanvasError as error: result['old_actor'][path] = {'error_kind': error.kind, 'status': error.status}
+        result['teacher_reads'] = {}
+        for path in (file['path'], '/api/v1/users/' + old):
+            try:
+                record = reader.object(path)
+                result['teacher_reads'][path] = {'status': 'accessible', **{k: record[k] for k in ('id', 'workflow_state', 'display_name', 'size', 'content-type', 'created_at', 'updated_at') if k in record}}
+            except auth.CanvasError as error: result['teacher_reads'][path] = {'error_kind': error.kind, 'status': error.status}
+        original = session.data['learner']
+        try:
+            session.data['learner'] = {'id': uid, 'enrollments': after['enrollments'], 'preexisting': False, 'baseline_files': []}
+            replacement_actor = session.learner_reader()
+            result['replacement_files'] = [auth.id_string(r['id']) for r in replacement_actor.client.paginate('/api/v1/users/self/files').items]
+        finally: session.data['learner'] = original
+        return result, 0
+
+
+def verify_reset(reader, args, history, downloader=None):
+    inspected, _ = inspect_reset(reader, args, history, downloader)
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        pending = session.data['pending'] or {}; replacement = pending.get('replacement') or {}
+        if pending.get('command') != 'reset-test-student' or not pending.get('marker') or replacement != inspected['replacement'] or inspected['replacement_files']: refuse('Reset verification requires the signed replacement and its empty personal file inventory')
+        before = copy.deepcopy(session.data); before['pending'] = None
+        if digest(before) != pending['before_state_hash']: refuse('The signed pre-reset session changed outside the recorded reset response')
+        old = pending['old_learner_id']; uid = replacement['id']
+        file = session.own('attachment', session.data['cleanup_blocker']['id'])
+        if inspected['old_actor'].get('/api/v1/users/self', {}).get('status') != 401 or inspected['old_actor'].get(file['path'], {}).get('status') != 401 or inspected['teacher_reads'].get('/api/v1/users/' + old, {}).get('status') != 404 or inspected['teacher_reads'].get(file['path'], {}).get('status') not in {403, 404}: refuse('The old Test Student must be removed and unable to authenticate; file denial alone is not removal proof')
+        current = access(reader, session.base)
+        if current != {'learners': [uid], 'enrollments': replacement['enrollments'], 'sections': replacement['sections']} or fake_enrollments(reader, session.base, old, True): refuse('Replacement identity, sections or original enrollment absence changed')
+        markers = [r for r in history.rows(account=reader.client.account.alias, course=session.data['binding']['course_id'], kind='write') if r['record_id'] == pending['marker'] and r.get('operation_id') == pending['operation'] and r.get('command') == 'reset-test-student' and r.get('target_ids') == [old] and r['outcome'] == 'uncertain']
+        if len(markers) != 1: refuse('One durable marker for the approved browser reset is required')
+        for row in session.data['owned']:
+            if row['kind'] == 'enrollment' and row['id'] in pending['old_enrollment_ids']:
+                row.update(deleted=True, removed_with_test_student_reset=old)
+            elif row is file:
+                row.update(deleted=True, removed_with_test_student_reset=old, content_purge_verified=False)
+            elif not row.get('deleted'): refuse('An unreviewed object remains outside the reset cleanup')
+        session.data['reset'] = {'old_learner_id': old, 'old_enrollment_ids': pending['old_enrollment_ids'], 'replacement': replacement, 'retired_attachment_ids': [file['id']], 'content_purge_verified': False, 'operation': pending['operation']}
+        session.data['learner'] = {'id': uid, 'enrollments': replacement['enrollments'], 'preexisting': False, 'baseline_files': []}
+        actor = session.learner_reader()
+        if actor.client.paginate('/api/v1/users/self/files').items: refuse('The replacement Test Student gained unrecorded files')
+        records = fake_enrollments(reader, session.base, uid)
+        for record in records:
+            rid = auth.id_string(record['id'])
+            if any(r['kind'] == 'enrollment' and r['id'] == rid for r in session.data['owned']): refuse('Replacement enrollment already has another receipt')
+            row = {'kind': 'enrollment', 'id': rid, 'path': session.base + '/enrollments/' + rid, 'user': uid, 'snapshot': None, 'created_by_test_student_reset': pending['operation']}
+            session.data['owned'].append(row); row['snapshot'] = session.snapshot(row)
+        session.check_state()
+        journal(session, 'verify-test-reset', pending['operation'], 'verified', markers[0]['preview_hash'], resolves=pending['marker'], target_ids=[old, uid, *replacement['enrollments']])
+        session.data['pending'] = None; session.data.pop('cleanup_blocker'); session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified_reset', 'writes_sent': 0, 'session': args.session, 'old_learner_removed': True, 'old_attachment_retired_with_removed_owner': file['id'], 'content_purge_verified': False, 'replacement_learner_id': uid, 'replacement_file_baseline_restored': True, 'remaining_enrollment_ids': replacement['enrollments'], 'session_closed': False}, 0
 
 
 def status(reader, args, history):
