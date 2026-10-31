@@ -11,7 +11,8 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "setup-github" / "scripts"))
 from collaboration import Context, Refusal, Step, TransportError, add_body, add_common, body, digest, execute, oid, positive, project, recover, rest_recovery, run
 
-PR_INFO = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){id number headRefOid baseRefOid mergeable mergeStateStatus reviewDecision autoMergeRequest{enabledAt} mergeQueueEntry{id} stack{id} closingIssuesReferences(first:100){pageInfo{hasNextPage} nodes{number repository{nameWithOwner}}}}}}"""
+PR_INFO = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){id number headRefOid baseRefOid baseRef{name target{oid}} mergeable mergeStateStatus reviewDecision autoMergeRequest{enabledAt} mergeQueueEntry{id} stack{id} closingIssuesReferences(first:100){pageInfo{hasNextPage} nodes{number repository{nameWithOwner}}}}}}"""
+MERGE_RESULT = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){id number merged headRefOid mergeCommit{oid}}}}"""
 THREADS = """query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){id number reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line diffSide viewerCanResolve viewerCanUnresolve comments(first:100){pageInfo{hasNextPage endCursor} nodes{id databaseId body url author{login} commit{oid} originalCommit{oid}}}}}}}}"""
 THREAD = """query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated path line diffSide viewerCanResolve viewerCanUnresolve pullRequest{number repository{nameWithOwner}} comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id databaseId body url author{login} commit{oid} originalCommit{oid}}}}}}"""
 
@@ -22,7 +23,7 @@ def info(ctx, number):
     value = (data.get("repository") or {}).get("pullRequest")
     if not value or value.get("number") != number or not value.get("id"):
         raise Refusal("PR rule/review metadata is unavailable", "unsupported")
-    required = {"headRefOid", "baseRefOid", "mergeable", "mergeStateStatus", "reviewDecision", "autoMergeRequest", "mergeQueueEntry", "stack", "closingIssuesReferences"}
+    required = {"headRefOid", "baseRefOid", "baseRef", "mergeable", "mergeStateStatus", "reviewDecision", "autoMergeRequest", "mergeQueueEntry", "stack", "closingIssuesReferences"}
     if not required <= value.keys():
         raise Refusal("PR integration metadata is incomplete", "unsupported")
     return value
@@ -220,10 +221,16 @@ def reviewers(ctx, args, pr, creating=False):
 def merge_evidence(ctx, pr):
     args = ctx.args
     metadata = info(ctx, args.pr)
-    head, base = oid(pr["head"]["sha"]), oid(pr["base"]["sha"])
-    if metadata.get("headRefOid") != head or metadata.get("baseRefOid") != base:
+    head, snapshot_base = oid(pr["head"]["sha"]), oid(pr["base"]["sha"])
+    if metadata.get("headRefOid") != head or metadata.get("baseRefOid") != snapshot_base:
         raise Refusal("PR refs changed while obtaining merge evidence")
+    base_ref = metadata.get("baseRef")
+    if not isinstance(base_ref, dict) or base_ref.get("name") != pr["base"]["ref"] or not isinstance(base_ref.get("target"), dict) or not base_ref["target"].get("oid"):
+        raise Refusal("Current base reference evidence is incomplete or mismatched", "unsupported")
+    base = oid(base_ref["target"]["oid"])
     branch = ctx.client.get(ctx.prefix + "/branches/" + quote(pr["base"]["ref"], safe=""))
+    if branch.get("name") != pr["base"]["ref"] or (branch.get("commit") or {}).get("sha") != base:
+        raise Refusal("Base branch moved while assessing integration")
     rules, coverage = ctx.client.collection(ctx.prefix + "/rules/branches/" + quote(pr["base"]["ref"], safe=""))
     if not coverage["complete"]:
         raise Refusal("Effective repository-rule evidence is incomplete", "unsupported")
@@ -286,7 +293,7 @@ def merge_evidence(ctx, pr):
         values, thread_coverage = threads(ctx, args.pr)
         if not thread_coverage["complete"] or any(not value.get("isResolved") for value in values):
             blockers.append("Required review-thread resolution is incomplete")
-    return {"head": head, "base": base, "base_branch_sha": (branch.get("commit") or {}).get("sha"), "metadata": metadata, "rules": rules, "protection": protection, "checks": checks, "statuses": statuses, "commits": [c["sha"] for c in commits], "blockers": blockers}
+    return {"head": head, "base": base, "pr_base_snapshot": snapshot_base, "base_branch_sha": (branch.get("commit") or {}).get("sha"), "metadata": metadata, "rules": rules, "protection": protection, "checks": checks, "statuses": statuses, "commits": [c["sha"] for c in commits], "blockers": blockers}
 
 
 def prepare(ctx):
@@ -432,6 +439,7 @@ def prepare(ctx):
         if not args.integration_discussed:
             raise Refusal("Merge requires a separate human/agent integration discussion and --integration-discussed")
         evidence = merge_evidence(ctx, pr)
+        baseline["base"] = evidence["base"]
         baseline["integration"] = evidence
         if evidence["blockers"]:
             raise Refusal("Merge blocked: " + "; ".join(evidence["blockers"]))
@@ -443,15 +451,13 @@ def prepare(ctx):
         method_setting = {"merge": "allow_merge_commit", "squash": "allow_squash_merge", "rebase": "allow_rebase_merge"}[args.method]
         if not ctx.repository.get(method_setting, False):
             raise Refusal("Requested merge method is not enabled")
-        if evidence["base_branch_sha"] != pr["base"]["sha"]:
-            raise Refusal("Base branch moved while assessing integration")
         for required_path in args.require_path:
             if required_path.startswith("/") or ".." in required_path.split("/") or not required_path:
                 raise Refusal("Required document path must stay inside the repository")
             content = ctx.client.get(ctx.prefix + "/contents/" + quote(required_path, safe="/") + "?ref=" + head)
             if not isinstance(content, dict) or content.get("path") != required_path or content.get("type") != "file":
                 raise Refusal("Required tracked document is absent from the contribution")
-        spec = {"kind": "merge", "pr": args.pr, "head": head, "base": pr["base"]["sha"], "head_repo": pr["head"]["repo"]["full_name"], "head_ref": pr["head"]["ref"], "commits": evidence["commits"] if args.preserve_history else [], "require_paths": args.require_path, "method": args.method, "acknowledged": False}
+        spec = {"kind": "merge", "pr": args.pr, "head": head, "base": evidence["base"], "head_repo": pr["head"]["repo"]["full_name"], "head_ref": pr["head"]["ref"], "commits": evidence["commits"] if args.preserve_history else [], "require_paths": args.require_path, "method": args.method, "acknowledged": False}
         def verify_merge(response):
             result = response
             accepted_id = result.get("uuid") or (result.get("details") or {}).get("uuid")
@@ -507,9 +513,13 @@ def verify_special(ctx, spec):
         return spec
     if spec["kind"] != "merge":
         raise Refusal("Unknown PR recovery evidence", "unsupported")
-    merge_sha = pr.get("merge_commit_sha")
-    if not pr.get("merged") or not merge_sha:
+    owner, name = ctx.repo.split("/")
+    data = ctx.client.graphql(MERGE_RESULT, owner=owner, name=name, number=spec["pr"])
+    merged = (data.get("repository") or {}).get("pullRequest") or {}
+    merge_sha = (merged.get("mergeCommit") or {}).get("oid")
+    if not pr.get("merged") or merged.get("id") != pr.get("node_id") or merged.get("number") != spec["pr"] or not merged.get("merged") or merged.get("headRefOid") != spec["head"] or not merge_sha:
         raise Refusal("PR is not independently verified as merged", "uncertain")
+    merge_sha = oid(merge_sha)
     if spec["method"] == "merge":
         commit = ctx.client.get(ctx.prefix + "/git/commits/" + oid(merge_sha))
         parents = [parent.get("sha") for parent in commit.get("parents", [])]

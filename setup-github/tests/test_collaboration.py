@@ -22,7 +22,7 @@ HEAD, BASE, MERGE = "a" * 40, "b" * 40, "c" * 40
 def fixture():
     issue = {"id": 101, "node_id": "ISSUE_1", "number": 1, "title": "Example issue", "body": "Original description", "state": "open", "state_reason": None, "user": {"id": 7, "login": "example-user"}, "labels": [{"name": "keep"}], "assignees": [{"login": "teammate"}], "html_url": "https://github.com/example-owner/example-project/issues/1"}
     issue["url"] = "https://api.github.com/repos/example-owner/example-project/issues/1"
-    pr = {**copy.deepcopy(issue), "id": 102, "node_id": "PR_2", "number": 2, "title": "Example PR", "html_url": "https://github.com/example-owner/example-project/pull/2", "draft": True, "merged": False, "merge_commit_sha": None, "head": {"sha": HEAD, "ref": "feature", "repo": {"full_name": "example-owner/example-project"}}, "base": {"sha": BASE, "ref": "main", "repo": {"full_name": "example-owner/example-project"}}, "requested_reviewers": [], "requested_teams": [], "commits": 2, "changed_files": 1}
+    pr = {**copy.deepcopy(issue), "id": 102, "node_id": "PR_2", "number": 2, "title": "Example PR", "html_url": "https://github.com/example-owner/example-project/pull/2", "draft": True, "merged": False, "head": {"sha": HEAD, "ref": "feature", "repo": {"full_name": "example-owner/example-project"}}, "base": {"sha": BASE, "ref": "main", "repo": {"full_name": "example-owner/example-project"}}, "requested_reviewers": [], "requested_teams": [], "commits": 2, "changed_files": 1}
     pr.update(url="https://api.github.com/repos/example-owner/example-project/pulls/2", issue_url="https://api.github.com/repos/example-owner/example-project/issues/2")
     thread = {"id": "THREAD_1", "isResolved": False, "isOutdated": False, "viewerCanResolve": True, "viewerCanUnresolve": True, "path": "app.py", "line": 2, "diffSide": "RIGHT", "pullRequest": {"number": 2, "repository": {"nameWithOwner": "example-owner/example-project"}}, "comments": {"nodes": [{"id": "COMMENT_1", "databaseId": 77, "body": "Check this", "url": pr["html_url"], "author": {"login": "teammate"}, "commit": {"oid": HEAD}, "originalCommit": {"oid": HEAD}}], "pageInfo": {"hasNextPage": False, "endCursor": None}}}
     return {"actor": {"id": 7, "login": "example-user"}, "repository": {"id": 10, "full_name": "example-owner/example-project", "allow_merge_commit": True, "allow_squash_merge": True, "allow_rebase_merge": True}, "issues": {"1": issue}, "prs": {"2": pr}, "issue_comments": [], "reviews": [], "review_comments": [], "thread": thread, "files": [{"filename": "app.py", "patch": "@@ -1,2 +1,3 @@\n old\n+new\n end", "additions": 1, "deletions": 0}], "head": HEAD, "base": BASE, "merge_sha": MERGE, "commits": ["d" * 40, HEAD], "checks": [{"id": 123, "name": "unit", "status": "completed", "conclusion": "success"}], "statuses": []}
@@ -271,6 +271,23 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(len(self.state["mutations"]), 1)
         sent = self.state["mutations"][0]["payload"]
         self.assertEqual(sent, {"sha": HEAD, "merge_method": "merge", "merge_action": "direct_merge", "bypass_rules": False})
+        self.assertNotIn("merge_commit_sha", self.state["prs"]["2"])
+        self.assertEqual(result["steps"][0]["proof"]["merge_commit_sha"], MERGE)
+
+    def test_incomplete_or_wrong_graphql_merge_result_stays_uncertain(self):
+        for merge_result in ({"mergeCommit": None}, {"id": "OTHER_PR"}, {"number": 99}, {"headRefOid": "e" * 40}, {"merged": False}):
+            with self.subTest(merge_result=merge_result):
+                self.state = fixture()
+                self.state["prs"]["2"]["draft"] = False
+                self.state["merge_result"] = merge_result
+                self.save()
+                result = self.apply("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed", code=3)
+                self.assertEqual(result["outcome"], "uncertain")
+                self.assertEqual(len(self.load()["mutations"]), 1)
+                self.state.pop("merge_result")
+                self.save()
+                self.assertEqual(self.call("recover", "--operation-id", result["operation_id"])["outcome"], "success")
+                self.assertEqual(len(self.load()["mutations"]), 1)
 
     def test_queue_failed_checks_and_strategy_substitution_refuse(self):
         self.state["prs"]["2"]["draft"] = False
@@ -286,6 +303,47 @@ class CollaborationTests(unittest.TestCase):
         self.save()
         self.call("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "squash", "--integration-discussed", "--preserve-history", code=2)
         self.assertFalse(self.load().get("mutations"))
+
+    def test_merge_uses_current_base_when_pr_snapshot_lags(self):
+        self.state["prs"]["2"]["draft"] = False
+        self.state["base"] = "e" * 40
+        self.save()
+        assessment = self.call("assess-merge", "--pr", 2)["assessment"]
+        self.assertEqual(assessment["pr_base_snapshot"], BASE)
+        self.assertEqual(assessment["base"], "e" * 40)
+        result = self.apply("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed", "--preserve-history")
+        self.assertEqual(result["outcome"], "success")
+        self.assertEqual(result["plan"]["baseline"]["base"], "e" * 40)
+        self.assertEqual(result["steps"][0]["proof"]["base"], "e" * 40)
+        self.assertEqual(len(self.load()["mutations"]), 1)
+
+    def test_current_base_change_invalidates_merge_preview(self):
+        self.state["prs"]["2"]["draft"] = False
+        self.save()
+        options = ("--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed")
+        preview = self.call("merge-pr", *options)
+        self.load()["base"] = "e" * 40
+        self.save()
+        self.call("merge-pr", *options, "--execute", "--expect", preview["plan"]["fingerprint"], "--operation-id", preview["operation_id"], code=2)
+        self.assertFalse(self.load().get("mutations"))
+
+    def test_disagreeing_live_base_reads_refuse_before_mutation(self):
+        self.state["prs"]["2"]["draft"] = False
+        self.state["merge_metadata"] = {"baseRef": {"name": "main", "target": {"oid": "e" * 40}}}
+        self.save()
+        result = self.call("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed", code=2)
+        self.assertIn("Base branch moved", result["message"])
+        self.assertFalse(self.load().get("mutations"))
+
+    def test_missing_or_mismatched_live_base_ref_refuses(self):
+        for base_ref in (None, {}, {"name": "other", "target": {"oid": BASE}}, {"name": "main", "target": None}):
+            with self.subTest(base_ref=base_ref):
+                self.state = fixture()
+                self.state["prs"]["2"]["draft"] = False
+                self.state["merge_metadata"] = {"baseRef": base_ref}
+                self.save()
+                self.call("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed", code=4)
+                self.assertFalse(self.load().get("mutations"))
 
     def test_head_change_refuses_review(self):
         self.call("review-pr", "--pr", 2, "--expected-head", "e" * 40, "--event", "APPROVE", "--body", "Review", code=2)
@@ -457,7 +515,7 @@ class CollaborationTests(unittest.TestCase):
         return subprocess.check_output(["git", "-C", str(self.checkout), "rev-parse", "HEAD"], text=True).strip()
 
     def test_history_verifier_uses_original_commits_from_real_git_graph(self):
-        self.git_commit("Initial")
+        initial = self.git_commit("Initial")
         initial_branch = subprocess.check_output(["git", "-C", str(self.checkout), "branch", "--show-current"], text=True).strip()
         subprocess.run(["git", "-C", str(self.checkout), "checkout", "-qb", "contribution"], check=True)
         source = self.checkout / "feature.txt"
@@ -475,7 +533,7 @@ class CollaborationTests(unittest.TestCase):
         merged = subprocess.check_output(["git", "-C", str(self.checkout), "rev-parse", "HEAD"], text=True).strip()
         self.state.update(head=head, base=base, merge_sha=merged, commits=[first, head])
         self.state["prs"]["2"]["head"]["sha"] = head
-        self.state["prs"]["2"]["base"]["sha"] = base
+        self.state["prs"]["2"]["base"]["sha"] = initial
         self.state["prs"]["2"]["draft"] = False
         self.state["comparisons"] = {}
         self.state["tracked_files"] = subprocess.check_output(["git", "-C", str(self.checkout), "ls-tree", "-r", "--name-only", merged], text=True).splitlines()
@@ -604,7 +662,7 @@ class CollaborationTests(unittest.TestCase):
         result = self.apply("merge-pr", "--pr", 2, "--expected-head", HEAD, "--method", "merge", "--integration-discussed", code=3)
         self.assertEqual(result["outcome"], "uncertain")
         self.assertEqual(len(self.load()["mutations"]), 1)
-        self.state["prs"]["2"].update(merged=True, merge_commit_sha=MERGE)
+        self.state["prs"]["2"].update(merged=True)
         self.save()
         self.assertEqual(self.call("recover", "--operation-id", result["operation_id"])["outcome"], "success")
         self.assertEqual(len(self.load()["mutations"]), 1)
