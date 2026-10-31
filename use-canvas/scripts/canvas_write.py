@@ -100,6 +100,7 @@ def add_commands(commands, canvas_id):
             p.add_argument('--comment-file',type=Path,required=name=='comment-submission')
         if name=='submit-assignment':
             p.add_argument('--body-file',type=Path)
+            p.add_argument('--test-attachment',type=canvas_id)
 
 
 def canonical(value):
@@ -438,7 +439,10 @@ class Builder:
             current=self.get(path)
             if id_string(current.get('id'))!=a.topic: raise CanvasError('malformed','Canvas returned the wrong announcement')
             posted=current.get('posted_at');delayed=current.get('delayed_post_at')
-            if (posted and dt.datetime.fromisoformat(posted)<=self.now) or (delayed and dt.datetime.fromisoformat(delayed)<=self.now): raise CanvasError('announcement_posted','Posted announcements cannot be edited by this tool')
+            if (posted and dt.datetime.fromisoformat(posted)<=self.now) or (delayed and dt.datetime.fromisoformat(delayed)<=self.now):
+                scheduled_test=hasattr(self,'test_session') and self.test_session.scheduled_announcement(a.topic,current,self.now)
+                if not scheduled_test: raise CanvasError('announcement_posted','Posted announcements cannot be edited by this tool')
+                self.plan['effects'].append('Signed test announcement remains future-scheduled; posted_at records its creation time')
         body=self.body(current.get('message'))
         if create and body is None: raise CanvasError('input_invalid','Announcement creation requires --body-file')
         fields={}
@@ -507,7 +511,7 @@ class Builder:
         if assignment.get('locked_for_user'): raise CanvasError('assignment_locked','Assignment is locked for this user')
         attempt=int(submission.get('attempt') or 0);allowed=assignment.get('allowed_attempts')
         if allowed is not None and allowed>=0 and attempt>=allowed: raise CanvasError('attempts_exhausted','No submission attempts remain')
-        if sum(bool(x) for x in (a.body_file,a.url,a.file))!=1: raise CanvasError('input_invalid','Choose exactly one submission: --body-file, --url, or --file')
+        if sum(bool(x) for x in (a.body_file,a.url,a.file,a.test_attachment))!=1: raise CanvasError('input_invalid','Choose exactly one submission input')
         kind='online_text_entry' if a.body_file else 'online_url' if a.url else 'online_upload'
         if kind not in (assignment.get('submission_types') or []): raise CanvasError('submission_type_refused','Assignment does not accept this submission type')
         fields={'submission[submission_type]':kind}
@@ -520,6 +524,14 @@ class Builder:
             if urlsplit(a.url).scheme not in {'http','https'} or not urlsplit(a.url).netloc: raise CanvasError('input_invalid','Submission URL must use HTTP(S)')
             fields['submission[url]']=a.url;expected['url']=a.url
             self.change('url',submission.get('url'),a.url)
+        elif a.test_attachment:
+            if not hasattr(self,'test_session'): raise CanvasError('input_invalid','Reusing an attachment requires a signed test session')
+            row=self.test_session.own('attachment',a.test_attachment)
+            if self.test_session.snapshot(row)!=row['snapshot']: raise CanvasError('readback_mismatch','Recorded test attachment changed')
+            metadata=self.test_session.record(row)
+            fields['submission[file_ids][]']=[row['id']]
+            expected['attachments']=[{'id':row['id'],'display_name':metadata['display_name'],'size':row['bytes']}]
+            self.plan['changes'].append({'field':'recorded_test_attachment','id':row['id'],'name':metadata['display_name'],'size':row['bytes'],'sha256':row['sha256']})
         else:
             files=[file_facts(p) for p in a.file]
             for index,facts in enumerate(files): self.upload_step(facts,path+'/submissions/self/files',out='attachment'+str(index))
@@ -706,6 +718,7 @@ class Executor:
             raise CanvasError('upload_failed','Upload service refused the file',status=response.status)
         location=response.header('location')
         if not location: raise CanvasError('upload_uncertain','Upload service supplied no confirmation location')
+        if self.smoke and hasattr(self.smoke,'upload_location'): self.smoke.upload_location(urljoin(self.client.origin+'/',location))
         location=self.client.check_api_url(urljoin(self.client.origin+'/',location))
         # Confirmation is a GET that finalizes the upload, so it is journaled as a write and sent without retry.
         metadata,third=self.request('GET',location,custom=lambda:parse_json(self.client.transport.send('GET',location,{'Accept':'application/json+canvas-string-ids'},token=self.client._token)))
@@ -771,7 +784,9 @@ def run_write(reader,args,history,now=None,upload_sender=None,downloader=None):
         smoke=Session(reader,history,args.test_session,downloader)
         if args.command in LEARNER_COMMANDS: reader=smoke.learner_reader()
     elif args.command=='create-test-discussion': raise CanvasError('input_invalid','Discussion fixtures require a signed test-cluster session')
-    builder=Builder(reader,args,now).build()
+    builder=Builder(reader,args,now)
+    if smoke: builder.test_session=smoke
+    builder.build()
     if smoke: smoke.attach(builder)
     if getattr(args,'smoke_session',None):
         from canvas_smoke import Session

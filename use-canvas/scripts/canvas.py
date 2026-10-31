@@ -117,10 +117,14 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
         from canvas_write import COMMANDS,run_write
         from canvas_sandbox import COMMANDS as TEST_COMMANDS
         if args.command in TEST_COMMANDS:
-            from canvas_sandbox import prepare, prepare_learner, verify_learner, cleanup, verify_cleanup, status
+            from canvas_sandbox import prepare, prepare_learner, verify_learner, verify_submission, verify_upload, verify_file_touch, verify_cleanup_refusal, cleanup, verify_cleanup, status
             if args.command == 'test-session': value, code = prepare(reader, args, history)
             elif args.command == 'prepare-test-learner': value, code = prepare_learner(reader, args, history)
             elif args.command == 'verify-test-learner': value, code = verify_learner(reader, args, history)
+            elif args.command == 'verify-test-submission': value, code = verify_submission(reader, args, history)
+            elif args.command == 'verify-test-upload': value, code = verify_upload(reader, args, history, downloader)
+            elif args.command == 'verify-test-file-touch': value, code = verify_file_touch(reader, args, history, downloader)
+            elif args.command == 'verify-test-cleanup-refusal': value, code = verify_cleanup_refusal(reader, args, history, downloader)
             elif args.command == 'cleanup-test': value, code = cleanup(reader, args, history, downloader)
             elif args.command == 'test-status': value, code = status(reader, args, history)
             else: value, code = verify_cleanup(reader, args, history, downloader)

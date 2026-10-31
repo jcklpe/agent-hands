@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+import datetime as dt
 import hashlib
 import json
 import os
@@ -51,6 +52,8 @@ class SandboxFixture(SmokeFixture):
 
     def route(self, path, params):
         base = '/api/v1/courses/123'
+        if path == base + '/discussion_topics':
+            return self.data['announcements'] if 'only_announcements' in params else self.data['discussions']
         if path == '/api/v1/users/self' and self.actor:
             return {'id': self.actor, 'name': 'Test Student'}
         if path == '/api/v1/users/self/files' and self.actor:
@@ -110,10 +113,11 @@ class SandboxFixture(SmokeFixture):
             sub = self.route('/api/v1/courses/123/assignments/' + aid + '/submissions/' + uid, {})
             if method == 'POST' and path.endswith('/submissions'):
                 sub.update(fields['submission']); sub['attempt'] += 1
+                sub.update(workflow_state='submitted', submitted_at=dt.datetime.now(dt.timezone.utc).isoformat())
                 if 'file_ids' in fields['submission']:
                     sub['attachments'] = [next(f for f in self.data['files'] if f['id'] == fid) for fid in fields['submission']['file_ids']]
                 assignment = next(a for a in self.data['assignments'] if a['id'] == aid)
-                assignment.update(has_submitted_submissions=True, needs_grading_count=1)
+                assignment.update(has_submitted_submissions=True, needs_grading_count=1, unpublishable=False)
             if fields.get('comment'):
                 sub['submission_comments'].append({'id': self.new_id(), 'author_id': uid, 'comment': fields['comment']['text_comment']})
             return sub
@@ -127,7 +131,10 @@ class SandboxFixture(SmokeFixture):
             self.topic_entries.setdefault(tid, []).append(entry)
             next(t for t in self.data['discussions'] if t['id'] == tid)['discussion_subentry_count'] += 1
             return entry
-        return super().mutate(method, path, fields)
+        record = super().mutate(method, path, fields)
+        if method == 'POST' and path.endswith('/assignments'):
+            record.update(unpublishable=True, has_submitted_submissions=False, needs_grading_count=0)
+        return record
 
     def upload_sender(self, *args):
         response = super().upload_sender(*args)
@@ -358,6 +365,198 @@ class SandboxTest(unittest.TestCase):
         self.assertEqual(code, 3); self.assertFalse(result['baseline_restored'])
         args = canvas.parser().parse_args(['verify-test-cleanup', 'example', '--session', self.sid])
         with self.assertRaises(auth.CanvasError): sandbox.verify_cleanup(self.reader, args, self.history)
+
+    def test_owned_future_announcement_accepts_creation_posted_at_without_relaxing_other_guards(self):
+        self.learner()
+        mutate = self.fixture.mutate
+        def created_posted_at(method, path, fields):
+            record = mutate(method, path, fields)
+            if method == 'POST' and path.endswith('/discussion_topics') and fields.get('is_announcement'):
+                record['posted_at'] = NOW.isoformat()
+            return record
+        self.fixture.mutate = created_posted_at
+        aid = self.write('create-announcement', '--title', self.prefix + ' notice', '--body-file', str(self.body), '--delayed-post-at', '2026-12-01T12:00:00Z', '--notify-course')['target_ids']['announcement.id']
+        self.write('edit-announcement', '--topic', aid, '--title', self.prefix + ' edited notice')
+        ordinary = canvas.parser().parse_args(['edit-announcement', 'example', '--course', '123', '--topic', aid, '--title', 'Ordinary edit'])
+        with self.assertRaises(auth.CanvasError): run_write(self.reader, ordinary, self.history, NOW)
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_owned_submission_inspection_is_readonly_and_omits_content(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_text_entry', '--assignment-group', group, '--published')
+        args = canvas.parser().parse_args(['test-status', 'example', '--session', self.sid, '--inspect-owned'])
+        before = len(self.fixture.writes)
+        result, code = sandbox.status(self.reader, args, self.history)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), before)
+        assignment = next(r for r in result['owned'] if r['kind'] == 'assignment')
+        self.assertEqual(assignment['learner_submission']['attempt'], 0)
+        self.assertNotIn('body', assignment['learner_submission'])
+        self.assertNotIn('Synthetic test content', json.dumps(result))
+
+    def test_first_text_receipt_reconciliation_proves_preview_and_parent_without_resubmitting(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_text_entry', '--assignment-group', group, '--published')['target_ids']['assignment.id']
+        args = canvas.parser().parse_args(['submit-assignment', 'example', '--course', '123', '--test-session', self.sid, '--assignment', aid, '--body-file', str(self.body)])
+        plan, _ = run_write(self.reader, args, self.history, NOW)
+        source = self.root / 'preview.json'; source.write_text(json.dumps(plan))
+        original = sandbox.Session.begin
+        def legacy_begin(session, operation):
+            original(session, operation)
+            session.data['pending']['parent']['fields'].pop('unpublishable')
+            session.store.save(session.data)
+        args.execute = True; args.expect = plan['preview_hash']
+        with patch.object(sandbox.Session, 'begin', legacy_begin):
+            result, code = run_write(self.reader, args, self.history, NOW)
+        self.assertEqual(code, 3); self.assertEqual(result['writes_sent'], 1)
+        verify = canvas.parser().parse_args(['verify-test-submission', 'example', '--session', self.sid, '--preview-file', str(source)])
+        writes = len(self.fixture.writes)
+        bad = copy.deepcopy(plan); bad['changes'][0]['converted_html'] = '<p>Different content</p>'; source.write_text(json.dumps(bad))
+        with self.assertRaises(auth.CanvasError): sandbox.verify_submission(self.reader, verify, self.history)
+        source.write_text(json.dumps(plan))
+        assignment = next(r for r in self.fixture.data['assignments'] if r['id'] == aid)
+        assignment['name'] = 'Changed elsewhere'
+        with self.assertRaises(auth.CanvasError): sandbox.verify_submission(self.reader, verify, self.history)
+        assignment['name'] = self.prefix + ' task'
+        sub = self.fixture.submissions[(aid, '2001')]; sub['attempt'] = 2
+        with self.assertRaises(auth.CanvasError): sandbox.verify_submission(self.reader, verify, self.history)
+        sub['attempt'] = 1
+        result, code = sandbox.verify_submission(self.reader, verify, self.history)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), writes)
+        self.assertIsNone(Store(self.history, self.sid).load()['pending'])
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_interrupted_direct_file_confirmation_reconciles_bytes_and_reuses_upload_once(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_text_entry', '--submission-type', 'online_upload', '--assignment-group', group, '--published')['target_ids']['assignment.id']
+        self.write('submit-assignment', '--assignment', aid, '--body-file', str(self.body))
+        upload = self.root / (self.prefix + ' dummy.txt'); upload.write_bytes(b'synthetic smoke file')
+        args = canvas.parser().parse_args(['submit-assignment', 'example', '--course', '123', '--test-session', self.sid, '--assignment', aid, '--file', str(upload)])
+        plan, _ = run_write(self.reader, args, self.history, NOW)
+        source = self.root / 'upload-preview.json'; source.write_text(json.dumps(plan))
+        sender = self.fixture.upload_sender
+        def direct_location(*argv):
+            response = sender(*argv)
+            response.headers['location'] = response.header('location').replace('/create_success', '')
+            file = self.fixture.data['files'][-1]
+            file.update(created_at=dt.datetime.now(dt.timezone.utc).isoformat(), updated_at=dt.datetime.now(dt.timezone.utc).isoformat())
+            return response
+        args.execute = True; args.expect = plan['preview_hash']
+        with patch.object(sandbox.Session, 'upload_location', lambda *args: None):
+            result, code = run_write(self.reader, args, self.history, NOW, direct_location, self.fixture.download)
+        self.assertEqual(code, 3); self.assertEqual(result['writes_sent'], 2)
+        verify = canvas.parser().parse_args(['verify-test-upload', 'example', '--session', self.sid, '--preview-file', str(source)])
+        writes = len(self.fixture.writes)
+        self.fixture.personal_files.append('99999')
+        self.fixture.data['files'].append({'id': '99999'})
+        with self.assertRaises(auth.CanvasError): sandbox.verify_upload(self.reader, verify, self.history, self.fixture.download)
+        self.fixture.personal_files.remove('99999'); self.fixture.data['files'].pop()
+        sub = self.fixture.submissions[(aid, '2001')]; sub['attempt'] += 1
+        with self.assertRaises(auth.CanvasError): sandbox.verify_upload(self.reader, verify, self.history, self.fixture.download)
+        sub['attempt'] -= 1
+        result, code = sandbox.verify_upload(self.reader, verify, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), writes)
+        fid = result['target_ids']['attachment.id']
+        result = self.write('submit-assignment', '--assignment', aid, '--test-attachment', fid)
+        self.assertEqual(result['writes_sent'], 1); self.assertEqual(sub['attempt'], 2)
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_direct_file_confirmation_records_response_identity_before_readback(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_upload', '--assignment-group', group, '--published')['target_ids']['assignment.id']
+        upload = self.root / (self.prefix + ' dummy.txt'); upload.write_bytes(b'synthetic smoke file')
+        sender = self.fixture.upload_sender
+        def direct_location(*argv):
+            response = sender(*argv)
+            response.headers['location'] = response.header('location').replace('/create_success', '')
+            return response
+        self.fixture.upload_sender = direct_location
+        self.assertEqual(self.write('submit-assignment', '--assignment', aid, '--file', str(upload))['writes_sent'], 4)
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_file_timestamp_touch_preserves_content_guards_and_reconciles_legacy_receipts(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_upload', '--assignment-group', group, '--published')['target_ids']['assignment.id']
+        upload = self.root / (self.prefix + ' dummy.txt'); upload.write_bytes(b'synthetic smoke file')
+        self.write('submit-assignment', '--assignment', aid, '--file', str(upload))
+        session = sandbox.Session(self.reader, self.history, self.sid, self.fixture.download)
+        file = next(r for r in session.data['owned'] if r['kind'] == 'attachment')
+        subrow = next(r for r in session.data['owned'] if r['kind'] == 'submission')
+        metadata = next(r for r in self.fixture.data['files'] if r['id'] == file['id'])
+        metadata['updated_at'] = '2026-10-30T12:01:00Z'
+        old = sandbox.stable(session.record(file)); old['content'] = file['sha256']; file['snapshot'] = sandbox.digest(old)
+        sub = session.record(subrow); subrow['snapshot'] = sandbox.digest(sandbox.stable(sub))
+        subrow['metadata_hash'] = sandbox.digest(sandbox.stable({k: v for k, v in sub.items() if k not in {'updated_at', 'submission_comments', 'submission_comments_count'}}))
+        session.store.save(session.data)
+        metadata['updated_at'] = '2026-10-30T12:02:00Z'
+        args = canvas.parser().parse_args(['verify-test-file-touch', 'example', '--session', self.sid, '--before-updated-at', '2026-10-30T12:01:00Z'])
+        writes = len(self.fixture.writes)
+        metadata['display_name'] += ' changed'
+        with self.assertRaises(auth.CanvasError): sandbox.verify_file_touch(self.reader, args, self.history, self.fixture.download)
+        metadata['display_name'] = upload.name
+        result, code = sandbox.verify_file_touch(self.reader, args, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), writes)
+        metadata['updated_at'] = '2026-10-30T12:03:00Z'
+        self.write('comment-submission', '--assignment', aid, '--comment-file', str(self.comment))
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_reply_delete_accepts_204_and_legacy_lost_ack_requires_exact_tombstone(self):
+        self.learner()
+        topic = self.write('create-test-discussion', '--title', self.prefix + ' discussion', '--body-file', str(self.body))['target_ids']['discussion.id']
+        entry = self.write('reply-discussion', '--topic', topic, '--body-file', str(self.body))['target_ids']['entry.id']
+        send = self.fixture.send
+        def lost_ack(method, url, headers, body=None, token=None):
+            response = send(method, url, headers, body, token)
+            if method == 'DELETE' and '/entries/' in url: raise RuntimeError('Synthetic legacy empty response handling failure')
+            return response
+        self.fixture.send = lost_ack
+        result, code = self.cleanup(); self.assertEqual(code, 3); self.assertEqual(result['writes_sent'], 1)
+        self.fixture.send = send
+        args = canvas.parser().parse_args(['verify-test-cleanup', 'example', '--session', self.sid])
+        writes = len(self.fixture.writes)
+        self.fixture.topic_entries[topic][0]['deleted'] = False
+        with self.assertRaises(auth.CanvasError): sandbox.verify_cleanup(self.reader, args, self.history)
+        self.fixture.topic_entries[topic][0]['deleted'] = True
+        result, code = sandbox.verify_cleanup(self.reader, args, self.history)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), writes)
+        self.body.write_text('<p>Another synthetic reply.</p>')
+        self.write('reply-discussion', '--topic', topic, '--body-file', str(self.body))
+        def no_content(method, url, headers, body=None, token=None):
+            response = send(method, url, headers, body, token)
+            if method == 'DELETE' and '/entries/' in url: return auth.Response(204, {}, b'')
+            return response
+        self.fixture.send = no_content
+        self.assertTrue(self.cleanup()[0]['baseline_restored'])
+
+    def test_submitted_attachment_refusal_is_resolved_as_not_removed_and_blocks_retries(self):
+        self.learner()
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid = self.write('create-assignment', '--name', self.prefix + ' task', '--points', '0', '--submission-type', 'online_upload', '--assignment-group', group, '--published')['target_ids']['assignment.id']
+        upload = self.root / (self.prefix + ' dummy.txt'); upload.write_bytes(b'synthetic smoke file')
+        self.write('submit-assignment', '--assignment', aid, '--file', str(upload))
+        send = self.fixture.send
+        def protected(method, url, headers, body=None, token=None):
+            if method == 'DELETE' and '/api/v1/files/' in url: raise auth.CanvasError('denied', 'Synthetic submitted attachment protection', status=403)
+            return send(method, url, headers, body, token)
+        self.fixture.send = protected
+        result, code = self.cleanup(); self.assertEqual(code, 3); self.assertEqual(result['error_status'], 403)
+        source = self.root / 'refusal.json'; source.write_text(json.dumps(result))
+        args = canvas.parser().parse_args(['verify-test-cleanup-refusal', 'example', '--session', self.sid, '--execution-file', str(source)])
+        writes = len(self.fixture.writes)
+        bad = dict(result, error_status=503); source.write_text(json.dumps(bad))
+        with self.assertRaises(auth.CanvasError): sandbox.verify_cleanup_refusal(self.reader, args, self.history, self.fixture.download)
+        source.write_text(json.dumps(result))
+        value, code = sandbox.verify_cleanup_refusal(self.reader, args, self.history, self.fixture.download)
+        self.assertEqual(code, 0); self.assertFalse(value['full_cleanup_complete']); self.assertTrue(value['course_content_baseline_restored'])
+        self.assertEqual(value['writes_sent'], 0); self.assertEqual(len(self.fixture.writes), writes)
+        self.assertIsNone(Store(self.history, self.sid).load()['pending'])
+        self.assertFalse(any(r['outcome'] == 'uncertain' for r in self.history.rows()))
+        with self.assertRaises(auth.CanvasError): self.cleanup()
+        self.assertTrue(self.fixture.personal_files)
 
 
 if __name__ == '__main__': unittest.main()

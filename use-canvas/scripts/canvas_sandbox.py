@@ -1,6 +1,9 @@
 """Test-cluster-only learner access and provenance for disposable Canvas smoke fixtures."""
 import dataclasses
+import copy
 import datetime as dt
+import hashlib
+import json
 import re
 import tempfile
 import uuid
@@ -11,7 +14,7 @@ import canvas_auth as auth
 from canvas_smoke import Store, binding, context, inventory, listing, refuse
 from canvas_write import digest, stable
 
-COMMANDS = ('test-session', 'prepare-test-learner', 'verify-test-learner', 'cleanup-test', 'verify-test-cleanup', 'test-status')
+COMMANDS = ('test-session', 'prepare-test-learner', 'verify-test-learner', 'verify-test-submission', 'verify-test-upload', 'verify-test-file-touch', 'verify-test-cleanup-refusal', 'cleanup-test', 'verify-test-cleanup', 'test-status')
 LEARNER_COMMANDS = {'submit-assignment', 'comment-submission', 'reply-discussion'}
 
 
@@ -23,6 +26,10 @@ def add_commands(commands, canvas_id):
         else: p.add_argument('--session', required=True)
         if name in {'prepare-test-learner', 'cleanup-test'}:
             p.add_argument('--execute', action='store_true'); p.add_argument('--expect')
+        if name == 'test-status': p.add_argument('--inspect-owned', action='store_true')
+        if name in {'verify-test-submission', 'verify-test-upload'}: p.add_argument('--preview-file', type=Path, required=True)
+        if name == 'verify-test-file-touch': p.add_argument('--before-updated-at', required=True)
+        if name == 'verify-test-cleanup-refusal': p.add_argument('--execution-file', type=Path, required=True)
 
 
 def test_origin(reader):
@@ -59,7 +66,7 @@ def access(reader, base):
 def extra_inventory(reader, base, owned=()):
     result = access(reader, base)
     for kind, announce in (('announcement', True), ('discussion', False)):
-        rows = reader.client.paginate(base + '/discussion_topics', {'only_announcements': announce}).items
+        rows = reader.client.paginate(base + '/discussion_topics', {'only_announcements': True} if announce else None).items
         excluded = {r['id'] for r in owned if r['kind'] == kind}
         ids = {auth.id_string(r['id']) for r in rows}
         for row in owned:
@@ -98,8 +105,9 @@ class ActorClient(auth.Client):
             if row.get('deleted'): continue
             if row['kind'] in {'assignment', 'discussion'} and (path == row['path'] or path.startswith(row['path'] + '/')): allowed = True
             if row['kind'] == 'attachment' and (path == row['path'] or path == row['path'] + '/create_success'): allowed = True
-        # Upload confirmation identifies a new file before its signed receipt can be learned.
-        if re.fullmatch(r'/api/v1/files/\d+/create_success', path) and self.session.data.get('pending', {}).get('command') == 'submit-assignment': allowed = True
+        # The storage response's exact returned file ID is signed before confirmation.
+        pending = self.session.data.get('pending') or {}
+        if pending.get('upload_id') and path in {'/api/v1/files/' + pending['upload_id'], '/api/v1/files/' + pending['upload_id'] + '/create_success'}: allowed = True
         if not allowed: refuse('Test Student request is outside the signed course and recorded fixtures')
         pairs = parse_qsl(parts.query, keep_blank_values=True)
         actors = [v for k, v in pairs if k == 'as_user_id']
@@ -123,6 +131,13 @@ class Session:
         rows = [r for r in self.data['owned'] if r['kind'] == kind and r['id'] == rid and not r.get('deleted')]
         if len(rows) != 1: refuse('Target is not one exact recorded live test creation')
         return rows[0]
+
+    def scheduled_announcement(self, rid, current, now):
+        self.check()
+        row = self.own('announcement', rid)
+        if digest(stable(current)) != row['snapshot']: refuse('Announcement scheduling metadata differs from its signed receipt')
+        delay = current.get('delayed_post_at')
+        return bool(delay and dt.datetime.fromisoformat(delay) > now + dt.timedelta(days=1))
 
     def learner_reader(self):
         from canvas_read import Reader
@@ -160,7 +175,7 @@ class Session:
     def snapshot(self, row, expected=None):
         record = self.record(row)
         if expected is not None and (stable(record) != stable(expected) or row['kind'] == 'page' and record.get('url') != expected.get('url')): refuse('Test object changed between readback and receipt')
-        value = stable(record)
+        value = self.normalized(record)
         kind = row['kind']
         if kind == 'page':
             if record.get('published') is not False or record.get('front_page'): refuse('Test page must remain unpublished and cannot be a front page')
@@ -184,12 +199,23 @@ class Session:
             if set(entries) != expected_ids: refuse('Test topic contains an unrecorded reply')
             value['active_entries'] = entries
         if kind == 'attachment':
+            value.pop('updated_at', None)
             from canvas_export import download
             with tempfile.TemporaryDirectory() as folder:
                 content = (self.downloader or download)(self.learner_reader().client, record, Path(folder).resolve() / 'content')
             if content['sha256'] != row['sha256'] or content['bytes'] != row['bytes']: refuse('Test submission attachment content differs')
             value['content'] = content['sha256']
         return digest(value)
+
+    def normalized(self, record):
+        value = stable(record)
+        owned = {r['id'] for r in self.data['owned'] if r['kind'] == 'attachment' and not r.get('deleted')}
+        for file in value.get('attachments') or []:
+            if str(file.get('id')) in owned: file.pop('updated_at', None)
+        return value
+
+    def submission_metadata(self, record):
+        return digest(self.normalized({k: v for k, v in record.items() if k not in {'updated_at', 'submission_comments', 'submission_comments_count'}}))
 
     def entries(self, topic):
         view = self.reader.object(self.base + '/discussion_topics/' + topic + '/view', {'include_new_entries': True})
@@ -232,6 +258,7 @@ class Session:
 
     def attach(self, builder):
         a = builder.args; command = a.command
+        if self.data.get('cleanup_blocker'): refuse('Resolve the recorded cleanup blocker before adding more test content')
         self.check()
         if getattr(a, 'course', None) != self.data['binding']['course_id']: refuse('Write course differs from the signed test course')
         if any(getattr(a, k, None) for k in ('notify', 'front_page', 'allow_duplicate', 'replace', 'rename_on_conflict', 'move_to_module', 'group', 'personal')): refuse('Unsafe test-write option')
@@ -276,7 +303,7 @@ class Session:
         if a.command in LEARNER_COMMANDS:
             parent = self.own('discussion' if a.command == 'reply-discussion' else 'assignment', a.topic if a.command == 'reply-discussion' else a.assignment)
             before = self.record(parent)
-            keys = ('updated_at', 'discussion_subentry_count', 'last_reply_at') if a.command == 'reply-discussion' else ('updated_at', 'has_submitted_submissions', 'needs_grading_count')
+            keys = ('updated_at', 'discussion_subentry_count', 'last_reply_at') if a.command == 'reply-discussion' else ('updated_at', 'has_submitted_submissions', 'needs_grading_count', 'unpublishable')
             pending['parent'] = {'kind': parent['kind'], 'id': parent['id'], 'hash': digest(stable(before)), 'fields': {k: before[k] for k in keys if k in before}, 'absent': [k for k in keys if k not in before]}
             if a.command == 'comment-submission' or getattr(a, 'comment_file', None):
                 sub = self.reader.object(parent['path'] + '/submissions/' + self.data['learner']['id'], {'include[]': 'submission_comments'})
@@ -298,6 +325,13 @@ class Session:
         else: return
         if any(r['kind'] == kind and r['id'] == rid for r in self.data['owned']): refuse('Response ID was already recorded')
         self.data['owned'].append(row); self.data['pending']['created_id'] = rid; self.store.save(self.data)
+
+    def upload_location(self, location):
+        url = self.reader.client.check_api_url(location)
+        match = re.fullmatch(r'/api/v1/files/(\d+)(?:/create_success)?', urlsplit(url).path)
+        pending = self.data.get('pending') or {}
+        if not match or pending.get('command') != 'submit-assignment' or match[1] in self.data['learner']['baseline_files'] or any(r['kind'] == 'attachment' and r['id'] == match[1] for r in self.data['owned']): refuse('Upload confirmation must name one new file from the pending learner upload')
+        pending['upload_id'] = match[1]; self.store.save(self.data)
 
     def refresh_parent(self, proof):
         row = self.own(proof['kind'], proof['id']); current = self.record(row); inverse = stable(current)
@@ -331,7 +365,7 @@ class Session:
             for child in self.data['owned']:
                 if child['kind'] in {'submission', 'comment'} and child.get('assignment') == a.assignment and not child.get('deleted'):
                     child['snapshot'] = self.snapshot(child)
-                    if child['kind'] == 'submission': child['metadata_hash'] = digest(stable({k: v for k, v in sub.items() if k not in {'updated_at', 'submission_comments', 'submission_comments_count'}}))
+                    if child['kind'] == 'submission': child['metadata_hash'] = self.submission_metadata(sub)
         elif self.kind in {'page', 'announcement', 'discussion', 'assignment', 'entry'}:
             rid = variables['topic.id'] if self.kind == 'announcement' and not self.creates else variables[self.kind + '.id']
             row = self.own(self.kind, rid)
@@ -427,9 +461,196 @@ def journal(session, command, operation, outcome, fingerprint, **extra):
     return row['record_id']
 
 
+def verify_submission(reader, args, history):
+    """Reconcile only a verified first text POST whose signed parent predates the unpublishable field."""
+    from canvas_history import safe_path
+    with history.locked():
+        session = Session(reader, history, args.session)
+        pending = session.data['pending']; learner = session.data.get('learner')
+        if not pending or pending.get('command') != 'submit-assignment' or pending.get('created_id') or not learner or session.data['closed']: refuse('A known first text submission receipt must be pending')
+        proof = pending.get('parent') or {}
+        if proof.get('kind') != 'assignment' or 'unpublishable' in proof.get('fields', {}) or 'unpublishable' in proof.get('absent', []): refuse('Only the legacy assignment parent proof can be reconciled')
+        parent = session.own('assignment', proof['id'])
+        if parent['snapshot'] != proof['hash'] or any(r['kind'] in {'submission', 'comment', 'attachment'} for r in session.data['owned']): refuse('The first submission must have no earlier learner receipts')
+        preview = json.loads(safe_path(args.preview_file).read_text(encoding='utf-8'))
+        before = copy.deepcopy(session.data); before['pending'] = None
+        binding = session.data['binding']; aid = parent['id']; path = parent['path'] + '/submissions'
+        expected_context = {'id': args.session, 'state_hash': digest(before), 'origin': binding['origin'], 'learner_id': learner['id']}
+        if preview.get('mode') != 'preview' or preview.get('writes_sent') != 0 or preview.get('command') != 'submit-assignment' or preview.get('account') != {'alias': binding['alias'], 'origin': binding['origin'], 'user_id': learner['id']} or preview.get('context', {}).get('course_id') != binding['course_id'] or preview.get('test_session') != expected_context: refuse('Preview does not match the signed pending session and learner')
+        if preview.get('submission', {}).get('attempts_used') != 0 or preview.get('submission', {}).get('submission_type') != 'online_text_entry' or len(preview.get('steps', [])) != 1 or len(preview.get('changes', [])) != 1: refuse('Only one first text submission without comments or uploads can be reconciled')
+        change = preview['changes'][0]; body = change.get('converted_html')
+        if change.get('field') != 'body' or not isinstance(body, str) or not body: refuse('The reviewed text body is required')
+        public = preview['steps'][0]
+        fields = {'submission[submission_type]': 'online_text_entry', 'submission[body]': {'bytes': len(body.encode()), 'sha256': hashlib.sha256(body.encode()).hexdigest()}}
+        readback = {'path': path + '/self', 'fields': ['submission_type', 'attempt', 'body'], 'resource': 'id', 'comment': 'verify own comment text'}
+        if public != {'method': 'POST', 'path': path, 'fields': fields, 'readback': readback}: refuse('Preview is not the single supported text POST')
+        step = copy.deepcopy(public); step['fields']['submission[body]'] = body
+        step['readback'].update(fields={'submission_type': 'online_text_entry', 'attempt': 1, 'body': body}, comment=None)
+        plan = {k: v for k, v in preview.items() if k not in {'mode', 'writes_sent', 'preview_hash'}}
+        if digest({'plan': plan, 'steps': [step]}) != preview.get('preview_hash'): refuse('Reviewed preview fingerprint cannot be reconstructed')
+        rows = [r for r in history.rows(account=binding['alias'], course=binding['course_id'], kind='write') if r.get('operation_id') == pending['operation'] and r.get('command') == 'submit-assignment']
+        markers = [r for r in rows if r.get('recorded_outcome') == 'uncertain' or r.get('outcome') == 'uncertain']
+        if len(markers) != 1 or markers[0]['outcome'] != 'verified' or any(r.get('preview_hash') != preview['preview_hash'] for r in rows) or markers[0].get('steps') != [{'step': 1, 'method': 'POST', 'path': path}]: refuse('One durably verified original POST is required; no write is repeated')
+        actor = session.learner_reader()
+        sub = actor.object(path + '/self', {'include[]': 'submission_comments'})
+        teacher = reader.object(path + '/' + learner['id'], {'include[]': 'submission_comments'})
+        if stable(sub) != stable(teacher) or str(sub.get('assignment_id')) != aid or str(sub.get('user_id')) != learner['id'] or sub.get('attempt') != 1 or sub.get('submission_type') != 'online_text_entry' or sub.get('workflow_state') != 'submitted' or sub.get('body') != body or sub.get('url') or sub.get('attachments') or sub.get('submission_comments') or any(sub.get(k) is not None for k in ('score', 'grade', 'grader_id')): refuse('The current submission differs from the one reviewed first attempt')
+        submitted = dt.datetime.fromisoformat(sub['submitted_at'])
+        if not dt.datetime.fromisoformat(markers[0]['time']) - dt.timedelta(seconds=1) <= submitted <= max(dt.datetime.fromisoformat(r['time']) for r in rows) + dt.timedelta(seconds=1): refuse('Submission timestamp is outside the original operation')
+        current = session.record(parent); inverse = stable(current)
+        if current.get('unpublishable') is not False or current.get('has_submitted_submissions') is not True or proof['fields'].get('has_submitted_submissions') is not False: refuse('Expected first-submission assignment transition is absent')
+        inverse.update(proof['fields']); inverse['unpublishable'] = True
+        for key in proof['absent']: inverse.pop(key, None)
+        if digest(inverse) != proof['hash']: refuse('Assignment changed beyond the exact first-submission metadata transition')
+        sid = auth.id_string(sub['id'])
+        row = {'kind': 'submission', 'id': sid, 'path': path + '/' + learner['id'], 'assignment': aid}
+        session.data['owned'].append(row)
+        row['snapshot'] = session.snapshot(row)
+        row['metadata_hash'] = session.submission_metadata(teacher)
+        parent['snapshot'] = session.snapshot(parent)
+        session.check_state()
+        journal(session, 'verify-test-submission', pending['operation'], 'verified', preview['preview_hash'], target_ids=[aid, sid])
+        session.data['pending'] = None; session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified', 'session': args.session, 'writes_sent': 0, 'target_ids': {'assignment.id': aid, 'submission.id': sid}, 'original_post_verified': True, 'warnings': []}, 0
+
+
+def verify_upload(reader, args, history, downloader=None):
+    """Prove one interrupted upload in a newly created, initially empty Test Student file area."""
+    from canvas_history import safe_path
+    from canvas_write import file_facts
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        pending = session.data['pending']; learner = session.data.get('learner')
+        if not pending or pending.get('command') != 'submit-assignment' or pending.get('created_id') or not learner or learner['preexisting'] or learner['baseline_files'] or session.data['closed'] or any(r['kind'] == 'attachment' for r in session.data['owned']): refuse('Recovery requires the first interrupted upload in a new empty Test Student file area')
+        proof = pending.get('parent') or {}
+        if proof.get('kind') != 'assignment': refuse('The signed assignment parent is required')
+        parent = session.own('assignment', proof['id']); aid = parent['id']; path = parent['path'] + '/submissions'
+        if parent['snapshot'] != proof['hash'] or session.snapshot(parent) != proof['hash']: refuse('Assignment changed since upload began')
+        preview = json.loads(safe_path(args.preview_file).read_text(encoding='utf-8'))
+        before = copy.deepcopy(session.data); before['pending'] = None
+        binding = session.data['binding']
+        expected_context = {'id': args.session, 'state_hash': digest(before), 'origin': binding['origin'], 'learner_id': learner['id']}
+        if preview.get('mode') != 'preview' or preview.get('writes_sent') != 0 or preview.get('command') != 'submit-assignment' or preview.get('account') != {'alias': binding['alias'], 'origin': binding['origin'], 'user_id': learner['id']} or preview.get('context', {}).get('course_id') != binding['course_id'] or preview.get('test_session') != expected_context or len(preview.get('steps', [])) != 2 or len(preview.get('changes', [])) != 1: refuse('Original upload preview does not match the signed pending state')
+        change = preview['changes'][0]
+        if change.get('field') != 'submission_files' or len(change.get('files', [])) != 1: refuse('Only one reviewed dummy upload can be reconciled')
+        facts = change['files'][0]
+        if not facts['name'].startswith(session.data['prefix'] + ' ') or file_facts(facts['path'], facts['name']) != facts: refuse('The original local upload bytes changed')
+        first, second = copy.deepcopy(preview['steps'])
+        expected_first = {'method': 'POST', 'path': path + '/self/files', 'fields': {'name': facts['name'], 'size': facts['size'], 'content_type': facts['content_type'], 'on_duplicate': 'rename'}, 'out': 'attachment0', 'replace': None, 'rename': False, 'verify_content': False, 'readback': {'path': '/api/v1/files/$attachment0.id', 'fields': ['size', 'content-type'], 'resource': 'id'}}
+        expected_second = {'method': 'POST', 'path': path, 'fields': {'submission[submission_type]': 'online_upload', 'submission[file_ids][]': ['$attachment0.id']}, 'readback': {'path': path + '/self', 'fields': ['submission_type', 'attempt', 'attachments'], 'resource': 'id', 'comment': 'verify own comment text'}}
+        if first != expected_first or second != expected_second: refuse('Preview contains an unsupported upload or submission action')
+        first['upload'] = facts; first['readback']['fields'] = {'size': facts['size'], 'content-type': facts['content_type']}
+        second['readback'].update(fields={'submission_type': 'online_upload', 'attempt': preview['submission']['attempts_used'] + 1, 'attachments': [{'id': '$attachment0.id', 'display_name': facts['name'], 'size': facts['size']}]}, comment=None)
+        plan = {k: v for k, v in preview.items() if k not in {'mode', 'writes_sent', 'preview_hash'}}
+        if digest({'plan': plan, 'steps': [first, second]}) != preview.get('preview_hash'): refuse('Original upload fingerprint cannot be reconstructed')
+        rows = [r for r in history.rows(account=binding['alias'], course=binding['course_id'], kind='write') if r.get('operation_id') == pending['operation'] and r.get('command') == 'submit-assignment']
+        markers = [r for r in rows if r.get('recorded_outcome') == 'uncertain' or r.get('outcome') == 'uncertain']
+        if len(markers) != 2 or any(r.get('preview_hash') != preview['preview_hash'] for r in rows): refuse('Exactly registration and storage markers are required; no submission or confirmation may have been sent')
+        registration, storage = markers
+        if registration['outcome'] != 'verified' or registration['steps'] != [{'step': 1, 'method': 'POST', 'path': path + '/self/files'}] or storage['outcome'] != 'uncertain' or storage['steps'] != [{'step': 2, 'method': 'POST', 'path': 'upload-storage'}]: refuse('Upload protocol history differs from the interrupted storage boundary')
+        actor = session.learner_reader(); files = actor.client.paginate('/api/v1/users/self/files').items
+        if len(files) != 1: refuse('A complete unique new learner file inventory is required')
+        metadata = files[0]; fid = auth.id_string(metadata['id'])
+        if pending.get('upload_id') not in {None, fid} or metadata.get('display_name') != facts['name'] or metadata.get('size') != facts['size'] or metadata.get('content-type') != facts['content_type']: refuse('The only new learner file differs from the reviewed upload')
+        lower = dt.datetime.fromisoformat(registration['time']) - dt.timedelta(seconds=1)
+        upper = dt.datetime.fromisoformat(storage['time']) + dt.timedelta(seconds=auth.TIMEOUT_SECONDS + 1)
+        if any(not lower <= dt.datetime.fromisoformat(metadata[k]) <= upper for k in ('created_at', 'updated_at')): refuse('File timestamps are outside the original upload interval')
+        current = actor.object(path + '/self', {'include[]': 'submission_comments'})
+        sub = session.own('submission', auth.id_string(current['id']))
+        if current.get('attempt') != preview['submission']['attempts_used'] or session.snapshot(sub) != sub['snapshot']: refuse('The submission changed after the upload began')
+        row = {'kind': 'attachment', 'id': fid, 'path': '/api/v1/files/' + fid, 'snapshot': None, 'sha256': facts['sha256'], 'bytes': facts['size']}
+        session.data['owned'].append(row)
+        row['snapshot'] = session.snapshot(row, metadata)
+        session.check_state()
+        journal(session, 'verify-test-upload', pending['operation'], 'verified', preview['preview_hash'], resolves=storage['record_id'], target_ids=[fid])
+        session.data['pending'] = None; session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified', 'session': args.session, 'writes_sent': 0, 'target_ids': {'attachment.id': fid}, 'submission_sent': False, 'content_sha256': facts['sha256'], 'warnings': []}, 0
+
+
+def verify_file_touch(reader, args, history, downloader=None):
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        if session.data['pending'] or session.data['closed']: refuse('File touch reconciliation requires no pending mutation')
+        files = [r for r in session.data['owned'] if r['kind'] == 'attachment' and not r.get('deleted')]
+        if len(files) != 1: refuse('Exactly one recorded test attachment is required')
+        file = files[0]; record = session.record(file)
+        prior = dt.datetime.fromisoformat(args.before_updated_at)
+        if prior.tzinfo is None or prior >= dt.datetime.fromisoformat(record['updated_at']): refuse('The supplied original file timestamp must precede its current timestamp')
+        current = session.snapshot(file)
+        inverse = stable(record); inverse['updated_at'] = args.before_updated_at; inverse['content'] = file['sha256']
+        if digest(inverse) != file['snapshot']: refuse('File changed beyond the exact timestamp and unchanged downloaded bytes')
+        submissions = [r for r in session.data['owned'] if r['kind'] == 'submission' and not r.get('deleted')]
+        if len(submissions) != 1: refuse('One recorded submission is required')
+        subrow = submissions[0]; sub = session.record(subrow)
+        attachments = sub.get('attachments') or []
+        if sub.get('submission_type') != 'online_upload' or len(attachments) != 1 or str(attachments[0].get('id')) != file['id']: refuse('The recorded file must be the exact current upload submission')
+        inverse = stable(sub); inverse['attachments'][0]['updated_at'] = args.before_updated_at
+        old_metadata = digest(stable({k: v for k, v in inverse.items() if k not in {'updated_at', 'submission_comments', 'submission_comments_count'}}))
+        if digest(inverse) != subrow['snapshot'] or old_metadata != subrow['metadata_hash']: refuse('Submission changed beyond its exact attachment timestamp')
+        file['snapshot'] = current; subrow['snapshot'] = session.snapshot(subrow); subrow['metadata_hash'] = session.submission_metadata(sub)
+        session.check_state()
+        journal(session, 'verify-test-file-touch', uuid.uuid4().hex, 'verified', digest({'session': args.session, 'file': file['id'], 'before_updated_at': args.before_updated_at}), target_ids=[file['id'], subrow['id']])
+        session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified', 'writes_sent': 0, 'target_ids': [file['id'], subrow['id']], 'only_attachment_updated_at_changed': True}, 0
+
+
+def verify_cleanup_refusal(reader, args, history, downloader=None):
+    """Resolve a known refused attachment DELETE while preserving the file and cleanup blocker."""
+    from canvas_history import safe_path
+    with history.locked():
+        session = Session(reader, history, args.session, downloader)
+        pending = session.data['pending'] or {}
+        if pending.get('command') != 'cleanup-test' or pending.get('kind') != 'attachment' or pending.get('acknowledged') or not pending.get('marker') or session.data['closed']: refuse('One unacknowledged attachment cleanup refusal must be pending')
+        result = json.loads(safe_path(args.execution_file).read_text(encoding='utf-8'))
+        if result.get('session') != args.session or result.get('mode') != 'executed' or result.get('outcome') != 'PARTIAL or uncertain' or result.get('error_kind') != 'denied' or result.get('error_status') != 403 or not result.get('writes_sent'): refuse('The original native cleanup output must report its explicit HTTP 403 refusal')
+        markers = [r for r in history.rows(account=reader.client.account.alias, course=session.data['binding']['course_id'], kind='write') if r['record_id'] == pending['marker'] and r.get('command') == 'cleanup-test' and r.get('operation_id') == pending['operation'] and r.get('target_ids') == [pending['id']] and r['outcome'] == 'uncertain']
+        if len(markers) != 1: refuse('One exact unresolved attachment deletion marker is required')
+        row = session.own('attachment', pending['id'])
+        if any(not r.get('deleted') and r['kind'] not in {'attachment', 'enrollment'} for r in session.data['owned']): refuse('Resolve this protection only after other recorded course content is removed')
+        session.check_state()
+        if session.snapshot(row) != row['snapshot']: refuse('The refused file must still exist with its unchanged bytes and metadata')
+        journal(session, 'verify-test-cleanup-refusal', pending['operation'], 'not_landed', markers[0]['preview_hash'], resolves=pending['marker'], target_ids=[row['id']])
+        session.data['cleanup_blocker'] = {'kind': 'submitted_attachment_delete_refused', 'id': row['id'], 'refusal_marker': pending['marker'], 'requires': 'Separately reviewed Test Student reset or another supported cleanup route; do not repeat direct file deletion'}
+        session.data['pending'] = None; session.store.save(session.data)
+        return {'mode': 'verified', 'outcome': 'verified_not_removed', 'writes_sent': 0, 'course_content_baseline_restored': True, 'full_cleanup_complete': False, 'session_closed': False, 'remaining': [{'kind': r['kind'], 'id': r['id']} for r in session.data['owned'] if not r.get('deleted')], 'cleanup_blocker': session.data['cleanup_blocker']}, 0
+
+
 def status(reader, args, history):
     session = Session(reader, history, args.session)
     value = {'mode': 'inspection', 'session': args.session, 'pending': session.data['pending'], 'owned': [{'kind': r['kind'], 'id': r['id'], 'verified': bool(r.get('snapshot')), 'deleted': bool(r.get('deleted'))} for r in session.data['owned']], 'writes_sent': 0, 'actor_reads': {}}
+    if session.data.get('cleanup_blocker'): value['cleanup_blocker'] = session.data['cleanup_blocker']
+    if args.inspect_owned:
+        current = extra_inventory(reader, session.base, session.data['owned'])
+        current['enrollments'] = sorted(set(current['enrollments']) - {r['id'] for r in session.data['owned'] if r['kind'] == 'enrollment'})
+        if session.data.get('learner') and not session.data['learner']['preexisting']:
+            current['learners'] = [uid for uid in current['learners'] if uid != session.data['learner']['id']]
+        value['inventory_differences'] = {key: {'baseline': session.data['baseline_extra'].get(key), 'current': current.get(key)} for key in set(current) | set(session.data['baseline_extra']) if current.get(key) != session.data['baseline_extra'].get(key)}
+        keys = ('id', 'page_id', 'posted_at', 'delayed_post_at', 'unlock_at', 'created_at', 'updated_at', 'published', 'workflow_state', 'is_announcement', 'unpublishable', 'has_submitted_submissions', 'needs_grading_count', 'submission_types', 'points_possible')
+        for summary, row in zip(value['owned'], session.data['owned']):
+            if row.get('deleted'): continue
+            try: record = session.record(row)
+            except auth.CanvasError as error:
+                summary['inspection_error'] = {'kind': error.kind, 'status': error.status}; continue
+            summary['metadata'] = {key: record[key] for key in keys if key in record}
+            try: summary['receipt_matches'] = session.snapshot(row) == row.get('snapshot')
+            except auth.CanvasError as error: summary['receipt_error'] = {'kind': error.kind, 'status': error.status}
+            if row['kind'] == 'assignment' and session.data.get('learner'):
+                actor = session.learner_reader()
+                path = row['path'] + '/submissions/self'
+                before = actor.object(path, {'include[]': 'submission_comments'})
+                after = actor.object(path, {'include[]': 'submission_comments'})
+                fields = ('id', 'user_id', 'assignment_id', 'attempt', 'submitted_at', 'submission_type', 'workflow_state', 'score', 'grade', 'grader_id')
+                summary['learner_submission'] = {key: after.get(key) for key in fields}
+                summary['submission_changing_fields'] = sorted(key for key in set(stable(before)) | set(stable(after)) if stable(before).get(key) != stable(after).get(key))
+                receipt = next((r for r in session.data['owned'] if r['kind'] == 'submission' and r['assignment'] == row['id']), None)
+                if receipt:
+                    current = session.record(receipt)
+                    summary['teacher_submission_metadata'] = {k: v for k, v in current.items() if k not in {'body', 'url', 'preview_url', 'attachments', 'submission_comments', 'turnitin_data', 'rubric_assessment'}}
+                    summary['teacher_submission_attachments'] = [{k: v for k, v in file.items() if k not in {'url', 'preview_url', 'thumbnail_url', 'uuid', 'canvadoc_session_url'}} for file in current.get('attachments', [])]
+        if session.data.get('learner'):
+            files = session.learner_reader().client.paginate('/api/v1/users/self/files').items
+            keys = ('id', 'display_name', 'filename', 'size', 'content-type', 'created_at', 'updated_at', 'folder_id', 'user_id', 'hidden', 'locked', 'lock_at', 'unlock_at')
+            value['learner_files'] = [{k: r[k] for k in keys if k in r} for r in files]
     if session.data.get('learner'):
         client = ActorClient(reader.client, session)
         for path in ('/api/v1/users/self', '/api/v1/users/self/profile', '/api/v1/users/self/files', session.base):
@@ -451,7 +672,10 @@ def deletion_parent(session, row):
 def confirm_absent(session, row, acknowledged=False):
     kind = row['kind']
     if kind == 'entry':
-        if not acknowledged or row['id'] in session.entries(row['topic']): refuse('Deleted reply is still active or deletion was not acknowledged')
+        if not acknowledged:
+            records = session.reader.client.paginate(session.base + '/discussion_topics/' + row['topic'] + '/entry_list', {'ids[]': row['id']}).items
+            if len(records) != 1 or str(records[0].get('id')) != row['id'] or records[0].get('deleted') is not True: refuse('Unacknowledged reply absence requires its exact readable deletion marker')
+        if row['id'] in session.entries(row['topic']): refuse('Deleted reply is still active')
     elif kind == 'comment':
         sub = session.reader.object(row['submission_path'], {'include[]': 'submission_comments'})
         if row['id'] in {str(r['id']) for r in sub.get('submission_comments', [])}: refuse('Deleted comment is still present')
@@ -472,7 +696,7 @@ def confirm_absent(session, row, acknowledged=False):
     if kind == 'comment':
         subrow = next(r for r in session.data['owned'] if r['kind'] == 'submission' and r['assignment'] == row['assignment'] and not r.get('deleted'))
         record = session.record(subrow)
-        guard = digest(stable({k: v for k, v in record.items() if k not in {'updated_at', 'submission_comments', 'submission_comments_count'}}))
+        guard = session.submission_metadata(record)
         if guard != subrow['metadata_hash']: refuse('Submission changed beyond the deleted comment')
         subrow['snapshot'] = session.snapshot(subrow)
     if session.data['pending'].get('parent'): session.refresh_parent(session.data['pending']['parent'])
@@ -482,6 +706,7 @@ def confirm_absent(session, row, acknowledged=False):
 def cleanup(reader, args, history, downloader=None):
     with history.locked():
         session = Session(reader, history, args.session, downloader); session.check()
+        if session.data.get('cleanup_blocker'): refuse('Submitted attachment deletion was explicitly refused; a separately reviewed cleanup route is required')
         rank = {'comment': 0, 'entry': 1, 'assignment': 2, 'page': 3, 'announcement': 4, 'discussion': 5, 'attachment': 6, 'enrollment': 7}
         targets = sorted([r for r in session.data['owned'] if not r.get('deleted') and r['kind'] != 'submission'], key=lambda r: (rank[r['kind']], -int(r['id'])))
         plan = {'command': 'cleanup-test', 'session': args.session, 'binding': session.data['binding'], 'state_hash': digest(session.data), 'deletions': [{'kind': r['kind'], 'id': r['id'], 'method': 'DELETE', 'path': r['path'], 'fields': {'task': 'delete'} if r['kind'] == 'enrollment' else {}, 'snapshot': r['snapshot']} for r in targets], 'effects': ['Remove exact recorded test creations, their active submission parent records and personal submission attachments', 'Remove only Test Student enrollments created by this session; preserve existing learner files, enrollment and work', 'Canvas soft-deletion/audit history is retained; no independent submission withdrawal or user-record purge is claimed']}
@@ -505,7 +730,10 @@ def cleanup(reader, args, history, downloader=None):
                 session.data['pending']['marker'] = marker; session.store.save(session.data)
                 client = session.learner_reader().client if row['kind'] == 'attachment' else reader.client
                 sent += 1
-                response = auth.parse_json(client.request('DELETE', row['path'], data={'task': 'delete'} if row['kind'] == 'enrollment' else None))
+                raw = client.request('DELETE', row['path'], data={'task': 'delete'} if row['kind'] == 'enrollment' else None)
+                response = auth.parse_json(raw)
+                if row['kind'] == 'entry' and raw.status == 204 and response is None: response = {}
+                if not isinstance(response, dict): refuse('Deletion response lacks its required acknowledgment')
                 returned = response.get('page_id') if row['kind'] == 'page' else response.get('id')
                 if returned is not None and str(returned) != row['id']: refuse('Deletion acknowledgment has the wrong identity')
                 if row['kind'] == 'enrollment' and response.get('enrollment_state') != 'deleted': refuse('Enrollment deletion did not acknowledge the deleted state')
