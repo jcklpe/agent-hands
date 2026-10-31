@@ -15,7 +15,7 @@ from urllib.parse import urlsplit,urljoin,quote
 
 from canvas_auth import CanvasError, id_string, parse_json, verify_identity
 
-COMMANDS=('create-page','edit-page','revert-page','create-assignment','edit-assignment','create-module','edit-module','add-module-item','edit-module-item','create-announcement','edit-announcement','upload-file','submit-assignment','comment-submission','reply-discussion')
+COMMANDS=('create-page','edit-page','revert-page','create-assignment','edit-assignment','create-module','edit-module','add-module-item','edit-module-item','create-announcement','edit-announcement','upload-file','submit-assignment','comment-submission','reply-discussion','create-test-discussion')
 PAGE_COMMANDS={'create-page','edit-page','revert-page'}
 VOLATILE={'read_state','unread_count','subscribed','last_reply_at','url','preview_url','canvadoc_session_url','thumbnail_url','avatar_url','avatar_image_url','edited_by','last_edited_by'}
 
@@ -35,14 +35,15 @@ def add_commands(commands, canvas_id):
         p.add_argument('--execute',action='store_true')
         p.add_argument('--expect')
         p.add_argument('--smoke-session', help='record and restrict this write to a private smoke session')
+        p.add_argument('--test-session', help='restrict this write to a signed Canvas test-cluster session')
         p.add_argument('--allow-duplicate',action='store_true')
         p.add_argument('--tz')
-        if name in PAGE_COMMANDS|{'create-assignment','edit-assignment','reply-discussion','create-announcement','edit-announcement'}:
+        if name in PAGE_COMMANDS|{'create-assignment','edit-assignment','reply-discussion','create-announcement','edit-announcement','create-test-discussion'}:
             if name!='revert-page': p.add_argument('--body-file',type=Path)
             p.add_argument('--accept-loss',action='store_true')
         if name in {'create-page','edit-page','create-assignment','edit-assignment'}:
             p.add_argument('--notify',action='store_true')
-        if name in {'create-page','edit-page','create-announcement','edit-announcement'}:
+        if name in {'create-page','edit-page','create-announcement','edit-announcement','create-test-discussion'}:
             p.add_argument('--title',required=name.startswith('create-'))
         if name in {'edit-page','revert-page'}: p.add_argument('--page',type=canvas_id,required=True)
         if name in PAGE_COMMANDS:
@@ -260,9 +261,9 @@ class Builder:
             self.plan['target']={'page_id':a.page,'latest_revision_id':latest,'title':current.get('title')}
         if revert:
             revision=self.get(path+'/revisions/'+a.revision)
-            desired={'body':revision.get('body')}
-            if not isinstance(desired['body'],str): raise CanvasError('malformed','Revision body is missing')
-            self.change('body',current.get('body'),desired['body'])
+            desired={key:revision.get(key) for key in ('body','title','url')}
+            if any(not isinstance(value,str) for value in desired.values()): raise CanvasError('malformed','Revision body, title or URL is missing')
+            for key,value in desired.items(): self.change(key,current.get(key),value)
             self.plan['effects'].append('Restores the selected page revision; notification behavior for revision reverts is unverified')
             self.step('POST',path+'/revisions/'+a.revision,{},dict(desired,page_id=a.page),resource='revision_id',read_path=path,latest_revision=latest)
             return
@@ -569,6 +570,13 @@ class Builder:
         elif command in {'create-module','edit-module'}: self.modules()
         elif command in {'add-module-item','edit-module-item'}: self.module_items()
         elif command in {'create-announcement','edit-announcement'}: self.announcements()
+        elif command=='create-test-discussion':
+            self.permission('create_discussion_topic')
+            body=self.body() or ''
+            self.unique(self.listing(self.base+'/discussion_topics'),'title',self.args.title)
+            fields={'title':self.args.title,'message':body,'is_announcement':False,'published':True,'discussion_type':'threaded'}
+            for key,value in fields.items(): self.change(key,None,value)
+            self.step('POST',self.base+'/discussion_topics',fields,{'title':self.args.title,'message':body,'published':True,'is_announcement':False},out='discussion',read_path=self.base+'/discussion_topics/$discussion.id')
         elif command=='upload-file': self.uploads()
         elif command in {'submit-assignment','comment-submission'}: self.submission()
         else: self.discussion()
@@ -756,8 +764,15 @@ class Executor:
 def run_write(reader,args,history,now=None,upload_sender=None,downloader=None):
     if args.execute and (not args.expect or not re.fullmatch(r'[0-9a-f]{64}',args.expect)):
         raise CanvasError('preview_required','Execution requires the reviewed preview hash in --expect; no writes sent')
-    builder=Builder(reader,args,now).build()
     smoke=None
+    if getattr(args,'test_session',None):
+        if getattr(args,'smoke_session',None): raise CanvasError('input_invalid','Choose one session type')
+        from canvas_sandbox import Session,LEARNER_COMMANDS
+        smoke=Session(reader,history,args.test_session,downloader)
+        if args.command in LEARNER_COMMANDS: reader=smoke.learner_reader()
+    elif args.command=='create-test-discussion': raise CanvasError('input_invalid','Discussion fixtures require a signed test-cluster session')
+    builder=Builder(reader,args,now).build()
+    if smoke: smoke.attach(builder)
     if getattr(args,'smoke_session',None):
         from canvas_smoke import Session
         smoke=Session(reader,history,args.smoke_session,downloader)

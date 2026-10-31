@@ -65,6 +65,8 @@ History queries remain bounded to their selected months. They attach matching re
 Recovery is explicit: page revisions can be reverted; other edits can be previewed again with the before-values; created resources can be unpublished where supported. The guarded cleanup below applies only to smoke-session creations. Other deletion remains the user's action in Canvas. Notifications and overwritten files have no automatic recovery.
 
 ## Guarded smoke-test cleanup
+For announcement, actual revision-revert and learner smoke tests, use the separate [test-cluster workflow](test-cluster.md); it keeps its expanded access and cleanup behind an exact test-host boundary. The ordinary workflow below retains its original bounds.
+
 Use this workflow only for an explicitly authorized test in an unpublished course. It cannot adopt existing objects or clean up an earlier unrecorded test. Prepare a session before creating anything:
 ```sh
 uv run --project use-canvas python use-canvas/scripts/canvas.py smoke-session example --course 123 --json

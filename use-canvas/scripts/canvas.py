@@ -21,6 +21,8 @@ def canvas_id(value):
 def parser():
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
+    from canvas_sandbox import add_commands as sandbox_commands
+    sandbox_commands(commands, canvas_id)
     for name, description in (("courses", "list this user's courses"), ("verify", "report selected courses' access, navigation and permissions"), ("export", "publish a deterministic course export with coverage"), ("download-file", "stream one explicitly selected course file to disk"), ("history", "query monthly private operation records without Canvas access"), ("history-prune", "preview or execute removal of whole history months"), ("history-resolve", "record the inspected outcome of an uncertain write")):
         command = commands.add_parser(name, help=description)
         command.add_argument("alias")
@@ -113,6 +115,17 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             acct = client.account
             print("Canvas credential renewed and saved; the previous credential retains its original expiry.", file=sys.stderr)
         from canvas_write import COMMANDS,run_write
+        from canvas_sandbox import COMMANDS as TEST_COMMANDS
+        if args.command in TEST_COMMANDS:
+            from canvas_sandbox import prepare, prepare_learner, verify_learner, cleanup, verify_cleanup, status
+            if args.command == 'test-session': value, code = prepare(reader, args, history)
+            elif args.command == 'prepare-test-learner': value, code = prepare_learner(reader, args, history)
+            elif args.command == 'verify-test-learner': value, code = verify_learner(reader, args, history)
+            elif args.command == 'cleanup-test': value, code = cleanup(reader, args, history, downloader)
+            elif args.command == 'test-status': value, code = status(reader, args, history)
+            else: value, code = verify_cleanup(reader, args, history, downloader)
+            emit(value, args.json)
+            return code
         if args.command in {'smoke-session', 'cleanup-smoke', 'verify-smoke-cleanup', 'verify-smoke-assignment', 'verify-smoke-file', 'verify-smoke-item-title', 'inspect-smoke-creation'}:
             from canvas_smoke import prepare, cleanup, verify_cleanup, verify_assignment, verify_file, verify_item_title, inspect_creation
             if args.command == 'smoke-session': value, code = prepare(reader, args, history)
