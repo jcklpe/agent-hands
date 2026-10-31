@@ -76,7 +76,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 | Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) |
 | GitHub | [setup-github](setup-github/SKILL.md) |
 | Slack | [setup-slack](setup-slack/SKILL.md) |
-| Canvas | [setup-canvas](setup-canvas/SKILL.md) |
+| Canvas | [setup-canvas](setup-canvas/SKILL.md), including the packaged setup/use skill installer |
 | Trello | [setup-trello](setup-trello/SKILL.md) |
 | Odoo | [setup-odoo](setup-odoo/SKILL.md) |
 | Penpot | [setup-penpot](setup-penpot/SKILL.md) |
