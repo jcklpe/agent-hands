@@ -56,6 +56,8 @@ def parser():
             outcome.add_argument("--not-landed", action="store_true")
     from canvas_write import add_commands
     add_commands(commands,canvas_id)
+    from canvas_smoke import add_commands as smoke_commands
+    smoke_commands(commands, canvas_id)
     return root
 
 
@@ -111,6 +113,11 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             acct = client.account
             print("Canvas credential renewed and saved; the previous credential retains its original expiry.", file=sys.stderr)
         from canvas_write import COMMANDS,run_write
+        if args.command in {'smoke-session', 'cleanup-smoke'}:
+            from canvas_smoke import prepare, cleanup
+            value, code = prepare(reader, args, history) if args.command == 'smoke-session' else cleanup(reader, args, history, downloader)
+            emit(value, args.json)
+            return code
         if args.command in COMMANDS:
             value,code=run_write(reader,args,history,now,upload_sender,downloader)
             emit(value,args.json)

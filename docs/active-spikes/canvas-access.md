@@ -21,6 +21,9 @@ The user explicitly requested automatic renewal during account onboarding. [Setu
 
 Canvas's [OAuth guidance](https://developerdocs.instructure.com/services/canvas/oauth2/file.oauth) documents manual tokens for one's own application testing and requires OAuth for applications used by others. This implementation supports the personal-token testing route; administrator-issued developer-key/OAuth onboarding remains unimplemented.
 
+## Smoke-test cleanup — scope addition 2026-10-30
+The user approved guarded cleanup limited to exact objects recorded as created by a smoke test. This is not a general delete capability. Prepare a private signed session before creation, capture existing resource identities and container choices, attach creations/edits to that session, and preview cleanup against fresh ownership, permission and unchanged-object checks. Refuse pre-existing, unrecorded, published or concurrently changed objects and foreign module references; never infer ownership from a name alone. Cleanup must verify removal and compare existing identities/order with the baseline. Unknown write outcomes remain explicit and never trigger blind deletion. Course writes remain on hold until the concrete test batch is approved; the capability change alone is not execution approval.
+
 ## Selection before construction
 Inventory maintained MCP candidates from their original repositories and documentation. Compare maintenance/release activity, license, client/runtime compatibility, installation and update burden, actual API coverage, pagination, error handling, testability, and the ability to restrict operations to the authorized scope. Read the code or tests where necessary; a tool name or README claim is not evidence of working behavior.
 
@@ -108,7 +111,7 @@ Agent reading of `vishalsachdev/canvas-mcp` at release v1.16.0 (`main` at `bbf53
 | Need | canvas-mcp v1.16.0 | Built here |
 | --- | --- | --- |
 | Deterministic export with per-resource coverage | Not offered; reads are agent tool calls | The core of `use-canvas` |
-| The twelve course-content writes | All but page revision revert, plus deletes (which can be switched off) | All; no deletes |
+| The twelve course-content writes | All but page revision revert, plus deletes (which can be switched off) | All; guarded deletion of recorded smoke-test creations only |
 | Submit an assignment, comment on the submission | Yes, two-step | Yes |
 | Discussion replies | Yes, sent on the first call | Yes, previewed |
 | Group pages, group file uploads, personal file uploads | Not offered (group files are read-only) | Yes |
@@ -267,7 +270,7 @@ Writes follow the Trello and Excel pattern:
 - Retention is deterministic and belongs to the tool. The current month and the two before it stay plain (`CANVAS_HISTORY_PLAIN_MONTHS`, default 3); the first command run in a new month compresses older months to `.jsonl.gz` with a fixed gzip header, so the same month always compresses to the same bytes, and `history` reads both forms. Nothing is deleted automatically. `history-prune ALIAS --before YYYY-MM` previews which whole months would go and deletes them only with `--execute`; it refuses a month holding a write whose outcome is still uncertain until `history-resolve ALIAS RECORD_ID --landed|--not-landed` records what inspection found.
 - Bodies come from a file (`--body-file`): `.md` is converted to HTML (CommonMark with tables) and `.html` is sent as is. The file must be valid UTF-8 text; there is no size limit beyond Canvas's own. The preview shows the converted HTML. When an edit would replace HTML that Markdown cannot represent (iframes, embedded media, inline styles), the preview lists what would be lost and refuses unless `--accept-loss` is given or the body is supplied as `.html`. Date inputs need an explicit offset or `--tz ZONE`; naive times, nonexistent local times and ambiguous ones (the repeated hour when clocks go back) are refused. Previews show both the local and the UTC value.
 - New pages, assignments and modules are unpublished unless `--published` is given.
-- No delete command. Unpublishing is an ordinary edit, and page edits can be undone with `revert-page`.
+- No general delete command. Guarded cleanup is limited to unchanged creations recorded by a smoke session; the [write guide](../../use-canvas/references/writes.md#guarded-smoke-test-cleanup) owns its checks. Unpublishing is an ordinary edit, and page edits can be undone with `revert-page`.
 
 ### Proposed writes
 One command per row, all behind the gate above. Request paths are under `/api/v1/courses/:course_id` unless they start with `/groups` or `/users`. The user accepted the twelve course-content commands and the learner-role additions for the first version on 2026-10-29.
@@ -296,7 +299,7 @@ Group and personal contexts: `create-page`, `edit-page` and `revert-page` also t
 
 Upload transport: step 1 goes to the instance with the token. Step 2 posts `upload_params` unchanged, with the file as the last multipart field, to `upload_url`, which may be another host, and **without** the token. Step 3 follows the returned `Location` only when it is on the instance origin, with the token; any other location stops as uncertain. Automatic redirects are disabled throughout, so the token can never follow a redirect off the instance.
 
-Considered and left out of the first version: assignment overrides (useful for dates, but they need section and roster reads the first version does not make), editing or deleting the user's own discussion entries, personal calendar events and planner notes, marking module items done, file renames and moves, external-tool items, quizzes, grading, messaging, and any deletion.
+Considered and left out of the first version: assignment overrides (useful for dates, but they need section and roster reads the first version does not make), editing or deleting the user's own discussion entries, personal calendar events and planner notes, marking module items done, file renames and moves, external-tool items, quizzes, grading, messaging, and general deletion.
 
 ### Example preview
 `edit-page example --course 123 --page 789 --title 'Week 1 overview' --body-file week-1.html --json` prints:

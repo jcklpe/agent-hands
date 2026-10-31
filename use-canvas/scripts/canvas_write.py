@@ -34,6 +34,7 @@ def add_commands(commands, canvas_id):
         p.add_argument('--json',action='store_true')
         p.add_argument('--execute',action='store_true')
         p.add_argument('--expect')
+        p.add_argument('--smoke-session', help='record and restrict this write to a private smoke session')
         p.add_argument('--allow-duplicate',action='store_true')
         p.add_argument('--tz')
         if name in PAGE_COMMANDS|{'create-assignment','edit-assignment','reply-discussion','create-announcement','edit-announcement'}:
@@ -591,7 +592,7 @@ def matches(actual,expected,key=''):
 
 
 class Executor:
-    def __init__(self,builder,history,upload_sender=None,downloader=None):
+    def __init__(self,builder,history,upload_sender=None,downloader=None,smoke=None):
         self.builder,self.reader,self.client,self.history=builder,builder.reader,builder.client,history
         self.variables={key+'.id':str(getattr(builder.args,key)) for key in ('page','assignment','module','item','topic','folder','replace','revision') if getattr(builder.args,key,None) is not None}
         self.sent=0;self.verified=[];self.warnings=[]
@@ -601,6 +602,7 @@ class Executor:
         self.active_record=None
         self.current_step=0
         self.phase='before_send'
+        self.smoke=smoke
 
     def journal(self,outcome,**extra):
         self.history.now=dt.datetime.now(dt.timezone.utc)
@@ -680,6 +682,7 @@ class Executor:
         metadata,third=self.request('GET',location,custom=lambda:parse_json(self.client.transport.send('GET',location,{'Accept':'application/json+canvas-string-ids'},token=self.client._token)))
         if not isinstance(metadata,dict): raise CanvasError('malformed','Upload confirmation returned no file')
         fid=id_string(metadata.get('id'));self.variables[step['out']+'.id']=fid
+        if self.smoke: self.smoke.learned(fid,substitute(step['readback']['path'],self.variables))
         if step.get('replace') and fid!=step['replace']: raise CanvasError('readback_mismatch','Replacement returned a different file ID')
         if not step.get('rename') and metadata.get('display_name')!=facts['name']: raise CanvasError('readback_mismatch','Uploaded filename differs from the plan')
         record=self.readback(step)
@@ -697,6 +700,7 @@ class Executor:
             with self.history.locked():
                 self.history.compress()
                 self.journal('started')
+                if self.smoke: self.smoke.begin(self.operation)
                 for original in self.builder.steps:
                     step={**original,'path':substitute(original['path'],self.variables),'fields':substitute(original['fields'],self.variables)}
                     try:
@@ -707,14 +711,18 @@ class Executor:
                             if step.get('out'):
                                 if not isinstance(response,dict): raise CanvasError('malformed','Canvas returned no created resource')
                                 self.variables[step['out']+'.id']=id_string(response.get(step['readback']['resource']))
+                                if self.smoke: self.smoke.learned(self.variables[step['out']+'.id'],substitute(step['readback']['path'],self.variables))
                             record=self.readback(step)
                             self.resolved(pending,'verified_with_sanitizer_changes' if self.warnings else 'verified')
+                        if self.smoke: self.smoke.complete(self.variables,record)
                         self.verified.append({'step':len(self.verified)+1,'id':str(record.get('page_id') or record.get('id') or ''),'readback':'verified'})
                     except Exception as error:
                         known_refusal=isinstance(error,CanvasError) and error.status in {400,401,403,404,409,422,429} and self.active_record is not None and self.phase=='sending'
                         if known_refusal:
                             try: self.resolved(self.active_record,'not_landed')
                             except OSError: known_refusal=False
+                            if known_refusal and self.smoke and self.sent==1:
+                                self.smoke.refused_before_change()
                         partial=bool(self.verified) or self.sent>1 or (self.sent>0 and not known_refusal)
                         return {'mode':'executed','outcome':'PARTIAL or uncertain' if partial else 'refused','preview_hash':self.builder.plan['preview_hash'],'writes_sent':self.sent,'verified_steps':self.verified,'target_ids':self.variables,'uncertain_step':self.current_step if partial else None,'error_kind':error.kind if isinstance(error,CanvasError) else 'transport_or_history_error','warnings':self.warnings},3 if partial else 1
                 self.journal('verified')
@@ -728,6 +736,11 @@ def run_write(reader,args,history,now=None,upload_sender=None,downloader=None):
     if args.execute and (not args.expect or not re.fullmatch(r'[0-9a-f]{64}',args.expect)):
         raise CanvasError('preview_required','Execution requires the reviewed preview hash in --expect; no writes sent')
     builder=Builder(reader,args,now).build()
+    smoke=None
+    if getattr(args,'smoke_session',None):
+        from canvas_smoke import Session
+        smoke=Session(reader,history,args.smoke_session,downloader)
+        smoke.attach(builder)
     if not args.execute:
         try: history.record(account=reader.client.account.alias,command=args.command,kind='write',course_ids=[builder.plan['context']['course_id']] if builder.plan['context'].get('course_id') else [],preview_hash=builder.plan['preview_hash'],outcome='preview')
         except (OSError,CanvasError):
@@ -735,4 +748,4 @@ def run_write(reader,args,history,now=None,upload_sender=None,downloader=None):
         return {'mode':'preview',**builder.plan,'writes_sent':0},0
     if args.expect!=builder.plan['preview_hash']: raise CanvasError('preview_stale','Fresh reads differ from the reviewed plan; no writes sent')
     if args.command=='create-announcement' and not args.notify_course: raise CanvasError('notification_ack_required','Execution requires --notify-course; no writes sent')
-    return Executor(builder,history,upload_sender,downloader).run()
+    return Executor(builder,history,upload_sender,downloader,smoke).run()
