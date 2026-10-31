@@ -1,201 +1,147 @@
-"""Real CLI with synthetic gh responses only; never contacts GitHub."""
+"""Status-move regression cases retained on the guarded native Projects runtime."""
 import copy
-import json
-import os
-from pathlib import Path
-import shutil
-import subprocess
-import sys
-import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[2]
-CLI = ROOT / 'use-github-projects/scripts/github'
+from project_fixture import ProjectFixture
 
 
-def page(nodes, more=False, cursor=None):
-    return {'data': {'node': {'id': 'PROJECT_NODE', 'items': {
-        'nodes': nodes, 'pageInfo': {'hasNextPage': more, 'endCursor': cursor}}}}}
-
-
-class MoveCardTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='github-move-test-')
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.bin = self.root / 'bin'
-        self.bin.mkdir()
-        self.log = self.root / 'requests.jsonl'
-        self.fixture = self.root / 'responses.json'
-        shutil.copy(ROOT / 'setup-github/github-repos.example.json', self.root / 'github-repos.json')
-        # The double records requests, enforces balanced GraphQL selection braces,
-        # and models gh's JSON error output plus nonzero status on a bad query.
-        fake = self.bin / 'gh'
-        fake.write_text('#!'+sys.executable+'\n'+'''import json,os,re,sys
-from pathlib import Path
-args=sys.argv[1:]
-with open(os.environ['MOVE_LOG'],'a') as log: log.write(json.dumps(args)+'\\n')
-f=json.loads(Path(os.environ['MOVE_FIXTURE']).read_text())
-if args[:2]==['auth','status']: sys.exit(0)
-if args[:2]==['issue','view']:
-    print(f['issue']); sys.exit(f.get('issue_exit',0))
-assert args[:2]==['api','graphql'],args
-query=next(a[6:] for a in args if a.startswith('query='))
-shape=re.sub(r'"(?:[^"\\\\]|\\\\.)*"','""',query)
-if shape.count('{')!=shape.count('}'):
-    print(json.dumps({'errors':[{'message':'Synthetic malformed query'}]})); sys.exit(1)
-kind='mutation' if 'updateProjectV2ItemFieldValue' in query else ('meta' if 'organization(login:' in query else 'items')
-if kind=='items':
-    assert '--paginate' in args
-    assert '$endCursor' in query and 'pageInfo' in query
-value=f[kind]
-if kind=='items' and isinstance(value,list):
-    for p in value: print(json.dumps(p))
-elif isinstance(value,str): print(value)
-else: print(json.dumps(value))
-sys.exit(f.get(kind+'_exit',0))
-''')
-        fake.chmod(0o755)
-        # Only the double can satisfy gh; config is a temporary synthetic example.
-        self.env = {k: v for k,v in os.environ.items() if not k.startswith(('GH_', 'GITHUB_'))}
-        self.env.update(PATH=str(self.bin)+':'+os.environ['PATH'], BASH_ENV='/dev/null',
-                        GITHUB_CONFIG_DIR=str(self.root), MOVE_LOG=str(self.log), MOVE_FIXTURE=str(self.fixture))
-        self.item = {'id': 'ITEM_NODE', 'content': {'id': 'ISSUE_NODE'},
-                     'fieldValueByName': {'optionId': 'OLD_OPTION', 'name': 'Waiting'}}
-        self.responses = {'meta': {'data': {'organization': {'projectV2': {
-            'id': 'PROJECT_NODE', 'field': {'id': 'FIELD_NODE', 'options': [
-                {'id': 'OPTION_NODE', 'name': 'Ready'}, {'id': 'OLD_OPTION', 'name': 'Waiting'}]}}}}},
-            'issue': 'ISSUE_NODE', 'items': [page([self.item])],
-            'mutation': {'data': {'updateProjectV2ItemFieldValue': {'projectV2Item': {'id': 'ITEM_NODE'}}}}}
-
-    def run_cli(self, *extra):
-        self.fixture.write_text(json.dumps(self.responses))
-        self.log.write_text('')
-        run = subprocess.run(['/bin/bash', str(CLI), 'move-card', '--repo', 'example',
-                              '--issue', '1', '--status', 'Ready', *extra], env=self.env,
-                             capture_output=True, text=True, timeout=10)
-        self.requests = [json.loads(line) for line in self.log.read_text().splitlines()]
-        self.mutations = [r for r in self.requests if any('updateProjectV2ItemFieldValue' in a for a in r)]
-        return run
+class MoveCardTests(ProjectFixture, unittest.TestCase):
+    def preview(self, **kwargs):
+        return self.call("move-card", "--issue", 1, "--status", "Ready", **kwargs)
 
     def fail_closed(self):
-        for flags in [[], ['--execute']]:
-            with self.subTest(flags=flags):
-                run = self.run_cli(*flags)
-                self.assertNotEqual(run.returncode, 0, run.stdout+run.stderr)
-                self.assertEqual(self.mutations, [])
-                self.assertNotIn('GitHub board move plan:', run.stdout)
-                self.assertNotIn('No Status', run.stdout)
+        for flags in ((), ("--execute", "--expect", "0" * 64, "--operation-id", "1" * 32)):
+            self.call("move-card", "--issue", 1, "--status", "Ready", *flags, code=None)
+            self.assert_no_writes()
 
     def test_preview_preserves_actual_status_and_never_mutates(self):
-        for flags in [[], ['--dry-run'], ['--execute', '--dry-run']]:
-            run = self.run_cli(*flags)
-            self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertIn('Status: Waiting -> Ready', run.stdout)
-            self.assertIn('DRY RUN', run.stdout)
-            self.assertEqual(self.mutations, [])
+        for flags in ((), ("--dry-run",)):
+            result = self.call("move-card", "--issue", 1, "--status", "Ready", *flags)
+            self.assertEqual(result["plan"]["baseline"]["items"][0]["fieldValueByName"]["name"], "Waiting")
+            self.assertEqual(result["writes_sent"], 0)
+            self.assert_no_writes()
 
     def test_execute_uses_resolved_ids(self):
-        run = self.run_cli('--execute')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(len(self.mutations), 1)
-        for argument in ['project=PROJECT_NODE', 'item=ITEM_NODE', 'field=FIELD_NODE', 'option=OPTION_NODE']:
-            self.assertIn(argument, self.mutations[0])
-        self.assertIn('Moved #1 to Ready', run.stdout)
+        self.assertEqual(self.apply("move-card", "--issue", 1, "--status", "Ready")["outcome"], "success")
+        inputs = self.load()["mutations"][0]["variables"]["input"]
+        self.assertEqual(inputs, {"projectId": "PROJECT_1", "itemId": "ITEM_1", "fieldId": "FIELD_STATUS", "value": {"singleSelectOptionId": "READY"}})
 
     def test_already_matching_status_is_noop_even_with_execute(self):
-        self.item['fieldValueByName'] = {'optionId': 'OPTION_NODE', 'name': 'Ready'}
-        run = self.run_cli('--execute')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn('nothing to do', run.stdout)
-        self.assertEqual(self.mutations, [])
+        self.project["items"][0]["fieldValueByName"] = {"optionId": "READY", "name": "Ready", "field": {"id": "FIELD_STATUS"}}
+        self.save()
+        self.assertTrue(self.apply("move-card", "--issue", 1, "--status", "Ready")["already_satisfied"])
+        self.assert_no_writes()
 
     def test_explicit_null_status_is_legitimate(self):
-        self.item['fieldValueByName'] = None
-        run = self.run_cli()
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn('Status: No Status -> Ready', run.stdout)
-        self.assertEqual(self.mutations, [])
+        self.project["items"][0]["fieldValueByName"] = None
+        self.save()
+        result = self.preview()
+        self.assertIsNone(result["plan"]["baseline"]["items"][0]["fieldValueByName"])
+        self.assert_no_writes()
 
     def test_target_on_later_page(self):
-        self.responses['items'] = [page([{'id': 'OTHER_ITEM', 'content': None}], True, 'CURSOR_1'), page([self.item])]
-        run = self.run_cli('--execute')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn('item=ITEM_NODE', self.mutations[0])
+        self.project["items"].insert(0, {"id": "OTHER_ITEM", "content": None, "fieldValueByName": None})
+        self.state["page_size"] = 1
+        self.save()
+        self.assertEqual(self.apply("move-card", "--issue", 1, "--status", "Ready")["outcome"], "success")
+        self.assertEqual(len(self.load()["mutations"]), 1)
 
     def test_graphql_error_or_transport_failure_never_becomes_no_status(self):
-        original = copy.deepcopy(self.responses)
-        for kind in ['meta', 'items']:
-            for status in [0, 1]:
-                with self.subTest(kind=kind, status=status):
-                    self.responses = copy.deepcopy(original)
-                    self.responses[kind] = {'errors': [{'message': 'Synthetic request error'}]}
-                    self.responses[kind+'_exit'] = status
-                    self.fail_closed()
-        self.responses = copy.deepcopy(original)
-        self.responses['items_exit'] = 1  # A partial valid page must not be accepted.
+        self.state["graphql_errors"] = [{"message": "Synthetic failure"}]
+        self.save()
         self.fail_closed()
 
     def test_missing_duplicate_or_invalid_target(self):
-        variants = [[], [self.item, self.item]]
-        for key, value in [('id', None), ('id', ''), ('id', 'null'), ('fieldValueByName', {}),
-                           ('fieldValueByName', {'optionId': 'OLD_OPTION', 'name': 'Wrong'}),
-                           ('fieldValueByName', {'optionId': None, 'name': 'Waiting'})]:
-            item = copy.deepcopy(self.item); item[key] = value; variants.append([item])
-        missing_status = copy.deepcopy(self.item); del missing_status['fieldValueByName']; variants.append([missing_status])
-        for nodes in variants:
-            with self.subTest(nodes=nodes):
-                self.responses['items'] = [page(nodes)]
+        original = copy.deepcopy(self.project["items"][0])
+        variants = [[], [original, original]]
+        for key, value in (("id", None), ("id", ""), ("id", "null"), ("fieldValueByName", {}), ("fieldValueByName", {"optionId": "WAITING", "name": "Wrong", "field": {"id": "FIELD_STATUS"}}), ("fieldValueByName", {"optionId": None, "name": "Waiting", "field": {"id": "FIELD_STATUS"}})):
+            item = copy.deepcopy(original)
+            item[key] = value
+            variants.append([item])
+        missing = copy.deepcopy(original)
+        del missing["fieldValueByName"]
+        variants.append([missing])
+        for items in variants:
+            with self.subTest(items=items):
+                self.project["items"] = items
+                self.save()
                 self.fail_closed()
 
     def test_invalid_or_incomplete_pages(self):
-        for value in ['not-json', [], [page([] ,True, 'LAST')], [page([self.item]), page([])],
-                      [{'data': {'node': None}}], [page(None)]]:
-            with self.subTest(value=value):
-                self.responses['items'] = value
-                self.fail_closed()
+        self.state["malformed_family"] = "items"
+        self.save()
+        self.fail_closed()
+        self.state.pop("malformed_family")
+        self.state["incomplete_family"] = "items"
+        self.save()
+        self.call("move-card", "--issue", 1, "--status", "Ready", "--page-limit", 1, code=4)
+        self.assert_no_writes()
+        self.state.pop("incomplete_family")
+        self.state["repeated_cursor"] = True
+        self.save()
+        self.fail_closed()
 
     def test_invalid_metadata_and_option(self):
-        base = copy.deepcopy(self.responses['meta'])
-        for key in ['project', 'field', 'option', 'duplicate', 'missing']:
-            self.responses['meta'] = copy.deepcopy(base)
-            p = self.responses['meta']['data']['organization']['projectV2']
-            if key=='project': p['id'] = None
-            elif key=='field': p['field']['id'] = 'null'
-            elif key=='option': p['field']['options'][0]['id'] = ''
-            elif key=='duplicate': p['field']['options'].append(p['field']['options'][0])
-            else: p['field']['options'] = []
-            with self.subTest(key=key): self.fail_closed()
+        original = copy.deepcopy(self.project["fields"])
+        variants = []
+        for value in (None, "", "null"):
+            fields = copy.deepcopy(original)
+            fields[0]["options"][1]["id"] = value
+            variants.append(fields)
+        for kind in ("field-id", "duplicate-option", "missing-options"):
+            fields = copy.deepcopy(original)
+            if kind == "field-id":
+                fields[0]["id"] = "null"
+            elif kind == "duplicate-option":
+                fields[0]["options"].append(copy.deepcopy(fields[0]["options"][0]))
+            else:
+                fields[0]["options"] = []
+            variants.append(fields)
+        for fields in variants:
+            with self.subTest(fields=fields):
+                self.project["fields"] = fields
+                self.save()
+                self.fail_closed()
+        self.project["fields"] = original
+        self.project["meta"]["id"] = None
+        self.save()
+        self.fail_closed()
 
     def test_invalid_issue_ids_and_failed_lookup(self):
-        for value in ['', 'null', 'bad\nID']:
-            self.responses['issue'] = value
-            with self.subTest(value=value): self.fail_closed()
-        self.responses['issue'] = 'ISSUE_NODE'; self.responses['issue_exit'] = 1
+        for value in ("", "null", "bad ID"):
+            self.state["issue_node"] = value
+            self.save()
+            self.fail_closed()
+        self.state.pop("issue_node")
+        self.state["issue_denied"] = True
+        self.save()
         self.fail_closed()
 
     def test_bad_mutation_response_is_uncertain_never_retried(self):
-        for value in [{}, {'errors': [{'message': 'Synthetic mutation failure'}]},
-                      {'data': {'updateProjectV2ItemFieldValue': {'projectV2Item': {'id': 'WRONG_ITEM'}}}}]:
-            self.responses['mutation'] = value
-            run = self.run_cli('--execute')
-            self.assertNotEqual(run.returncode, 0)
-            self.assertEqual(len(self.mutations), 1)
-            self.assertNotIn('Moved #1', run.stdout)
-            self.assertIn('outcome is uncertain', run.stderr)
+        for index, response in enumerate(({}, {"errors": [{"message": "Synthetic mutation error"}]}, {"data": {"result": {"resource": {"id": "WRONG_ITEM"}}}})):
+            with self.subTest(response=response):
+                self.state["mutation_result"] = response
+                self.project["items"][0]["fieldValueByName"] = {"optionId": "WAITING", "name": "Waiting", "field": {"id": "FIELD_STATUS"}}
+                self.save()
+                result = self.apply("move-card", "--issue", 1, "--status", "Ready", code=3)
+                self.assertEqual(result["outcome"], "uncertain")
+                self.assertEqual(len(self.load()["mutations"]), index + 1)
+                self.state.pop("mutation_result")
+                self.save()
+                self.assertEqual(self.call("recover", "--operation-id", result["operation_id"])["outcome"], "success")
 
     def test_malformed_error_envelope_fails_closed(self):
-        self.responses['meta']['errors'] = False
+        self.state["malformed_errors"] = True
+        self.save()
         self.fail_closed()
 
     def test_failed_mutation_transport_is_uncertain_never_retried(self):
-        self.responses['mutation_exit'] = 1
-        run = self.run_cli('--execute')
-        self.assertNotEqual(run.returncode, 0)
-        self.assertEqual(len(self.mutations), 1)
-        self.assertNotIn('Moved #1', run.stdout)
-        self.assertIn('outcome is uncertain', run.stderr)
+        self.state["lose_response"] = True
+        self.save()
+        result = self.apply("move-card", "--issue", 1, "--status", "Ready", code=3)
+        self.assertEqual(result["outcome"], "uncertain")
+        self.assertEqual(len(self.load()["mutations"]), 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -9,11 +9,14 @@ command_name="${1:-help}"
 case "$command_name" in
     help|--help|-h)
         printf 'GitHub projects: export REPO_OR_ALIAS --output DIRECTORY; list-repos\n'
-        printf 'Projects export requires a configured alias. move-card --repo ALIAS --issue NUMBER --status NAME [--execute | --dry-run] (first configured organization project)\n'
+        printf 'Collaboration: read-project, read-view, create-project, copy-project, link-repository, ensure-field, create-view, edit-view, add-item, move-card, automation-config, recover\n'
+        printf 'Pass COMMAND --help for exact selectors and preview/execute guards. Projects export requires a configured alias.\n'
         exit 0 ;;
 esac
 _github_load_env || exit 1
 case "$command_name" in
+    read-project|read-view|create-project|copy-project|link-repository|ensure-field|create-view|edit-view|add-item|move-card|automation-config|recover)
+        _github_render_file "${GITHUB_USE_DIR}/scripts/collaborate.py" "$command_name" "$@" ;;
     list-repos) _github_list_repos ;;
     export)
         repo=""; output=""
@@ -26,6 +29,5 @@ case "$command_name" in
         done
         [ -n "$repo" ] && [ -n "$output" ] || { _github_error 'export requires REPO_OR_ALIAS --output DIRECTORY'; exit 1; }
         _github_export_projects "$repo" "$output" ;;
-    move-card) _github_move_card "$@" ;;
     *) _github_error "Unknown command: $command_name"; exit 1 ;;
 esac
