@@ -59,6 +59,9 @@ The names below group related reads, writes, and comments where implemented. A `
 | Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
 | Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a connected file through Penpot's MCP tools and export images for visual checks. MCP writes act immediately. Also export design-token JSON from a local archive using a project-owned manifest, with preview and guarded execution; this offline command needs no credentials. |
 
+### Local snapshot processing
+[use-canvas-snapshots](use-canvas-snapshots/SKILL.md) compares native Canvas exports, retains unresolved findings and refreshes one explicitly selected local snapshot with staged replacement. It uses Python’s standard library and includes a packaged installer for optional Codex/Claude discovery; service access and export dependencies remain with use-canvas. Interpretation and work ownership remain with the consuming project.
+
 ### Local rendering
 | Skill | Purpose | Dependencies |
 | --- | --- | --- |

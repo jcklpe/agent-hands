@@ -73,7 +73,7 @@ class SkillLinksTests(unittest.TestCase):
     def test_every_owner_selection_has_real_sources(self):
         choices = {"setup-google-services": "use-google-docs", "setup-microsoft-services": "use-planner", "setup-github": "use-github-issues", "setup-slack": "use-slack-lists"}
         entrypoints = list(self.repo.glob("*/scripts/link-skills.py"))
-        self.assertEqual(len(entrypoints), 13)
+        self.assertEqual(len(entrypoints), 14)
         for entry in entrypoints:
             owner = entry.parents[1].name
             args = ["--skill", choices[owner]] if owner in choices else []
@@ -83,6 +83,8 @@ class SkillLinksTests(unittest.TestCase):
                 self.assertTrue(all(Path(x["source"]).joinpath("SKILL.md").is_file() for x in plan["links"]))
                 if owner == "setup-canvas":
                     self.assertEqual({x["skill"] for x in plan["links"]}, {"setup-canvas", "use-canvas"})
+                if owner == "use-canvas-snapshots":
+                    self.assertEqual({x["skill"] for x in plan["links"]}, {"use-canvas-snapshots"})
         self.assertFalse(self.dest.exists())
 
     def test_files_directories_and_unrelated_links_block_all_writes(self):

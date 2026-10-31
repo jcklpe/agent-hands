@@ -41,7 +41,7 @@ Bodies convert to Markdown and retain the original HTML's SHA-256. `--include-ht
 | `partial` | Some records, bodies or images are missing, or duplicate responses conflicted. |
 | `failed` | Retrieval failed, including malformed data, bounded throttling failure or incomplete pagination. |
 
-Coverage includes counts, missing identities, HTTP status and fallback notes. When a file listing is denied, referenced files are requested individually; coverage remains `denied` with `referenced_only`, rather than claiming a complete file listing. Parent-listing failures propagate to child coverage. Compare or infer absence only from `complete`; change detection belongs to the consuming workflow.
+Coverage includes counts, missing identities, HTTP status and fallback notes. When a file listing is denied, referenced files are requested individually; coverage remains `denied` with `referenced_only`, rather than claiming a complete file listing. Parent-listing failures propagate to child coverage. Compare or infer absence only from `complete`. Consuming workflows may use the optional [snapshot companion](../use-canvas-snapshots/SKILL.md) for offline differences, retained findings and local snapshot replacement; the consuming workflow owns interpretation and reconciliation.
 
 Retrieval, normalization, conversion and export run entirely in scripts and can refresh without invoking a model. Agent tokens are used when an agent is asked to inspect, interpret or act on the results; consumers choose which outputs to load. JSON is the structured consumer interface; Markdown supplies a readable inspection and agent-reading view.
 
