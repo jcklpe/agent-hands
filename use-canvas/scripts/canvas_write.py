@@ -17,7 +17,7 @@ from canvas_auth import CanvasError, id_string, parse_json, verify_identity
 
 COMMANDS=('create-page','edit-page','revert-page','create-assignment','edit-assignment','create-module','edit-module','add-module-item','edit-module-item','create-announcement','edit-announcement','upload-file','submit-assignment','comment-submission','reply-discussion')
 PAGE_COMMANDS={'create-page','edit-page','revert-page'}
-VOLATILE={'read_state','unread_count','subscribed','last_reply_at','url','preview_url','thumbnail_url','avatar_url','avatar_image_url','edited_by','last_edited_by'}
+VOLATILE={'read_state','unread_count','subscribed','last_reply_at','url','preview_url','canvadoc_session_url','thumbnail_url','avatar_url','avatar_image_url','edited_by','last_edited_by'}
 
 
 def add_commands(commands, canvas_id):
@@ -315,6 +315,10 @@ class Builder:
         for key,value in fields.items(): self.change(key,current.get(key),value)
         fields['notify_of_update']=a.notify
         expected={k:v for k,v in fields.items() if k!='notify_of_update'};expected['id']='$assignment.id' if create else a.assignment
+        if fields.get('submission_types',current.get('submission_types'))==['not_graded']:
+            if fields.get('points_possible') not in (None,0): raise CanvasError('input_invalid','Ungraded assignments cannot retain nonzero points')
+            expected.update(points_possible=None,submission_types=['not_graded'])
+            self.plan['normalizations']=[{'field':'points_possible','sent':fields.get('points_possible'),'stored':None,'reason':'Canvas clears the point total for an ungraded assignment'}]
         self.plan['effects'].append('notify_of_update='+str(a.notify).lower())
         self.step('POST' if create else 'PUT',path,fields,expected,out='assignment' if create else None,prefix='assignment',read_path=self.base+'/assignments/$assignment.id' if create else path)
 
@@ -392,6 +396,18 @@ class Builder:
                 rows=self.listing(self.base+'/modules/'+a.move_to_module+'/items')
             if not fields: raise CanvasError('input_invalid','No module item changes supplied')
         destination=getattr(a,'move_to_module',None) or a.module
+        linked=None
+        if not create and a.title is not None and current.get('type') in {'Assignment','File','Page','Discussion','Quiz'}:
+            kind=current['type'];endpoint={'Assignment':'assignments','File':'files','Page':'pages','Discussion':'discussion_topics','Quiz':'quizzes'}[kind]
+            source_path=self.base+'/'+endpoint+'/'+(quote(current['page_url'],safe='') if kind=='Page' else id_string(current['content_id']))
+            source=self.get(source_path)
+            source_id=id_string(source.get('page_id') if kind=='Page' else source.get('id'))
+            if kind=='Page': source_path=self.base+'/pages/page_id:'+source_id
+            key={'Assignment':'name','File':'display_name'}.get(kind,'title')
+            allowed=[key,'updated_at']+(['url'] if kind=='Page' else ['filename'] if kind=='File' else [])
+            linked={'kind':kind.lower(),'id':source_id,'path':source_path,'field':key,'expected':a.title,'before_hash':digest(stable(source)),'before':{k:source[k] for k in allowed if k in source},'absent_before':[k for k in allowed if k not in source]}
+            self.plan['effects'].append({'linked_content_rename':{'type':kind,'id':source_id,'field':key,'before':source.get(key),'after':a.title}})
+            if kind in {'Assignment','File','Page'}: self.permission({'Assignment':'manage_assignments_edit','File':'manage_files_edit','Page':'manage_wiki_update'}[kind])
         order=self.ordered(rows,'$item.id' if create else a.item,a.position if a.position is not None else current.get('position') if not getattr(a,'move_to_module',None) else None)
         self.plan['effects'].append({'module_item_order':order,'module_id':destination})
         for key,value in fields.items(): self.change(key,current.get(key),value)
@@ -401,6 +417,7 @@ class Builder:
             if a.minimum is not None: expected['completion_requirement'][a.completion]=a.minimum
         expected.update(id='$item.id' if create else a.item)
         self.step('POST' if create else 'PUT',path if create else path+'/'+a.item,fields,expected,out='item' if create else None,prefix='module_item',read_path=self.base+'/modules/'+destination+'/items/'+('$item.id' if create else a.item),order={'path':self.base+'/modules/'+destination+'/items','expected':order})
+        if linked: self.steps[-1]['readback']['linked_title']=linked
         if create and a.type=='Page':
             self.steps[-1]['readback']['page_reference']={'path':self.base+'/pages/'+quote(resource['url'],safe=''),'page_id':a.page}
         # Rails nested keys need the bracket inside the outer module_item wrapper.
@@ -660,6 +677,10 @@ class Executor:
             rows=self.client.paginate(check['order']['path']).items
             order=[id_string(x.get('id')) for x in sorted(rows,key=lambda r:(r.get('position') or 0,id_string(r.get('id'))))]
             if order!=check['order']['expected']: raise CanvasError('readback_mismatch','Collection order differs on readback')
+        if check.get('linked_title'):
+            linked=check['linked_title'];source=self.reader.object(linked['path'])
+            if str(source.get('page_id') if linked['kind']=='page' else source.get('id'))!=linked['id'] or source.get(linked['field'])!=linked['expected']:
+                raise CanvasError('readback_mismatch','The associated content title differs from the module-item rename')
         self.warnings.extend(warnings)
         return record
 

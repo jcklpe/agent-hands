@@ -9,8 +9,8 @@ from pathlib import Path
 from canvas_write_fixture import WriteFixture, NOW, reply
 from canvas_auth import CanvasError
 from canvas_history import History
-from canvas_write import run_write
-from canvas_smoke import DELETE_PERMISSIONS, Session, Store, prepare, cleanup, verify_cleanup
+from canvas_write import run_write, Builder
+from canvas_smoke import DELETE_PERMISSIONS, Session, Store, prepare, cleanup, verify_cleanup, verify_assignment, verify_file, verify_item_title, inspect_creation
 import canvas
 
 
@@ -20,12 +20,16 @@ class SmokeFixture(WriteFixture):
         self.data['course']['workflow_state'] = 'unpublished'
         self.permissions.update({k: True for k in DELETE_PERMISSIONS})
         self.deleted = set()
+        self.deleted_objects = {}
+        self.item_tombstones = False
         self.deleted_read_status = 404
 
     def send(self, method, url, headers, body=None, token=None):
         from urllib.parse import urlsplit
         path = urlsplit(url).path
-        if method == 'GET' and path in self.deleted: return reply({'message': 'missing'}, self.deleted_read_status)
+        if method == 'GET' and path in self.deleted:
+            if self.item_tombstones and '/items/' in path: return reply(self.deleted_objects[path])
+            return reply({'message': 'missing'}, self.deleted_read_status)
         return super().send(method, url, headers, body, token)
 
     def mutate(self, method, path, fields):
@@ -37,6 +41,7 @@ class SmokeFixture(WriteFixture):
         else:
             tail = bits[5:]
             if tail[0] == 'modules' and len(tail) == 4:
+                self.deleted_objects[path] = copy.deepcopy(next(r for r in self.items[tail[1]] if r['id']==tail[3]))
                 self.items[tail[1]][:] = [r for r in self.items[tail[1]] if r['id'] != tail[3]]
                 for index, row in enumerate(self.items[tail[1]], 1): row['position'] = index
             else:
@@ -360,6 +365,304 @@ class SmokeTest(unittest.TestCase):
         self.fixture.deleted_read_status = 401
         with self.assertRaises(CanvasError): self.verify_pending()
         self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
+
+    def acknowledged_legacy_assignment(self):
+        from unittest.mock import patch
+        body = self.root/'assignment.md'; body.write_text('Synthetic assignment body.\n')
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        original = Builder.assignments
+        def legacy(builder):
+            original(builder)
+            builder.plan.pop('normalizations', None)
+            check = builder.steps[-1]['readback']['fields']
+            check.pop('grading_type', None); check['points_possible'] = 0.0
+        args = self.args('create-assignment', '--name', self.prefix+' assignment', '--points', '0', '--submission-type', 'not_graded', '--assignment-group', group, '--body-file', str(body))
+        with patch.object(Builder, 'assignments', legacy):
+            plan, _ = self.run_write(args)
+            args.execute = True; args.expect = plan['preview_hash']
+            result, code = self.run_write(args)
+        self.assertEqual(code, 3); self.assertEqual(result['error_kind'], 'readback_mismatch')
+        path = self.root/'original-preview.json'; path.write_text(json.dumps(plan)); path.chmod(0o600)
+        self.original_preview = path
+        return result['target_ids']['assignment.id']
+
+    def verify_assignment(self):
+        args = canvas.parser().parse_args(['verify-smoke-assignment','example','--session',self.sid,'--preview-file',str(self.original_preview)])
+        return verify_assignment(self.reader, args, self.history)
+
+    def test_ungraded_point_normalization_is_explicit_and_verified(self):
+        group = self.prepared['existing_containers']['assignment_group'][0]['id']
+        args = self.args('create-assignment', '--name', self.prefix+' assignment', '--points', '0', '--submission-type', 'not_graded', '--assignment-group', group)
+        plan, _ = self.run_write(args)
+        self.assertEqual(plan['normalizations'][0]['stored'], None)
+        self.assertIn('submission_types', plan['steps'][0]['readback']['fields'])
+        args.execute = True; args.expect = plan['preview_hash']
+        self.assertEqual(self.run_write(args)[1], 0)
+        self.assertIsNone(self.fixture.data['assignments'][-1]['points_possible'])
+        self.assertEqual(self.fixture.data['assignments'][-1]['grading_type'], 'points')
+
+    def test_acknowledged_assignment_verification_binds_original_hash_without_writes(self):
+        aid = self.acknowledged_legacy_assignment()
+        before = len(self.fixture.writes)
+        result, code = self.verify_assignment()
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0)
+        self.assertEqual(result['target_ids']['assignment.id'], aid)
+        self.assertEqual(len(self.fixture.writes), before)
+        self.assertIsNone(Store(self.history, self.sid).load()['pending'])
+        self.assertIsNotNone(Store(self.history, self.sid).load()['owned'][0]['snapshot'])
+        self.assertFalse(any(r['outcome']=='uncertain' for r in self.history.rows()))
+        self.assertTrue(self.clean()['baseline_restored'])
+
+    def test_acknowledged_assignment_verification_rejects_forged_body(self):
+        self.acknowledged_legacy_assignment()
+        plan = json.loads(self.original_preview.read_text())
+        html = '<p>Changed outside the approved creation.</p>\n'
+        change = next(c for c in plan['changes'] if c['field']=='description')
+        change['converted_html'] = html
+        facts = {'bytes':len(html.encode()),'sha256':hashlib.sha256(html.encode()).hexdigest()}
+        change['after_sha256'] = facts['sha256']
+        plan['steps'][0]['fields']['assignment[description]'] = facts
+        self.original_preview.write_text(json.dumps(plan))
+        self.fixture.data['assignments'][-1]['description'] = html
+        with self.assertRaises(CanvasError): self.verify_assignment()
+        self.assertIsNotNone(Store(self.history, self.sid).load()['pending'])
+
+    def test_acknowledged_assignment_verification_refuses_lost_id_or_changed_target(self):
+        self.acknowledged_legacy_assignment()
+        store = Store(self.history, self.sid); original = store.load()
+        lost = copy.deepcopy(original); lost['pending']['created_id'] = None; store.save(lost)
+        with self.assertRaises(CanvasError): self.verify_assignment()
+        store.save(original)
+        row = self.fixture.data['assignments'][-1]
+        row['updated_at'] = '2026-10-30T12:02:00Z'
+        with self.assertRaises(CanvasError): self.verify_assignment()
+        row['updated_at'] = row['created_at']; row['published'] = True
+        with self.assertRaises(CanvasError): self.verify_assignment()
+
+    def test_graded_null_points_are_not_accepted_as_zero(self):
+        args = canvas.parser().parse_args(['create-assignment','example','--course','123','--name','Synthetic graded zero','--points','0','--submission-type','none'])
+        plan, _ = self.run_write(args)
+        mutate = self.fixture.mutate
+        def null_points(method, path, fields):
+            result = mutate(method, path, fields)
+            result['points_possible'] = None; result['grading_type'] = 'points'
+            return result
+        self.fixture.mutate = null_points
+        args.execute = True; args.expect = plan['preview_hash']
+        result, code = self.run_write(args)
+        self.assertEqual(code, 3); self.assertEqual(result['error_kind'], 'readback_mismatch')
+
+    def test_ungraded_nonzero_points_refuse_before_writing(self):
+        args = canvas.parser().parse_args(['create-assignment','example','--course','123','--name','Contradictory points','--points','5','--submission-type','not_graded'])
+        with self.assertRaises(CanvasError): self.run_write(args)
+        self.assertEqual(self.fixture.writes, [])
+
+    def rotating_preview_urls(self):
+        route = self.fixture.route
+        self.preview_counter = 0
+        def rotating(path, params):
+            result = route(path, params)
+            if path.startswith('/api/v1/files/'):
+                self.preview_counter += 1
+                result = dict(result, canvadoc_session_url='https://preview.example.net/session/'+str(self.preview_counter))
+            return result
+        self.fixture.route = rotating
+
+    def acknowledged_legacy_file(self):
+        from unittest.mock import patch
+        import canvas_write
+        self.rotating_preview_urls()
+        folder = self.prepared['existing_containers']['folder'][0]['id']
+        args = self.args('upload-file','--file',str(self.file),'--name',self.prefix+' file.txt','--folder',folder,'--verify-content')
+        with patch.object(canvas_write,'VOLATILE',canvas_write.VOLATILE-{'canvadoc_session_url'}):
+            plan, _ = self.run_write(args)
+            args.execute = True; args.expect = plan['preview_hash']
+            result, code = self.run_write(args)
+        self.assertEqual(code, 3); self.assertEqual(result['error_kind'], 'smoke_refused')
+        path = self.root/'upload-preview.json'; path.write_text(json.dumps(plan)); path.chmod(0o600)
+        self.original_preview = path
+        return result['target_ids']['file.id']
+
+    def verify_file(self, downloader=None):
+        args = canvas.parser().parse_args(['verify-smoke-file','example','--session',self.sid,'--preview-file',str(self.original_preview)])
+        return verify_file(self.reader,args,self.history,downloader or self.fixture.download)
+
+    def test_canvadoc_session_rotation_does_not_change_content_guard(self):
+        self.rotating_preview_urls()
+        folder = self.prepared['existing_containers']['folder'][0]['id']
+        self.write('upload-file','--file',str(self.file),'--name',self.prefix+' file.txt','--folder',folder,'--verify-content')
+        self.assertGreater(self.preview_counter, 2)
+        self.assertTrue(self.clean()['baseline_restored'])
+
+    def test_acknowledged_file_reverification_uses_original_digest_without_upload(self):
+        fid = self.acknowledged_legacy_file(); before = len(self.fixture.writes)
+        result, code = self.verify_file()
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0)
+        self.assertEqual(result['target_ids']['file.id'], fid)
+        self.assertEqual(len(self.fixture.writes), before)
+        self.assertIsNone(Store(self.history,self.sid).load()['pending'])
+        self.assertTrue(self.clean()['baseline_restored'])
+
+    def test_acknowledged_file_reverification_rejects_changed_content_or_metadata(self):
+        fid = self.acknowledged_legacy_file()
+        def changed(*args, **kwargs): return {'bytes': len(self.file.read_bytes()), 'sha256': '0'*64}
+        with self.assertRaises(CanvasError): self.verify_file(changed)
+        record = next(r for r in self.fixture.data['files'] if r['id']==fid)
+        record['hidden'] = True
+        with self.assertRaises(CanvasError): self.verify_file()
+        self.assertIsNotNone(Store(self.history,self.sid).load()['pending'])
+
+    def test_acknowledged_file_reverification_rejects_forged_preview_or_unknown_id(self):
+        self.acknowledged_legacy_file()
+        plan = json.loads(self.original_preview.read_text())
+        plan['changes'][0]['file']['sha256'] = '0'*64
+        self.original_preview.write_text(json.dumps(plan))
+        with self.assertRaises(CanvasError): self.verify_file()
+        store = Store(self.history,self.sid); data = store.load(); data['pending']['created_id'] = None; store.save(data)
+        with self.assertRaises(CanvasError): self.verify_file()
+
+    def test_creation_inspection_is_bounded_and_does_not_seal_or_leak_preview_urls(self):
+        self.acknowledged_legacy_file(); before = len(self.fixture.writes)
+        args = canvas.parser().parse_args(['inspect-smoke-creation','example','--session',self.sid])
+        result, code = inspect_creation(self.reader,args,self.history,self.fixture.download)
+        self.assertEqual(code, 0); self.assertEqual(result['writes_sent'], 0)
+        self.assertNotIn('https://preview.example.net/',json.dumps(result))
+        self.assertEqual(len(self.fixture.writes), before)
+        self.assertIsNotNone(Store(self.history,self.sid).load()['pending'])
+
+    def legacy_item_title_effect(self):
+        import datetime
+        from unittest.mock import patch
+        actual_datetime=datetime.datetime
+        clock={'value':actual_datetime(2026,10,30,12,1,tzinfo=datetime.timezone.utc)}
+        class Frozen(actual_datetime):
+            @classmethod
+            def now(cls,tz=None): return clock['value'].astimezone(tz or datetime.timezone.utc)
+        original=Builder.module_items
+        def legacy(builder):
+            original(builder)
+            builder.steps[-1]['readback'].pop('linked_title',None)
+            builder.plan['effects']=[e for e in builder.plan['effects'] if not isinstance(e,dict) or 'linked_content_rename' not in e]
+        self.prior_name=self.prefix+' assignment'
+        group=self.prepared['existing_containers']['assignment_group'][0]['id']
+        with patch('canvas_write.dt.datetime',Frozen):
+            aid=self.write('create-assignment','--name',self.prior_name,'--points','0','--submission-type','not_graded','--assignment-group',group)['target_ids']['assignment.id']
+            mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+            iid=self.write('add-module-item','--module',mid,'--type','Assignment','--content-id',aid,'--title','Initial link')['target_ids']['item.id']
+            clock['value']=actual_datetime(2026,10,30,12,2,tzinfo=datetime.timezone.utc)
+            args=self.args('edit-module-item','--module',mid,'--item',iid,'--title','Verified link')
+            with patch.object(Builder,'module_items',legacy):
+                plan,_=self.run_write(args);args.execute=True;args.expect=plan['preview_hash']
+                self.assertEqual(self.run_write(args)[1],0)
+        self.title_preview=self.root/'item-title-preview.json';self.title_preview.write_text(json.dumps(plan));self.title_preview.chmod(0o600)
+        return aid,iid
+
+    def verify_item_title(self):
+        args=canvas.parser().parse_args(['verify-smoke-item-title','example','--session',self.sid,'--preview-file',str(self.title_preview),'--before-name',self.prior_name])
+        return verify_item_title(self.reader,args,self.history,self.fixture.download)
+
+    def test_linked_title_effect_is_previewed_and_tracked_for_cleanup(self):
+        group=self.prepared['existing_containers']['assignment_group'][0]['id']
+        aid=self.write('create-assignment','--name',self.prefix+' assignment','--points','0','--submission-type','not_graded','--assignment-group',group)['target_ids']['assignment.id']
+        mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+        iid=self.write('add-module-item','--module',mid,'--type','Assignment','--content-id',aid,'--title','Initial link')['target_ids']['item.id']
+        args=self.args('edit-module-item','--module',mid,'--item',iid,'--title','Verified link')
+        plan,_=self.run_write(args)
+        self.assertTrue(any(isinstance(e,dict) and e.get('linked_content_rename',{}).get('id')==aid for e in plan['effects']))
+        args.execute=True;args.expect=plan['preview_hash'];self.assertEqual(self.run_write(args)[1],0)
+        self.assertTrue(self.clean()['baseline_restored'])
+
+    def test_legacy_title_effect_requires_exact_prior_signed_fingerprint(self):
+        aid,iid=self.legacy_item_title_effect()
+        with self.assertRaises(CanvasError): self.clean()
+        before=len(self.fixture.writes)
+        result,code=self.verify_item_title()
+        self.assertEqual(code,0);self.assertEqual(result['writes_sent'],0)
+        self.assertEqual(result['target_ids'],{'item.id':iid,'assignment.id':aid})
+        self.assertEqual(len(self.fixture.writes),before)
+        self.assertTrue(result['prior_fingerprint_proved'])
+        self.assertTrue(self.clean()['baseline_restored'])
+
+    def test_legacy_title_effect_refuses_other_changes_and_wrong_prior_name(self):
+        aid,_=self.legacy_item_title_effect()
+        original_name=self.prior_name;self.prior_name=self.prefix+' incorrect name'
+        with self.assertRaises(CanvasError): self.verify_item_title()
+        self.prior_name=original_name
+        source=next(r for r in self.fixture.data['assignments'] if r['id']==aid)
+        source['description']='Unrelated content change'
+        with self.assertRaises(CanvasError): self.verify_item_title()
+        with self.assertRaises(CanvasError): self.clean()
+
+    def test_readonly_title_verification_cannot_extend_original_write_window(self):
+        import datetime
+        aid,_=self.legacy_item_title_effect()
+        store=Store(self.history,self.sid);original=store.load()
+        self.history.now=datetime.datetime(2026,10,30,12,10,tzinfo=datetime.timezone.utc)
+        self.assertEqual(self.verify_item_title()[1],0)
+        store.save(original)
+        source=next(r for r in self.fixture.data['assignments'] if r['id']==aid)
+        source['updated_at']='2026-10-30T12:09:00Z'
+        with self.assertRaises(CanvasError): self.verify_item_title()
+
+    def test_readable_deleted_item_requires_complete_active_parent_absence(self):
+        self.fixture.item_tombstones=True
+        mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+        self.write('add-module-item','--module',mid,'--type','SubHeader','--title','Test heading')
+        result=self.clean()
+        self.assertTrue(result['baseline_restored'])
+        receipt=Store(self.history,self.sid).load()
+        item=next(r for r in receipt['owned'] if r['kind']=='item')
+        self.assertEqual(item['removal_evidence']['object_read_status'],200)
+
+    def test_readable_item_still_in_parent_refuses(self):
+        self.fixture.item_tombstones=True
+        mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+        self.write('add-module-item','--module',mid,'--type','SubHeader','--title','Test heading')
+        mutate=self.fixture.mutate
+        def still_active(method,path,fields):
+            result=mutate(method,path,fields)
+            if method=='DELETE' and '/items/' in path:
+                self.fixture.items[mid].append(self.fixture.deleted_objects[path])
+            return result
+        self.fixture.mutate=still_active
+        args=self.cleanup_args();plan,_=cleanup(self.reader,args,self.history)
+        args.execute=True;args.expect=plan['preview_hash']
+        result,code=cleanup(self.reader,args,self.history)
+        self.assertEqual(code,3);self.assertFalse(result['baseline_restored'])
+
+    def test_readable_item_without_explicit_edit_permission_refuses(self):
+        self.fixture.item_tombstones=True
+        mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+        self.write('add-module-item','--module',mid,'--type','SubHeader','--title','Test heading')
+        mutate=self.fixture.mutate
+        def revoked(method,path,fields):
+            result=mutate(method,path,fields)
+            if method=='DELETE': self.fixture.permissions.pop('manage_course_content_edit')
+            return result
+        self.fixture.mutate=revoked
+        args=self.cleanup_args();plan,_=cleanup(self.reader,args,self.history)
+        args.execute=True;args.expect=plan['preview_hash']
+        result,code=cleanup(self.reader,args,self.history)
+        self.assertEqual(code,3);self.assertEqual(result['writes_sent'],1)
+        self.assertIsNotNone(Store(self.history,self.sid).load()['pending'])
+
+    def test_readonly_reconciliation_of_acknowledged_item_tombstone_never_redeletes(self):
+        from unittest.mock import patch
+        self.fixture.item_tombstones=True
+        mid=self.write('create-module','--name',self.prefix+' module')['target_ids']['module.id']
+        self.write('add-module-item','--module',mid,'--type','SubHeader','--title','Test heading')
+        args=self.cleanup_args();plan,_=cleanup(self.reader,args,self.history)
+        args.execute=True;args.expect=plan['preview_hash']
+        original=Session.confirm_absent
+        def legacy(session,row,allow_page_denial=False,allow_item_tombstone=False):
+            return original(session,row,allow_page_denial,False)
+        with patch.object(Session,'confirm_absent',legacy):
+            self.assertEqual(cleanup(self.reader,args,self.history)[1],3)
+        before=len(self.fixture.writes)
+        result,code=self.verify_pending()
+        self.assertEqual(code,0);self.assertEqual(result['writes_sent'],0)
+        self.assertFalse(result['baseline_restored']);self.assertEqual(len(self.fixture.writes),before)
+        self.assertTrue(self.clean()['baseline_restored'])
 
     def test_missing_from_course_collection_and_folder_side_effect_refuse(self):
         pid = self.create_page()

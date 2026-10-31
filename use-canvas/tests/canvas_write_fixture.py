@@ -121,6 +121,7 @@ class WriteFixture(CanvasFixture):
         if tail=='files' or tail.endswith('/submissions/self/files'):
             fid=next((f['id'] for f in self.data['files'] if f['display_name']==fields['name'] and fields['on_duplicate']=='overwrite' and self.file_context[f['id']]==(context,cid)),None) or self.new_id()
             meta={'id':fid,'display_name':fields['name'],'filename':fields['name'],'size':fields['size'],'content-type':fields['content_type'],'folder_id':fields.get('parent_folder_id','80'),'url':ORIGIN+'/files/'+fid+'/download'}
+            meta.update(created_at='2026-10-30T12:01:00Z',updated_at='2026-10-30T12:01:00Z',modified_at='2026-10-30T12:01:00Z',locked=False,hidden=False,lock_at=None,unlock_at=None)
             if fields['on_duplicate']=='rename' and any(f['display_name']==meta['display_name'] and self.file_context[f['id']]==(context,cid) for f in self.data['files']): meta['display_name']='renamed-'+meta['display_name']
             self.pending[fid]=(meta,context,cid)
             return {'upload_url':'https://storage.example.net/'+fid,'upload_params':{'key':'opaque-key','signature':'synthetic-signature'}}
@@ -149,9 +150,12 @@ class WriteFixture(CanvasFixture):
             if tail.endswith('/submissions/self'):
                 self.add_comment(fields['comment']['text_comment']);return self.submission
             if tail=='assignments':
-                assignment={'id':self.new_id()};self.data['assignments'].append(assignment)
+                assignment={'id':self.new_id(),'created_at':'2026-10-30T12:01:00Z','has_submitted_submissions':False};self.data['assignments'].append(assignment)
             else: assignment=next(a for a in self.data['assignments'] if a['id']==tail.split('/')[-1])
             assignment.update({k:v for k,v in fields['assignment'].items() if k!='notify_of_update'})
+            if assignment.get('submission_types')==['not_graded']:
+                assignment['points_possible']=None
+                assignment.setdefault('grading_type','points')
             assignment['updated_at']='2026-10-30T12:01:00Z'
             return assignment
         if tail=='modules' or tail.startswith('modules/'):
@@ -167,6 +171,14 @@ class WriteFixture(CanvasFixture):
                 item={'id':self.new_id(),'module_id':mid};self.items[mid].append(item)
             else: item=next(i for i in self.items[mid] if i['id']==pieces[-1])
             item.update(fields['module_item'])
+            if method=='PUT' and 'title' in fields['module_item'] and item.get('type') in {'Assignment','File','Page'}:
+                kind=item['type'];key={'Assignment':'name','File':'display_name','Page':'title'}[kind]
+                rows=self.data[{'Assignment':'assignments','File':'files','Page':'pages'}[kind]]
+                source=next(r for r in rows if (r.get('url')==item.get('page_url') if kind=='Page' else r['id']==item.get('content_id')))
+                source.update({key:fields['module_item']['title'],'updated_at':'2026-10-30T12:02:00Z'})
+                if kind=='Page':
+                    revisions=self.revisions.setdefault((context,cid,source['page_id']),[])
+                    revisions.append({'revision_id':self.new_id(),'body':source['body']})
             destination=fields['module_item'].get('module_id',mid)
             if destination!=mid: self.items[mid].remove(item);self.items[destination].append(item)
             self.reposition(self.items[destination],item,fields['module_item'].get('position',item.get('position')))

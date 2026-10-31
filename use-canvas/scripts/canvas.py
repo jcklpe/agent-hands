@@ -113,11 +113,15 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             acct = client.account
             print("Canvas credential renewed and saved; the previous credential retains its original expiry.", file=sys.stderr)
         from canvas_write import COMMANDS,run_write
-        if args.command in {'smoke-session', 'cleanup-smoke', 'verify-smoke-cleanup'}:
-            from canvas_smoke import prepare, cleanup, verify_cleanup
+        if args.command in {'smoke-session', 'cleanup-smoke', 'verify-smoke-cleanup', 'verify-smoke-assignment', 'verify-smoke-file', 'verify-smoke-item-title', 'inspect-smoke-creation'}:
+            from canvas_smoke import prepare, cleanup, verify_cleanup, verify_assignment, verify_file, verify_item_title, inspect_creation
             if args.command == 'smoke-session': value, code = prepare(reader, args, history)
             elif args.command == 'cleanup-smoke': value, code = cleanup(reader, args, history, downloader)
-            else: value, code = verify_cleanup(reader, args, history, downloader)
+            elif args.command == 'verify-smoke-cleanup': value, code = verify_cleanup(reader, args, history, downloader)
+            elif args.command == 'verify-smoke-assignment': value, code = verify_assignment(reader, args, history)
+            elif args.command == 'verify-smoke-file': value, code = verify_file(reader, args, history, downloader)
+            elif args.command == 'verify-smoke-item-title': value, code = verify_item_title(reader, args, history, downloader)
+            else: value, code = inspect_creation(reader, args, history, downloader)
             emit(value, args.json)
             return code
         if args.command in COMMANDS:
