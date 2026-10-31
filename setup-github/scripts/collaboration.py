@@ -456,7 +456,7 @@ def execute(ctx, plan, steps, rebuild=None):
                 journal.write(record)
             except (TransportError, Refusal, OSError, ValueError, KeyError, TypeError, AttributeError, IndexError) as exc:
                 not_sent = entry["status"] == "not_sent" or ctx.client.writes_sent == writes_before
-                known_refused = isinstance(exc, TransportError) and exc.status is not None and 400 <= exc.status < 500
+                known_refused = isinstance(exc, TransportError) and exc.sent and exc.status is not None and 400 <= exc.status < 500
                 entry["status"] = "not_sent" if not_sent else "refused" if known_refused else "uncertain"
                 record["outcome"] = "failed" if known_refused or not_sent else "uncertain"
                 try:

@@ -369,6 +369,14 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(result["steps"][0]["status"], "uncertain")
         self.assertEqual(len(self.load()["issue_comments"]), 1)
 
+    def test_denied_readback_after_landed_write_remains_uncertain(self):
+        self.state["fault"] = {"method": "GET", "path": "/issues/comments/", "mode": "refuse"}
+        self.save()
+        result = self.apply("comment-issue", "--issue", 1, "--body", "Landed but readback denied", code=3)
+        self.assertEqual(result["outcome"], "uncertain")
+        self.assertEqual(result["steps"][0]["status"], "uncertain")
+        self.assertEqual(len(self.load()["issue_comments"]), 1)
+
     def test_wrong_parent_in_comment_readback_is_uncertain(self):
         self.state["fault"] = {"method": "GET", "path": "/issues/comments/", "mode": "wrong-parent"}
         self.save()
@@ -646,6 +654,7 @@ if __name__ == "__main__":
         domain = sys.argv[position + 1]
         del sys.argv[position:position + 2]
         issue_names = {"test_actor_mismatch_and_missing_fingerprint_refuse", "test_closed_issue_can_be_read_and_pr_is_not_issue", "test_ignored_journal_required", "test_preview_never_writes_or_creates_journal", "test_stale_field_refuses_before_mutation", "test_unrelated_issue_field_change_does_not_invalidate", "test_uncertain_comment_reconciles_without_resending", "test_intentional_repeated_comment_gets_new_id", "test_journal_has_digests_not_bodies_and_refuses_reuse", "test_external_state_directory_without_checkout", "test_wrong_project_and_symlink_journal_refuse", "test_uncertain_intent_cannot_be_retried_with_another_operation_id", "test_ambiguous_recovery_requires_explicit_result", "test_readback_failure_preserves_uncertainty", "test_known_refusal_is_distinct_from_uncertain_send", "test_bounded_comment_reads_report_incomplete_and_append_refuses", "test_all_worktrees_share_one_journal_and_lock", "test_stale_state_is_rechecked_inside_execution_lock", "test_private_body_preserves_crlf_and_empty_rest_body_is_semantic_empty", "test_project_journal_handles_separate_git_metadata", "test_wrong_parent_in_comment_readback_is_uncertain", "test_conflicting_host_and_wrong_repository_identity_refuse"}
+        issue_names.add("test_denied_readback_after_landed_write_remains_uncertain")
         names = unittest.defaultTestLoader.getTestCaseNames(CollaborationTests)
         selected = [name for name in names if (name.startswith("test_issue_") or name in issue_names) == (domain == "issues") and name not in {"test_selected_domain_runs_with_only_its_setup_sibling", "test_uncertain_creates_recover_by_exact_new_item"}]
         suite = unittest.TestSuite(CollaborationTests(name) for name in selected)
