@@ -18,6 +18,8 @@ Read [account access and provider support](references/account-access.md) for con
 
 For issue/PR collaboration, read the [collaboration runtime contract](references/collaboration.md): effective actor/host guards, structured previews, fingerprint-bound execution, project-owned ignored recovery state and truthful partial/uncertain outcomes. Configure an optional `GITHUB_EXPECTED_ACTOR` or pass `--actor` per operation. The use skills own supported issue/PR operations; setup does not create shared records or choose a project's collaboration policy. Integration requires the documented current server schema/API; unsupported older servers refuse rather than changing routes or grants.
 
+Before collaboration writes, add `/.github/project-collaboration/` to the operated project's root `.gitignore`, preserving shared `.github/` configuration. The runtime creates that recovery directory and its records with private permissions when executing an approved operation. Other forge adapters' setup instructions select their corresponding platform directory with a `project-collaboration/` subtree. The runtime contract covers explicit alternative locations and preserving existing recovery evidence when changing locations.
+
 ## Optional global discovery
 Ask whether this selected capability should be available globally and which supported local clients (Codex, Claude Code, or both) should receive it. Preserve an already stated choice; do not re-ask for granted installation scope. Select only the requested capabilities with repeated `--skill`; omission is refused for this service. Read the [shared link procedure](../setup-agent-hands/references/global-skill-links.md), inspect existing destinations, and use this owner's entrypoint from the checkout root:
 ```sh

@@ -37,7 +37,7 @@ class CollaborationTests(unittest.TestCase):
         self.checkout.mkdir()
         subprocess.run(["git", "init", "-q", str(self.checkout)], check=True)
         subprocess.run(["git", "-C", str(self.checkout), "remote", "add", "origin", "https://github.com/example-owner/example-project.git"], check=True)
-        (self.checkout / ".gitignore").write_text(".agent-hands/\n")
+        (self.checkout / ".gitignore").write_text("/.github/project-collaboration/\n")
         self.bin = self.work / "bin"
         self.bin.mkdir()
         gh = self.bin / "gh"
@@ -78,7 +78,7 @@ class CollaborationTests(unittest.TestCase):
         result = self.call("create-issue", "--title", "Literal title", "--body", "Literal $() and `text`\nNext")
         self.assertIn("fingerprint", result["plan"])
         self.assertFalse(self.load().get("mutations"))
-        self.assertFalse((self.checkout / ".agent-hands").exists())
+        self.assertFalse((self.checkout / ".github/project-collaboration").exists())
 
     def test_issue_create_executes_and_independently_reads_back(self):
         text = "Literal $() and `text`\n\nTrailing newline\n"
@@ -301,7 +301,7 @@ class CollaborationTests(unittest.TestCase):
 
     def test_journal_has_digests_not_bodies_and_refuses_reuse(self):
         result = self.apply("comment-issue", "--issue", 1, "--body", "Unique private content")
-        files = list((self.checkout / ".agent-hands/github").rglob("*.json"))
+        files = list((self.checkout / ".github/project-collaboration").rglob("*.json"))
         self.assertEqual(len(files), 1)
         self.assertNotIn("Unique private content", files[0].read_text())
         self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
@@ -326,13 +326,31 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "success")
         self.assertTrue(list(location.rglob("*.json")))
 
+    def test_default_change_preserves_legacy_uncertainty(self):
+        legacy = self.checkout / ".agent-hands/github"
+        with (self.checkout / ".gitignore").open("a") as stream:
+            stream.write("/.agent-hands/github/\n")
+        self.state["fault"] = {"method": "POST", "path": "/issues/1/comments", "mode": "after"}
+        self.save()
+        result = self.apply("comment-issue", "--issue", 1, "--body", "Uncertain legacy send", "--state-dir", legacy, code=3)
+        self.load().pop("fault")
+        self.save()
+        blocked = self.apply("comment-issue", "--issue", 1, "--body", "Uncertain legacy send", code=2)
+        self.assertIn("Previous default journal", blocked["message"])
+        self.assertEqual(len(self.load()["mutations"]), 1)
+        self.assertFalse((self.checkout / ".github/project-collaboration").exists())
+        recovered = self.call("recover", "--operation-id", result["operation_id"], "--state-dir", legacy, domain="issues")
+        self.assertEqual(recovered["outcome"], "success")
+        self.assertEqual(recovered["writes_sent"], 0)
+        self.assertEqual(len(self.load()["mutations"]), 1)
+
     def test_wrong_project_and_symlink_journal_refuse(self):
         subprocess.run(["git", "-C", str(self.checkout), "remote", "set-url", "origin", "https://github.com/other-owner/other-project.git"], check=True)
         self.apply("comment-issue", "--issue", 1, "--body", "Wrong checkout", code=2)
         subprocess.run(["git", "-C", str(self.checkout), "remote", "set-url", "origin", "https://github.com/example-owner/example-project.git"], check=True)
         outside = self.work / "outside"
         outside.mkdir()
-        (self.checkout / ".agent-hands").symlink_to(outside, target_is_directory=True)
+        (self.checkout / ".github").symlink_to(outside, target_is_directory=True)
         self.apply("comment-issue", "--issue", 1, "--body", "Symlink", code=2)
         self.assertFalse(self.load().get("mutations"))
 
@@ -427,11 +445,11 @@ class CollaborationTests(unittest.TestCase):
         metadata = self.work / "separate-git"
         subprocess.run(["git", "init", "-q", "--separate-git-dir", str(metadata), str(checkout)], check=True)
         subprocess.run(["git", "-C", str(checkout), "remote", "add", "origin", "https://github.com/example-owner/example-project.git"], check=True)
-        (checkout / ".gitignore").write_text(".agent-hands/\n")
+        (checkout / ".gitignore").write_text("/.github/project-collaboration/\n")
         result = self.apply("comment-issue", "--issue", 1, "--body", "Nested checkout", "--project", checkout)
         self.assertEqual(result["outcome"], "success")
-        self.assertTrue(list((checkout / ".agent-hands/github").rglob("*.json")))
-        self.assertFalse((metadata / ".agent-hands").exists())
+        self.assertTrue(list((checkout / ".github/project-collaboration").rglob("*.json")))
+        self.assertFalse((metadata / ".github").exists())
 
     def git_commit(self, message):
         subprocess.run(["git", "-C", str(self.checkout), "add", "."], check=True)
@@ -618,7 +636,7 @@ class CollaborationTests(unittest.TestCase):
             result = runtime.execute(context, plan, [step])
         self.assertEqual(result["outcome"], "uncertain")
         self.assertEqual(context.client.writes_sent, 1)
-        record = next((self.checkout / ".agent-hands/github").rglob("*.json"))
+        record = next((self.checkout / ".github/project-collaboration").rglob("*.json"))
         self.assertEqual(json.loads(record.read_text())["steps"][0]["status"], "uncertain")
 
     def test_journal_failure_between_steps_reports_verified_partial(self):

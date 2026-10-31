@@ -288,7 +288,10 @@ def state_location(ctx):
                 primary = Path(first)
         if git(primary, "rev-parse", "--show-toplevel", required=False) != str(primary):
             raise Refusal("Cannot resolve a shared primary worktree; supply --state-dir")
-        location = primary / ".agent-hands" / "github"
+        legacy = primary / ".agent-hands" / "github"
+        if legacy.exists() or legacy.is_symlink():
+            raise Refusal("Previous default journal exists at .agent-hands/github; select it with --state-dir or coordinate migration of the complete journal before using the new default")
+        location = primary / ".github" / "project-collaboration"
     else:
         raise Refusal("No local checkout: supply an explicit private --state-dir")
     for candidate in (location, *location.parents):
@@ -556,7 +559,7 @@ def add_common(parser):
     parser.add_argument("--page-limit", type=int, default=20)
     parser.add_argument("--item-limit", type=int, default=2000)
     parser.add_argument("--project", help="Local operated checkout; defaults to cwd")
-    parser.add_argument("--state-dir", help="Explicit private project recovery directory")
+    parser.add_argument("--state-dir", help="Override the project's .github/project-collaboration recovery directory")
     parser.add_argument("--operation-id")
     parser.add_argument("--expect", help="Exact preview fingerprint")
     modes = parser.add_mutually_exclusive_group()
