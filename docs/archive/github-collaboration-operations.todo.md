@@ -1,9 +1,14 @@
 ---
-attention: live
+attention: historical
 reviewed: 2026-11-01
 ---
 
 # GitHub Collaboration Operations — Tasks
+Historical record. Closed: 2026-11-01. Slug: `github-collaboration-operations`. Provider implementation and selected API validation are complete. Current capabilities and limits are maintained in the [issues](../../use-github-issues/references/collaboration.md), [pull requests](../../use-github-pull-requests/references/collaboration.md) and [Projects](../../use-github-projects/references/collaboration.md) contracts; [Agent Hands instructions](../../AGENTS.md#project-workflow) own its issue-centered collaboration default. This dated record preserves validation and handoff evidence. Receiving setup and acceptance continue under the existing Project Workflows and Barkonomics owners.
+
+Continues in: docs/active-spikes/human-agent-contributions.md (jcklpe/project-workflows)
+Continues in: docs/active-spikes/github-workflow-integration.md (Barkonomics-DataWrangling/pet-names)
+
 Opened: 2026-10-30. Slug: `github-collaboration-operations`. [Concept and capability contract](github-collaboration-operations.md).
 
 ## Background
@@ -29,7 +34,7 @@ The selected live pilot uses Agent Hands itself. Approved creation, body replace
 The Projects extension and final pilot records are merged through [PR #4](https://github.com/jcklpe/agent-hands/pull/4) at `4b6e7ae5324345cdb39406ad7f58636efb5d8e86`. The selected API command sweep is complete: bounded user/organization discovery, create/copy/link, ordered Status options, selected field/view configuration, explicit card membership/moves, repeat no-ops and read-only recovery are verified within their documented limits. The reviewed body update, readiness and merge succeeded; independent Git/API verification preserved all eight contribution commits, required documents and the tested tree. The retained source branch is `codex/github-projects-collaboration` at `c23d5a2`; the same pilot PR card moved from Backlog to Done, with schema, repository links and native workflow flags preserved. Issue #1 remains open. The [Barkonomics handoff](github-collaboration-operations.md#barkonomics-provider-handoff--2026-11-01) identifies the released GitHub-only selection and existing receiving issue #3. Hosted lifecycle, fresh-client/collaborator/reviewer and notification QA belong to that existing integration; no second lifecycle engine or implicit consumer rollout is introduced.
 
 ## To Do
-No provider implementation or selected API-sweep item remains. Finish publication/review of the final documentation and obtain explicit provider issue/spike closure scope. Receiving integration checks continue under their owner and do not gate provider closeout. Consumer publication, installation, board/issue setup and rollout keep their own per-action previews and approval.
+No provider implementation or selected API-sweep item remains. The final documentation and handoff are prepared for this closure; publication/integration and GitHub issue closure follow their separately approved service steps. Receiving integration checks continue under their owner. Consumer publication, installation, board/issue setup and rollout keep their own per-action previews and approval.
 
 ## Receiving integration checks
 The following open items are retained as the handoff checklist, without claiming implementation or a passing consumer result. The receiving owner's existing records own execution; no duplicate provider installation or lifecycle engine is required.
@@ -38,6 +43,7 @@ The following open items are retained as the handoff checklist, without claiming
 - [ ] Receive the consuming integration's actual fresh-installation and collaborator results, including reviewer add/remove requests, approval/request-changes verdicts and notification delivery. The user selected that integration as the fresh-client/collaborator check and deferred the reviewer-request test there; do not run a duplicate provider installation pilot. Restricted-permission/protected-branch cases remain fixture-tested unless a real target is separately selected.
 
 ## Done
+- [x] Close the provider spike with its complete concept/task history and the released-source handoff preserved. Receiving setup/template reconciliation, installation, hosted lifecycle and collaborator checks remain explicitly open under their existing owners. GitHub publication, integration and issue closure retain their separate execution approvals.
 - [x] Reconcile the final provider handoff with the owner's Barkonomics board changes and separate provider closeout from receiving acceptance. A complete/stable native read verifies Project Management Kanban is public/open at the same identity, with preserved schema, native workflow flags, repository link and zero items. Owner-reported ordering/description/default-repository/direct-admin changes remain distinguished from provider readback. The handoff preserves that setup; no service mutation or consumer/sibling file edit was made. Provider implementation/API validation is complete, with final documentation publication and explicit closure still outstanding.
 - [x] Record the issue-centered collaboration default for Agent Hands and hand it to Project Workflows without duplicating PR cards. Agent Hands' repository guidance now uses issues as the board/discussion hub and linked PRs as discrete review/integration points; the existing concept names the companion setup/template changes. Provider PR-card operations and historical pilot evidence are preserved. No shared collection, consumer installation, source pin, existing membership or service setting changed.
 - [x] Execute approved G51 as read-only browser inspection and verify the unchanged board through an independent complete/stable API read. All five rendered lanes, six saved native conditions and configured admin access for both collaborators were inspected. Added/closed native rules can distinguish issues from PRs; linking a PR moves its issue to Active. No saved/toggled setting, new card or repository publication followed inspection. Native-setting edits remain unapproved; actual collaborator sign-in and hosted lifecycle behavior remain untested.

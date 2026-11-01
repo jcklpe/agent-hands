@@ -1,9 +1,14 @@
 ---
-attention: live
+attention: historical
 reviewed: 2026-11-01
 ---
 
 # GitHub Collaboration Operations
+Historical record. Closed: 2026-11-01. Slug: `github-collaboration-operations`. Provider implementation and selected API validation are complete. Current capabilities and limits are maintained in the [issues](../../use-github-issues/references/collaboration.md), [pull requests](../../use-github-pull-requests/references/collaboration.md) and [Projects](../../use-github-projects/references/collaboration.md) contracts; [Agent Hands instructions](../../AGENTS.md#project-workflow) own its issue-centered collaboration default. This dated record preserves validation and handoff evidence. Receiving setup and acceptance continue under the existing Project Workflows and Barkonomics owners.
+
+Continues in: docs/active-spikes/human-agent-contributions.md (jcklpe/project-workflows)
+Continues in: docs/active-spikes/github-workflow-integration.md (Barkonomics-DataWrangling/pet-names)
+
 Opened: 2026-10-30. Slug: `github-collaboration-operations`. [Task record](github-collaboration-operations.todo.md).
 
 ## Purpose and authorization
@@ -58,7 +63,7 @@ The table records the baseline before this implementation. Current supported com
 | PR reads | Open-PR metadata/body and gh-returned conversation comments only. | Exact base/head/repositories and commit IDs, code diff/file coverage, checks, reviews and review-thread coverage; explicit closed/merged target reads. |
 | PR writes | None; its operations file only loads the shared collector. | Create, bounded description/metadata updates, conversation comment, review submission and separately gated merge. |
 
-Related live spikes do not already own these gaps. [GitHub Project Move Reliability](github-project-move.md) repaired a bounded Projects v2 Status move; retain its fail-closed regression themes when extending that command under this authorized scope. [Setup and Use Contracts](setup-use-contracts.md) supplies reusable preview/execute, stale-state and uncertain-result lessons. [CLI Review Feedback](cli-review-feedback.md) records successful GitHub reads but proposes Drive/Docs improvements. Existing historical service docs do not supersede current native contracts. Preserve the unrelated uncommitted documentation migration and its pending privacy review.
+Related live spikes do not already own these gaps. [GitHub Project Move Reliability](../active-spikes/github-project-move.md) repaired a bounded Projects v2 Status move; retain its fail-closed regression themes when extending that command under this authorized scope. [Setup and Use Contracts](../active-spikes/setup-use-contracts.md) supplies reusable preview/execute, stale-state and uncertain-result lessons. [CLI Review Feedback](../active-spikes/cli-review-feedback.md) records successful GitHub reads but proposes Drive/Docs improvements. Existing historical service docs do not supersede current native contracts. Preserve the unrelated uncommitted documentation migration and its pending privacy review.
 
 ## Adapter mapping for Agent Hands handoff contract v1
 The companion plan's **Agent Hands handoff contract v1** at `docs/active-spikes/human-agent-contributions.md#agent-hands-handoff-contract-v1` is the shared semantic boundary. Its parts are selection/capabilities, read context, prepare a change, execute within scope, outcome/evidence, and integration/history. This provider-side mapping was reconciled with that contract on 2026-10-30. Both spikes must reconcile later shared semantic changes; GitHub command syntax and exact serialization stay here.
@@ -230,4 +235,4 @@ Approved read-only G51 on November 1 verified the Full Kanban rendering has all 
 
 Barkonomics follows the issue-centered default above. Before any next service write, revise the unexecuted native-setting proposal around issue cards and linked PRs; PR-only native status rules are not required merely to preserve duplicate PR cards. Consider issue-only view filters and entry selection, plus each selected rule's actual issue effects. Preserve existing options and fields, review the needed blocker/completion behavior, and keep runner enablement held. G48–G50 remain zero-write real-issue membership previews held for the receiving plan's fixture-first QA; issue #3's Active move needs a separate preview after its card exists. A setup PR references #3 without closing it until its sharing/readiness acceptance is met. Neither the earlier native-setting proposal nor this default authorizes service writes or consumer publication.
 
-The Agent Hands implementation and selected provider validation are complete. The receiving owner retains installation, project choices, real collaborator/notification results, hosted lifecycle behavior and rollout, including reconciliation of the issue-centered model with its shared setup/templates. These checks continue in the receiving records and do not require the provider spike to stay open. Any concrete provider defect found during adoption can be a separately scoped follow-up. Canonical details stay in these project records; private coordination holds only a pickup pointer. Final provider documentation publication, issue closure and explicit archival remain separately scoped; the receiving integration and issue #3 remain active.
+The Agent Hands implementation and selected provider validation are complete. The receiving owner retains installation, project choices, real collaborator/notification results, hosted lifecycle behavior and rollout, including reconciliation of the issue-centered model with its shared setup/templates. These checks continue in the receiving records and do not require the provider spike to stay open. Any concrete provider defect found during adoption can be a separately scoped follow-up. Canonical details stay in these project records; private coordination holds only a pickup pointer. This pair records provider closure; final documentation publication/integration and GitHub issue closure follow their separately approved service steps. The receiving integration and issue #3 remain active.
