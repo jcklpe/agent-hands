@@ -116,7 +116,7 @@ class Client:
             raise TransportError("Malformed GitHub JSON response", status=status, sent=sent) from exc
         if result.returncode or status >= 400:
             raise TransportError("GitHub request refused or failed (HTTP %s)" % status, status, sent)
-        if isinstance(data, dict) and data.get("errors"):
+        if isinstance(data, dict) and data.get("errors") not in (None, []):
             raise TransportError("GitHub GraphQL returned errors; partial data is not success", status=status, sent=sent)
         return data
 
@@ -177,6 +177,7 @@ class Step:
     payload: dict | None
     recovery: dict
     verify: Callable[[dict], dict]
+    result_ids: Callable[[dict], dict] | None = None
 
 
 class Context:
@@ -451,6 +452,11 @@ def execute(ctx, plan, steps, rebuild=None):
                 response = ctx.client.request(step.method, path, step.payload)
                 if isinstance(response, dict):
                     entry["returned"] = {k: response[k] for k in ("id", "number", "node_id", "sha", "html_url", "uuid", "status") if k in response}
+                    if step.result_ids:
+                        identifiers = step.result_ids(response)
+                        if not isinstance(identifiers, dict) or not set(identifiers) <= {"id", "number", "node_id"} or any(not isinstance(value, (str, int)) or isinstance(value, bool) for value in identifiers.values()):
+                            raise Refusal("Invalid mutation result identifiers", "uncertain")
+                        entry["returned"].update(identifiers)
                     if isinstance(response.get("details"), dict) and response["details"].get("uuid"):
                         entry["returned"]["uuid"] = response["details"]["uuid"]
                     journal.write(record)
