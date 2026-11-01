@@ -15,7 +15,7 @@ from urllib.parse import urlsplit,urljoin,quote
 
 from canvas_auth import CanvasError, id_string, parse_json, verify_identity
 
-COMMANDS=('create-page','edit-page','revert-page','create-assignment','edit-assignment','create-module','edit-module','add-module-item','edit-module-item','create-announcement','edit-announcement','upload-file','submit-assignment','comment-submission','reply-discussion')
+COMMANDS=('create-page','edit-page','revert-page','create-assignment','edit-assignment','create-module','edit-module','add-module-item','edit-module-item','create-announcement','edit-announcement','upload-file','submit-assignment','comment-submission','reply-discussion','create-test-discussion')
 PAGE_COMMANDS={'create-page','edit-page','revert-page'}
 VOLATILE={'read_state','unread_count','subscribed','last_reply_at','url','preview_url','canvadoc_session_url','thumbnail_url','avatar_url','avatar_image_url','edited_by','last_edited_by'}
 
@@ -35,14 +35,15 @@ def add_commands(commands, canvas_id):
         p.add_argument('--execute',action='store_true')
         p.add_argument('--expect')
         p.add_argument('--smoke-session', help='record and restrict this write to a private smoke session')
+        p.add_argument('--test-session', help='restrict this write to a signed Canvas test-cluster session')
         p.add_argument('--allow-duplicate',action='store_true')
         p.add_argument('--tz')
-        if name in PAGE_COMMANDS|{'create-assignment','edit-assignment','reply-discussion','create-announcement','edit-announcement'}:
+        if name in PAGE_COMMANDS|{'create-assignment','edit-assignment','reply-discussion','create-announcement','edit-announcement','create-test-discussion'}:
             if name!='revert-page': p.add_argument('--body-file',type=Path)
             p.add_argument('--accept-loss',action='store_true')
         if name in {'create-page','edit-page','create-assignment','edit-assignment'}:
             p.add_argument('--notify',action='store_true')
-        if name in {'create-page','edit-page','create-announcement','edit-announcement'}:
+        if name in {'create-page','edit-page','create-announcement','edit-announcement','create-test-discussion'}:
             p.add_argument('--title',required=name.startswith('create-'))
         if name in {'edit-page','revert-page'}: p.add_argument('--page',type=canvas_id,required=True)
         if name in PAGE_COMMANDS:
@@ -99,6 +100,7 @@ def add_commands(commands, canvas_id):
             p.add_argument('--comment-file',type=Path,required=name=='comment-submission')
         if name=='submit-assignment':
             p.add_argument('--body-file',type=Path)
+            p.add_argument('--test-attachment',type=canvas_id)
 
 
 def canonical(value):
@@ -260,9 +262,9 @@ class Builder:
             self.plan['target']={'page_id':a.page,'latest_revision_id':latest,'title':current.get('title')}
         if revert:
             revision=self.get(path+'/revisions/'+a.revision)
-            desired={'body':revision.get('body')}
-            if not isinstance(desired['body'],str): raise CanvasError('malformed','Revision body is missing')
-            self.change('body',current.get('body'),desired['body'])
+            desired={key:revision.get(key) for key in ('body','title','url')}
+            if any(not isinstance(value,str) for value in desired.values()): raise CanvasError('malformed','Revision body, title or URL is missing')
+            for key,value in desired.items(): self.change(key,current.get(key),value)
             self.plan['effects'].append('Restores the selected page revision; notification behavior for revision reverts is unverified')
             self.step('POST',path+'/revisions/'+a.revision,{},dict(desired,page_id=a.page),resource='revision_id',read_path=path,latest_revision=latest)
             return
@@ -437,7 +439,10 @@ class Builder:
             current=self.get(path)
             if id_string(current.get('id'))!=a.topic: raise CanvasError('malformed','Canvas returned the wrong announcement')
             posted=current.get('posted_at');delayed=current.get('delayed_post_at')
-            if (posted and dt.datetime.fromisoformat(posted)<=self.now) or (delayed and dt.datetime.fromisoformat(delayed)<=self.now): raise CanvasError('announcement_posted','Posted announcements cannot be edited by this tool')
+            if (posted and dt.datetime.fromisoformat(posted)<=self.now) or (delayed and dt.datetime.fromisoformat(delayed)<=self.now):
+                scheduled_test=hasattr(self,'test_session') and self.test_session.scheduled_announcement(a.topic,current,self.now)
+                if not scheduled_test: raise CanvasError('announcement_posted','Posted announcements cannot be edited by this tool')
+                self.plan['effects'].append('Signed test announcement remains future-scheduled; posted_at records its creation time')
         body=self.body(current.get('message'))
         if create and body is None: raise CanvasError('input_invalid','Announcement creation requires --body-file')
         fields={}
@@ -506,7 +511,7 @@ class Builder:
         if assignment.get('locked_for_user'): raise CanvasError('assignment_locked','Assignment is locked for this user')
         attempt=int(submission.get('attempt') or 0);allowed=assignment.get('allowed_attempts')
         if allowed is not None and allowed>=0 and attempt>=allowed: raise CanvasError('attempts_exhausted','No submission attempts remain')
-        if sum(bool(x) for x in (a.body_file,a.url,a.file))!=1: raise CanvasError('input_invalid','Choose exactly one submission: --body-file, --url, or --file')
+        if sum(bool(x) for x in (a.body_file,a.url,a.file,a.test_attachment))!=1: raise CanvasError('input_invalid','Choose exactly one submission input')
         kind='online_text_entry' if a.body_file else 'online_url' if a.url else 'online_upload'
         if kind not in (assignment.get('submission_types') or []): raise CanvasError('submission_type_refused','Assignment does not accept this submission type')
         fields={'submission[submission_type]':kind}
@@ -519,6 +524,14 @@ class Builder:
             if urlsplit(a.url).scheme not in {'http','https'} or not urlsplit(a.url).netloc: raise CanvasError('input_invalid','Submission URL must use HTTP(S)')
             fields['submission[url]']=a.url;expected['url']=a.url
             self.change('url',submission.get('url'),a.url)
+        elif a.test_attachment:
+            if not hasattr(self,'test_session'): raise CanvasError('input_invalid','Reusing an attachment requires a signed test session')
+            row=self.test_session.own('attachment',a.test_attachment)
+            if self.test_session.snapshot(row)!=row['snapshot']: raise CanvasError('readback_mismatch','Recorded test attachment changed')
+            metadata=self.test_session.record(row)
+            fields['submission[file_ids][]']=[row['id']]
+            expected['attachments']=[{'id':row['id'],'display_name':metadata['display_name'],'size':row['bytes']}]
+            self.plan['changes'].append({'field':'recorded_test_attachment','id':row['id'],'name':metadata['display_name'],'size':row['bytes'],'sha256':row['sha256']})
         else:
             files=[file_facts(p) for p in a.file]
             for index,facts in enumerate(files): self.upload_step(facts,path+'/submissions/self/files',out='attachment'+str(index))
@@ -569,6 +582,13 @@ class Builder:
         elif command in {'create-module','edit-module'}: self.modules()
         elif command in {'add-module-item','edit-module-item'}: self.module_items()
         elif command in {'create-announcement','edit-announcement'}: self.announcements()
+        elif command=='create-test-discussion':
+            self.permission('create_discussion_topic')
+            body=self.body() or ''
+            self.unique(self.listing(self.base+'/discussion_topics'),'title',self.args.title)
+            fields={'title':self.args.title,'message':body,'is_announcement':False,'published':True,'discussion_type':'threaded'}
+            for key,value in fields.items(): self.change(key,None,value)
+            self.step('POST',self.base+'/discussion_topics',fields,{'title':self.args.title,'message':body,'published':True,'is_announcement':False},out='discussion',read_path=self.base+'/discussion_topics/$discussion.id')
         elif command=='upload-file': self.uploads()
         elif command in {'submit-assignment','comment-submission'}: self.submission()
         else: self.discussion()
@@ -698,6 +718,7 @@ class Executor:
             raise CanvasError('upload_failed','Upload service refused the file',status=response.status)
         location=response.header('location')
         if not location: raise CanvasError('upload_uncertain','Upload service supplied no confirmation location')
+        if self.smoke and hasattr(self.smoke,'upload_location'): self.smoke.upload_location(urljoin(self.client.origin+'/',location))
         location=self.client.check_api_url(urljoin(self.client.origin+'/',location))
         # Confirmation is a GET that finalizes the upload, so it is journaled as a write and sent without retry.
         metadata,third=self.request('GET',location,custom=lambda:parse_json(self.client.transport.send('GET',location,{'Accept':'application/json+canvas-string-ids'},token=self.client._token)))
@@ -756,8 +777,17 @@ class Executor:
 def run_write(reader,args,history,now=None,upload_sender=None,downloader=None):
     if args.execute and (not args.expect or not re.fullmatch(r'[0-9a-f]{64}',args.expect)):
         raise CanvasError('preview_required','Execution requires the reviewed preview hash in --expect; no writes sent')
-    builder=Builder(reader,args,now).build()
     smoke=None
+    if getattr(args,'test_session',None):
+        if getattr(args,'smoke_session',None): raise CanvasError('input_invalid','Choose one session type')
+        from canvas_sandbox import Session,LEARNER_COMMANDS
+        smoke=Session(reader,history,args.test_session,downloader)
+        if args.command in LEARNER_COMMANDS: reader=smoke.learner_reader()
+    elif args.command=='create-test-discussion': raise CanvasError('input_invalid','Discussion fixtures require a signed test-cluster session')
+    builder=Builder(reader,args,now)
+    if smoke: builder.test_session=smoke
+    builder.build()
+    if smoke: smoke.attach(builder)
     if getattr(args,'smoke_session',None):
         from canvas_smoke import Session
         smoke=Session(reader,history,args.smoke_session,downloader)

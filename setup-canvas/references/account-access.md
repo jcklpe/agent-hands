@@ -47,7 +47,7 @@ uv run --project setup-canvas python setup-canvas/scripts/canvas_auth.py whoami 
 | `network_error` | No complete response arrived | Check connectivity. A write may still have landed; inspect before retrying. |
 | `tz_data_missing`, `python_unsupported` | The runtime is incomplete | Install time-zone data, or use Python 3.11 or later. |
 
-The exact responses Canvas sends for hidden navigation areas and disabled features are not yet confirmed live, so `denied` versus `token_rejected` for a bare `401` follows the rule above until the live smoke test checks it.
+Hidden navigation and disabled-feature responses vary by institution and role. A bare `401` remains `denied` unless authentication evidence identifies a rejected token; a denial is not proof that content is absent. Selected-instance live results do not establish every hidden-resource response.
 
 ## Errors and authority
 Report missing permissions, inaccessible resources and rejected tokens as they are; do not expand access, borrow another credential or fall back to browser cookies. The initial credential is established in the user's Canvas profile settings. The runtime has no OAuth command, generic token-management endpoint, in-place regeneration or deletion command. Explicitly authorized [successor-token renewal](token-renewal.md) creates only a replacement for the configured user's credential, preserving its access scopes. See Canvas's [API authentication documentation](https://developerdocs.instructure.com/services/canvas/oauth2/file.oauth), [pagination](https://canvas.instructure.com/doc/api/file.pagination.html) and [throttling](https://canvas.instructure.com/doc/api/file.throttling.html).

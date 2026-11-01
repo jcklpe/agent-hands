@@ -54,10 +54,13 @@ The names below group related reads, writes, and comments where implemented. A `
 | GitHub | [use-github-projects](use-github-projects/SKILL.md) | Inspect Projects v2, provision selected fields/views and repository links, and add or move issue/PR cards with reviewed previews, readback and recovery. |
 | Slack | [use-slack-messages](use-slack-messages/SKILL.md) | Read/search conversations, resolve people/channels, and send messages, replies, or DMs as the user. |
 | Slack | [use-slack-lists](use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
-| Canvas | [use-canvas](use-canvas/SKILL.md) | Read/export selected courses with coverage, download files/images, query private history, and preview/execute fifteen bounded course-content and learner write commands. Selected-course reads/exports, opt-in credential renewal, page/assignment/module/item changes and a verified dummy upload/cleanup passed live checks; announcements, revision reverts and learner writes remain unverified live. |
+| Canvas | [use-canvas](use-canvas/SKILL.md) | Read/export selected courses with coverage, download files/images, query private history, and preview/execute fifteen bounded course-content and learner write commands. Reads/exports, opt-in credential renewal and ordinary page/assignment/module/file cycles passed live checks. Announcement/revert/learner tests and separately approved Test Student reset cleanup passed in an isolated test course, restoring the original active baseline; historical attachment storage is not proven purged. |
 | Trello | [use-trello](use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
 | Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
 | Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a connected file through Penpot's MCP tools and export images for visual checks. MCP writes act immediately. Also export design-token JSON from a local archive using a project-owned manifest, with preview and guarded execution; this offline command needs no credentials. |
+
+### Local snapshot processing
+[use-canvas-snapshots](use-canvas-snapshots/SKILL.md) compares native Canvas exports, retains unresolved findings and refreshes one explicitly selected local snapshot with staged replacement. It uses Python’s standard library and includes a packaged installer for optional Codex/Claude discovery; service access and export dependencies remain with use-canvas. Interpretation and work ownership remain with the consuming project.
 
 ### Local rendering
 | Skill | Purpose | Dependencies |
@@ -76,7 +79,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 | Microsoft | [setup-microsoft-services](setup-microsoft-services/SKILL.md) |
 | GitHub | [setup-github](setup-github/SKILL.md) |
 | Slack | [setup-slack](setup-slack/SKILL.md) |
-| Canvas | [setup-canvas](setup-canvas/SKILL.md) |
+| Canvas | [setup-canvas](setup-canvas/SKILL.md), including the packaged setup/use skill installer |
 | Trello | [setup-trello](setup-trello/SKILL.md) |
 | Odoo | [setup-odoo](setup-odoo/SKILL.md) |
 | Penpot | [setup-penpot](setup-penpot/SKILL.md) |

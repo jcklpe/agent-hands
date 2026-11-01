@@ -43,6 +43,7 @@ class WriteFixture(CanvasFixture):
             for item in items: item.update(module_id=mid,indent=0)
         self.writes=[];self.uploads=[];self.sequence=10000
         self.revisions={('courses','123','789'):[{'revision_id':'11','body':'<p>Old revision.</p>'},{'revision_id':'12','body':self.data['pages'][0]['body']}]}
+        for revision in self.revisions[('courses','123','789')]: revision.update(title=self.data['pages'][0]['title'],url=self.data['pages'][0]['url'])
         self.submission=copy.deepcopy(self.data['assignments'][0]['submission'])
         self.submission.update(body='<p>Previous submission.</p>',submission_comments=[])
         self.entries=[{'id':'700','user_id':'2002','message':'<p>Existing entry.</p>'}]
@@ -91,7 +92,7 @@ class WriteFixture(CanvasFixture):
             page=next((p for p in pages if p.get('url')==pid),None) if not pieces[1].startswith('page_id:') else None
             page=page or next(p for p in pages if p['page_id']==pid)
             if len(pieces)>2:
-                revisions=self.revisions.setdefault((context,cid,pid),[{'revision_id':'12','body':page['body']}])
+                revisions=self.revisions.setdefault((context,cid,pid),[{'revision_id':'12',**{k:page.get(k,'') for k in ('body','title','url')}}])
                 return revisions[-1] if pieces[-1]=='latest' else next(r for r in revisions if r['revision_id']==pieces[-1])
             return page
         if tail.startswith('modules/'):
@@ -134,11 +135,11 @@ class WriteFixture(CanvasFixture):
             else: page=next(p for p in pages if p['page_id']==pieces[1].removeprefix('page_id:'))
             revisions=self.revisions.setdefault((context,cid,page['page_id']),[])
             if 'revisions' in pieces:
-                old=next(r for r in revisions if r['revision_id']==pieces[-1]);page['body']=old['body']
+                old=next(r for r in revisions if r['revision_id']==pieces[-1]);page.update({k:old[k] for k in ('body','title','url')})
             else:
                 page.update({k:v for k,v in fields['wiki_page'].items() if k!='notify_of_update'})
                 if self.sanitize and 'body' in page: page['body']=page['body'].replace('<script>x</script>','')
-            revision={'revision_id':self.new_id(),'body':page.get('body','')};revisions.append(revision)
+            revision={'revision_id':self.new_id(),**{k:page.get(k,'') for k in ('body','title','url')}};revisions.append(revision)
             page['updated_at']='2026-10-30T12:01:00Z'
             return revision if 'revisions' in pieces else page
         if tail=='assignments' or tail.startswith('assignments/'):
