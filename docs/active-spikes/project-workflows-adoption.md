@@ -3,6 +3,9 @@ attention: live
 ---
 
 # Project Workflows Adoption
+
+Current source: the collection uses an exact detached shared-main pin with project-owned settings in [docs/workflow.toml](../workflow.toml). [AGENTS.md](../../AGENTS.md) owns current routing. The setup and reconciliation details below describe their dated checkpoints; they do not direct agents to select the retired adaptation branch.
+
 Opened: 2026-10-25. Slug: `project-workflows-adoption`.
 
 Agent Hands now adopts the complete Project Workflows collection as its root-level `project-workflows/` Git submodule. Its project branch is `project/agent-hands`, created from the shared `main` branch. The branch lives inside Project Workflows so project-specific configuration and later procedural adaptations retain a shared ancestor for reconciliation with upstream. The containing configs project's separate workflow adoption is not the baseline for Agent Hands.
