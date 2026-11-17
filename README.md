@@ -126,6 +126,8 @@ Commit workflow changes in the child first, then record its exact pin with relat
 
 Project Workflows supports contribution and documentation; service-only skill bundles still require only their declared capability/provider dependencies. Documentation destinations are configured for active spikes, scratch, archives, policies, and pinned issues; create content only where needed rather than adding empty folder scaffolding.
 
+Agent-only standing obligations are in the [policy index](docs/agent-policies/policy.index.md): three adopted kernel policies and eight adopted operational service policies. The [policy pilot](docs/archive/agent-policy-pilot.md) records the scope/identity review and local adoption. Retired numeric records under `docs/archive/agent-policy-retirements/` preserve original source text without becoming current instructions. Setup/use skills own procedures and real tool guards; policy types and kernel filename prefixes add no permission or precedence.
+
 ## MCP setup
 For an implemented MCP route, use its service guide: [setup-penpot](setup-penpot/SKILL.md) and [use-penpot](use-penpot/SKILL.md) own the connector and design workflow; [setup-pencil](setup-pencil/SKILL.md) documents the editor-managed server; [setup-jasp](setup-jasp/SKILL.md) documents the local application bridge. The latter two record their verification evidence and remaining gaps; they do not claim tested design or analysis workflows.
 
