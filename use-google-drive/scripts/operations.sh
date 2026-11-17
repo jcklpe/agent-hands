@@ -93,10 +93,29 @@ _drive_fetch_meta() {
         --data-urlencode "fields=id,name,mimeType,modifiedTime,webViewLink,owners(displayName,emailAddress),parents,driveId,size"
 }
 
+_drive_render_page() {
+    local result_file="$1" json="$2"
+    jq -e 'type == "object" and (.error == null) and (.files | type == "array") and (.nextPageToken == null or (.nextPageToken | type == "string")) and (.incompleteSearch == null or (.incompleteSearch | type == "boolean"))' "$result_file" >/dev/null || {
+        _google_error 'Drive listing returned an invalid/error response; the page is not verified. Review the request before restarting pagination.'
+        return 1
+    }
+    if [ "$json" -eq 1 ]; then
+        cat "$result_file"
+    else
+        _drive_files_human < "$result_file" || return 1
+        if jq -e '(.nextPageToken // "") | length > 0' "$result_file" >/dev/null; then
+            _drive_warn 'More results exist; this is one bounded page. --json includes nextPageToken; pass it with --page-token using the same account, query/folder and page-size setting.'
+        fi
+        if jq -e '.incompleteSearch == true' "$result_file" >/dev/null; then
+            _drive_warn 'Drive reported an incomplete search; this page does not establish complete results, even without a nextPageToken.'
+        fi
+    fi
+}
+
 _drive_search() (
     set -o pipefail
     _drive_work_begin || return 1
-    local alias="${1:-}" query="${2:-}" json=0 page_size escaped q
+    local alias="${1:-}" query="${2:-}" json=0 page_size escaped q page_token=""
     local result_file
     [ -n "$alias" ] || { _google_error "drive search requires ALIAS"; return 1; }
     [ -n "$query" ] || { _google_error "drive search requires QUERY"; return 1; }
@@ -104,6 +123,10 @@ _drive_search() (
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --json) json=1; shift ;;
+            --page-token)
+                [ -z "$page_token" ] || { _google_error '--page-token may be supplied only once'; return 1; }
+                [ -n "${2:-}" ] || { _google_error '--page-token requires a nonempty TOKEN'; return 1; }
+                page_token="$2"; shift 2 ;;
             *) _google_error "Unknown drive search option: $1"; return 1 ;;
         esac
     done
@@ -111,25 +134,21 @@ _drive_search() (
     escaped="$(_drive_query_escape "$query")"
     q="trashed = false and (name contains '${escaped}' or fullText contains '${escaped}')"
     result_file="$(mktemp "$DRIVE_WORK/google-drive-search.XXXXXX")" || return 1
+    set --
+    if [ -n "$page_token" ]; then set -- --data-urlencode "pageToken=$page_token"; fi
     _google_get_url "$alias" "https://www.googleapis.com/drive/v3/files" \
         --data-urlencode "q=${q}" \
         --data-urlencode "pageSize=${page_size}" \
         --data-urlencode "supportsAllDrives=true" \
         --data-urlencode "includeItemsFromAllDrives=true" \
-        --data-urlencode "fields=files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName,emailAddress),parents,driveId),nextPageToken" > "$result_file" || return 1
-
-    if [ "$json" -eq 1 ]; then
-        cat "$result_file"
-    else
-        _drive_files_human < "$result_file" || return 1
-        if jq -e '.nextPageToken != null' "$result_file" >/dev/null; then _drive_warn "More results exist; this is one bounded page. --json includes the continuation token."; fi
-    fi
+        --data-urlencode "fields=files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName,emailAddress),parents,driveId),nextPageToken,incompleteSearch" "$@" > "$result_file" || return 1
+    _drive_render_page "$result_file" "$json"
 )
 
 _drive_list() (
     set -o pipefail
     _drive_work_begin || return 1
-    local alias="${1:-}" folder_id="${2:-}" json=0 q
+    local alias="${1:-}" folder_id="${2:-}" json=0 q page_token=""
     local result_file
     [ -n "$alias" ] || { _google_error "drive list requires ALIAS"; return 1; }
     [ -n "$folder_id" ] || { _google_error "drive list requires FOLDER_ID"; return 1; }
@@ -137,24 +156,24 @@ _drive_list() (
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --json) json=1; shift ;;
+            --page-token)
+                [ -z "$page_token" ] || { _google_error '--page-token may be supplied only once'; return 1; }
+                [ -n "${2:-}" ] || { _google_error '--page-token requires a nonempty TOKEN'; return 1; }
+                page_token="$2"; shift 2 ;;
             *) _google_error "Unknown drive list option: $1"; return 1 ;;
         esac
     done
     q="'$(_drive_query_escape "$folder_id")' in parents and trashed = false"
     result_file="$(mktemp "$DRIVE_WORK/google-drive-list.XXXXXX")" || return 1
+    set --
+    if [ -n "$page_token" ]; then set -- --data-urlencode "pageToken=$page_token"; fi
     _google_get_url "$alias" "https://www.googleapis.com/drive/v3/files" \
         --data-urlencode "q=${q}" \
         --data-urlencode "pageSize=$(_drive_page_size "$alias")" \
         --data-urlencode "supportsAllDrives=true" \
         --data-urlencode "includeItemsFromAllDrives=true" \
-        --data-urlencode "fields=files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName,emailAddress),parents,driveId),nextPageToken" > "$result_file" || return 1
-
-    if [ "$json" -eq 1 ]; then
-        cat "$result_file"
-    else
-        _drive_files_human < "$result_file" || return 1
-        if jq -e '.nextPageToken != null' "$result_file" >/dev/null; then _drive_warn "More results exist; this is one bounded page. --json includes the continuation token."; fi
-    fi
+        --data-urlencode "fields=files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName,emailAddress),parents,driveId),nextPageToken,incompleteSearch" "$@" > "$result_file" || return 1
+    _drive_render_page "$result_file" "$json"
 )
 
 _drive_meta() (
