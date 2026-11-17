@@ -13,7 +13,8 @@ index = "TODO.md"
 active_spikes = "docs/active-spikes"
 scratch = "docs/scratch"
 archive = "docs/archive"
-policies = "docs/policies"
+policies = "docs/agent-policies" # Compatibility locator; current agent rules use this directory.
+agent_policies = "docs/agent-policies" # Agent-only opt-in index: policy.index.md; availability is not adoption.
 
 # Adoption fills these with public-safe source metadata. The parent gitlink, not these fields, records the adopted commit.
 [adoption]

@@ -24,7 +24,7 @@ The unused workflow env scaffold has been removed upstream. No workflow env file
 
 The existing [CLI feedback concept](cli-review-feedback.md) and [task record](cli-review-feedback.todo.md) stay at their original paths. The concept and its proposals are preserved; the task record receives only a current workflow-routing clarification. This adoption does not start any of its proposed CLI implementation work.
 
-Active pairs live in `docs/active-spikes/`. The configured `docs/scratch/`, `docs/archive/`, and `docs/policies/` destinations are created when there is content for them. Empty placeholders and redundant folder READMEs add no useful record. No client installation or automatic discovery is implied by having nested skills; this setup provides explicit repository routing.
+Active pairs live in `docs/active-spikes/`. The configured `docs/scratch/`, `docs/archive/`, and `docs/agent-policies/` destinations are created when there is content for them. Empty placeholders and redundant folder READMEs add no useful record. No client installation or automatic discovery is implied by having nested skills; this setup provides explicit repository routing.
 
 ## Future reconciliation
 Use the adopted [update-project-workflows](../../project-workflows/update-project-workflows/SKILL.md) to verify exact shared-source upgrades while preserving project-owned configuration and copied assets. Propose reusable procedure improvements upstream; project-only settings stay in Agent Hands.
