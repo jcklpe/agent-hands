@@ -1,6 +1,6 @@
 ---
 name: use-outlook-mail
-description: "Read, search, and export Outlook mail; save attachments or preview supported folder, category, and Inbox-rule changes. Use for bounded Microsoft mail operations with account opt-in and verification."
+description: "Read, search and export Outlook mail; create manual-send reply drafts, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
 ---
 
 # Use Outlook Mail
@@ -30,7 +30,23 @@ Moves, archive/unarchive, Junk rescue, categories, and folder creation preview b
 
 `archive` requires messages currently in Inbox; `unarchive` requires Archive; `not-junk` requires Junk Email and moves to Inbox. Moves return new message IDs and verify destination by readback. Category changes preserve the retrieved category list and verify the result, but do not use ETags, so concurrent edits can race. Folder creation uses the API response and has no independent readback. Operations are not atomic across messages or batches. An incomplete batch response after a mutation means its outcome needs inspection, not a retry. The PowerShell provider disables SDK retries for non-GET requests, including batches.
 
-There is no send, forward, reply, direct message deletion, or permanent-deletion command. Rule behavior below is a distinct supported capability.
+There is no send, sent reply/forward, direct message deletion or permanent-deletion command. Manual-send reply drafts and Inbox rules have their own boundaries below.
+
+## Manual-send reply drafts
+Use [reply-draft preparation and recovery](references/reply-drafts.md) for the complete input/signature contract and acceptance limits.
+```sh
+bash scripts/mail reply-draft example --message MESSAGE_ID --body-file /private/reply.txt --to sender@example.com --signature-file /private/signature.json
+bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute --allow-draft
+bash scripts/mail draft-status example --plan OPERATION_ID
+bash scripts/mail draft-verify example --plan OPERATION_ID
+```
+Preview resolves the exact source and sending account, verifies explicit To/CC against Reply-To and the chosen reply/reply-all intent, and stores the new text/signature/source snapshot privately. Creation requires existing `mail.write_enabled`, the exact preview hash, `--execute` and separate action-time `--allow-draft`. It calls native `createReply` or explicitly selected `createReplyAll`; it never simulates a reply by creating a new message with a `Re:` subject. A mailbox-draft request permits only that unsent draft, never sending.
+
+The generated quotation is retained while new paragraphs and the supplied account-specific signature are prefixed. Existing draft changes or missing ETags stop population and preserve the created draft for inspection. Independent readback checks unsent state, identity, sender, explicit recipients, conversation, subject, visible paragraph boundaries, signature and quote content/resource references. It does not certify every HTML style, visual rendering or recipient-side threading. A signature inside quoted history does not satisfy the new-reply signature requirement. Native signature settings are not read or changed.
+
+A durable dispatch record prevents duplicate creation, including after failed acknowledgment or readback. Returned draft identity is saved before later work. `uncertain_after_dispatch` can leave a blank or partly populated reply draft; inspect status, the saved draft and Outlook Drafts before doing anything else. Never automatically recreate, overwrite user changes, delete or send it. There is no general existing-draft editing command, new-message draft, forwarding or new attachment surface.
+
+Twelve stateful draft tests and four shared provider-boundary tests pass. An authorized macOS test with existing Graph PowerShell access created one native reply, verified its unsent state and preserved source, and confirmed that server-side stale-ETag rejection retained a newer draft edit. The temporary test edit was conditionally restored and independently verified. Stored paragraphs, Unicode, supplied synthetic signature and native quotation passed readback; the user confirmed the draft looked correct in Outlook. This establishes the tested plain-text reply case, not exact style fidelity, live reply-all behavior, recipient-side threading or broader tenant/platform acceptance. Nothing was sent.
 
 ## Inbox rules
 `rules`, `create-rule`, and `delete-rule` operate on Inbox rules. Reads need mail enabled; executed rule changes separately require `mail.rules_enabled` and `--execute`, requesting MailboxSettings.ReadWrite. Rule creation supports sender addresses/fragments, subject fragments, recipient fragments, a category, an allowed destination folder, and stop-processing. Different condition types must all match; alternatives within a type are OR conditions. New rules affect future incoming mail, not existing messages.
@@ -42,4 +58,4 @@ Creation verifies returned conditions, actions, exceptions, enabled state, seque
 ## Private audit and validation
 Audit defaults to ignored `mail-writes.jsonl` beside this skill. `M365_MAIL_AUDIT_LOG` in the provider env selects another private location; relative paths resolve here. Records include message IDs, senders, subjects, and rule criteria. Audit is best-effort after execution; a failed append does not undo a write. Never commit these records or treat them as a transaction log covering every failure.
 
-Retained synthetic checks cover reads, moves, categories, rule gates/readback, export preservation, attachment safety, and failed deletion verification. Provider-only isolation and native command behavior are checked without real mail or consent. Live account behavior and fresh cross-platform installation remain unverified.
+Retained synthetic checks cover reads, moves, categories, rule gates/readback, export preservation, attachment safety, failed deletion verification and provider-only isolation. Live reply-draft acceptance is bounded to the case above; it does not validate every mail command or fresh cross-platform installation.
