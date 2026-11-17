@@ -12,13 +12,21 @@ files download ALIAS ITEM_ID --out PATH [--drive DRIVE_ID] [--force]
 files upload ALIAS LOCAL_FILE --parent FOLDER_ID [--drive DRIVE_ID] [--name NAME] [--execute]
 files replace ALIAS ITEM_ID --file LOCAL_FILE [--drive DRIVE_ID] [--execute]
 files create-folder ALIAS --parent FOLDER_ID --name NAME [--drive DRIVE_ID] [--execute]
-Writes preview by default and read current remote metadata. No delete or sharing changes.
+files children|permissions|versions ALIAS ITEM_ID --drive DRIVE_ID [--cursor TOKEN] [--limit 1..200]
+files ownership ALIAS ITEM_ID --drive DRIVE_ID
+files move ALIAS ITEM_ID --drive DRIVE_ID --parent FOLDER_ID [--name NAME]
+files rename ALIAS ITEM_ID --drive DRIVE_ID --name NAME
+files recycle ALIAS ITEM_ID --drive DRIVE_ID --reason REASON
+files organization-apply ALIAS --plan ID --hash SHA256 --execute [--allow-recycle]
+files organization-status|organization-verify ALIAS --plan ID
+Organization writes require a stored preview, exact hash and execute. Recycle additionally requires isolated itemized deletion consent and --allow-recycle. No purge, cross-drive move or sharing mutation.
 HELP
         exit 0 ;;
 esac
 _m365_load_env
 command="$1"; shift
 case "$command" in
+    children|permissions|versions|ownership|move|rename|recycle|organization-apply|organization-status|organization-verify) _m365_python "$MICROSOFT_FILES_DIR" "$SCRIPTS/organization.py" "$command" "$@" ;;
     search|meta|download|upload|replace) "_m365_files_$command" "$@" ;;
     resolve-link) _m365_files_resolve_link "$@" ;;
     create-folder) _m365_files_create_folder "$@" ;;
