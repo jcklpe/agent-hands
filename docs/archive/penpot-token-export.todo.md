@@ -1,7 +1,9 @@
 ---
-attention: live
+attention: historical
+closed: 2026-11-17
 ---
 # Penpot token export tasks
+Historical record — closed 2026-11-17. Stable slug: `penpot-token-export`. The complete development record is retained below; use [maintained guidance](../../use-penpot/references/token-export.md) for current behavior and limits. Closure and the exact archival wording were approved.
 ## To Do
 ## Done
 - Publish the reviewed implementation after unrelated outgoing history and the required workflow pin are resolved, then verify remote retrieval. The prerequisites were published separately and verified before the normal implementation push. A fresh anonymous recursive clone retrieved the implementation and exact workflow pin; all eighteen fixture tests passed from that clone. GitHub reported no commit checks.
@@ -12,3 +14,6 @@ attention: live
 
 ## Verification notes
 The real archive first revealed numeric object-key ordering differences in two palettes. The exporter now uses the observed browser ordering for unsigned array-index keys, with a regression fixture; existing artifacts were never rewritten. Review also added collision-safe temporary-file cleanup and Unicode-normalized destination checks. MCP access and hosted-file freshness were not tested.
+
+## Closure preparation — 2026-11-17
+The bounded offline exporter is ready for closure. All 18 exporter tests passed again; its implementation is already present in public main and matches the local source. The recorded fresh-clone and byte-preservation checks remain dated evidence, not new access to a consumer archive. No required implementation or selected acceptance item remains. Hosted retrieval/freshness and other-platform execution were outside this scope and are not claimed complete. Current guidance is [token export](../../use-penpot/references/token-export.md). The closure review (local preparation record) records the evidence and pending closure decision; this pair stays live until closure is authorized.
