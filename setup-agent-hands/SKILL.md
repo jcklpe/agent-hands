@@ -32,6 +32,8 @@ For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-
 
 For Outlook Mail/Calendar/Contacts, Microsoft Files, Excel Workbooks, or Planner, use [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and select only the requested capability plus setup-microsoft-services provider support. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
 
+For supported in-place cloud Word text editing, default to [use-word-documents](../use-word-documents/SKILL.md), Microsoft Files and Microsoft setup. Its automatic per-document setup, Node/Chrome dependencies and separate browser authentication belong to [Word browser setup](../setup-microsoft-services/references/word-browser.md). Ordinary Chrome profiles must remain untouched. Consult the Word capability’s recorded acceptance limits; one tested tenant and platform do not establish general deployment or recovery support.
+
 For local Markdown export, use [render-markdown-pdf](../render-markdown-pdf/SKILL.md). It has no authorization dependency; select only its own uv environment, Pandoc, native Pango, and fonts. The bundled plain theme is a general baseline, not an academic-style commitment.
 
 ## Missing runtime approach

@@ -6,6 +6,8 @@ description: "Search, inspect, download, upload, replace, or create folders in O
 # Use Microsoft Files
 Requires [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and `files.enabled` for the account. [Setup](../setup-microsoft-services/SKILL.md) explains delegated authorization. This capability has its own small Python 3.11+ uv environment for output publication and auditing; Bash 3.2, jq, and the selected provider runtime are required. No mail, calendar, workbook, or private workspace dependency is needed.
 
+For supported in-place text edits to an existing cloud Word DOCX, use [Word Documents](../use-word-documents/SKILL.md) by default. It prepares the add-in headlessly for an authorized editing target and saves through Word coauthoring. This capability still owns file discovery/downloads and explicitly requested whole-file transfers; do not use replacement as an automatic fallback for Word editing failures or active locks.
+
 ## Read and resolve
 ```sh
 bash scripts/files search example "report" --json

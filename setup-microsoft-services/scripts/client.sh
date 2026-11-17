@@ -322,18 +322,25 @@ _m365_graph_base() {
 }
 
 _m365_http_msal() (
+    # Keep credentials out of inherited shell traces, child arguments/environment and temporary files. This subshell leaves the caller's tracing state unchanged.
+    set +ax
     set -o pipefail
     _m365_work_begin || return 1
-    local method="$1" alias="$2" url="$3" body="$4" token response http_code message
+    unset m365_msal_token
+    local method="$1" alias="$2" url="$3" body="$4" m365_msal_token response http_code message
+    export -n m365_msal_token
     shift 4
-    token="$(_m365_access_token "$alias")" || return 1
+    m365_msal_token="$(_m365_access_token "$alias")" || return 1
+    case "$m365_msal_token" in
+        ''|*[!A-Za-z0-9._~+/=-]*) _m365_error 'Microsoft authentication returned an invalid bearer token'; return 1 ;;
+    esac
     response="$(mktemp "$M365_WORK/m365-response.XXXXXX")" || return 1
     if [ "${1:-}" = "--output-file" ]; then
         # Raw file download: the bytes go straight to disk, following Graph's redirect to the pre-authenticated download URL.
         local output="$2"
         shift 2
-        http_code="$(curl -sS -L -o "$output" -w '%{http_code}' -X "$method" "$url" \
-            -H "Authorization: Bearer ${token}" "$@")" || { _m365_error "Microsoft Graph request failed before receiving a response"; rm -f "$output"; return 1; }
+        http_code="$(builtin printf 'Authorization: Bearer %s\n' "$m365_msal_token" | curl -q -sS -L -o "$output" -w '%{http_code}' -X "$method" "$url" \
+            -H @- "$@")" || { _m365_error "Microsoft Graph request failed before receiving a response"; rm -f "$output"; return 1; }
         case "$http_code" in
             2??) rm -f "$response"; return 0 ;;
             *) mv "$output" "$response" ;;
@@ -342,18 +349,18 @@ _m365_http_msal() (
         # Raw file upload: curl --upload-file sends the bytes; remaining args are headers.
         local upload="$2"
         shift 2
-        http_code="$(curl -sS -o "$response" -w '%{http_code}' -X "$method" "$url" \
-            -H "Authorization: Bearer ${token}" \
+        http_code="$(builtin printf 'Authorization: Bearer %s\n' "$m365_msal_token" | curl -q -sS -o "$response" -w '%{http_code}' -X "$method" "$url" \
+            -H @- \
             -H "Content-Type: application/octet-stream" \
             --upload-file "$upload" "$@")" || { _m365_error "Microsoft Graph request failed before receiving a response"; return 1; }
     elif [ -n "$body" ]; then
-        http_code="$(curl -sS -o "$response" -w '%{http_code}' -X "$method" "$url" \
-            -H "Authorization: Bearer ${token}" \
+        http_code="$(builtin printf 'Authorization: Bearer %s\n' "$m365_msal_token" | curl -q -sS -o "$response" -w '%{http_code}' -X "$method" "$url" \
+            -H @- \
             -H "Content-Type: application/json; charset=utf-8" \
             --data-binary "$body" "$@")" || { _m365_error "Microsoft Graph request failed before receiving a response"; return 1; }
     else
-        http_code="$(curl -sS -o "$response" -w '%{http_code}' -X "$method" --get "$url" \
-            -H "Authorization: Bearer ${token}" \
+        http_code="$(builtin printf 'Authorization: Bearer %s\n' "$m365_msal_token" | curl -q -sS -o "$response" -w '%{http_code}' -X "$method" --get "$url" \
+            -H @- \
             -H "Accept: application/json" "$@")" || { _m365_error "Microsoft Graph request failed before receiving a response"; return 1; }
     fi
     case "$http_code" in

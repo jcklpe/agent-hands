@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Provider-owned, bounded configuration check. No authentication material is returned.
+set -eu
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/client.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/drive-items.sh"
+[[ $# == 2 && "$1" == check-write ]] || { printf '%s\n' 'word-access check-write ALIAS' >&2; exit 2; }
+_m365_load_env
+_m365_accounts_ready
+_m365_require_enabled "$2" files
+_m365_files_require_write "$2"
+printf '%s\n' '{"filesWriteEnabled":true}'
