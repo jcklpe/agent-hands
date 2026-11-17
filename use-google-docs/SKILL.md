@@ -10,7 +10,7 @@ Requires only [setup-google-services](../setup-google-services/SKILL.md) as a si
 Run from this skill folder or use the absolute entrypoint path. Help does not need credentials; `bash scripts/docs COMMAND --help` shows complete options.
 ```sh
 bash scripts/docs read example DOC_URL_OR_ID [--tab-id ID]... [--show-links]
-bash scripts/docs replace-once example DOC_URL_OR_ID --old-file OLD --new-file NEW [--markdown] [--link "TEXT=URL"]... [--tab-id ID]... [--execute]
+bash scripts/docs replace-once example DOC_URL_OR_ID --old-file OLD --new-file NEW [--suggest | --markdown] [--link "TEXT=URL"]... [--tab-id ID]... [--execute]
 bash scripts/docs set-body example DOC_URL_OR_ID --file MARKDOWN [--tab-id ID] [--execute]
 bash scripts/docs comments example DOC_URL_OR_ID
 bash scripts/docs comment example DOC_URL_OR_ID --body-file COMMENT [--quote TEXT] [--tab-id ID]... [--execute]
@@ -28,7 +28,12 @@ All three write commands preview by default and require `--execute`. Preview per
 
 `set-body` replaces one whole tab, including an empty body. It can destroy native chips and formatting that Markdown cannot express. Review that scope explicitly. It refuses a revision change between its preview read and execution read, then uses the live revision for the guarded request. It is not a general fidelity-preserving document converter.
 
+## Native suggestions
+`replace-once --suggest` submits a pending tracked replacement using [Google Docs Suggest mode](https://developers.google.com/workspace/docs/api/how-tos/suggestions). It supports changed, nonempty, single-paragraph plain text only; no `--markdown`, `--link`, paragraph breaks, native chips, or overlap with existing suggestions. It never accepts suggestions or falls back to direct editing. Reads explicitly use `SUGGESTIONS_INLINE`; flattened read output can show both inserted and deleted text and omit native chips, so inspect native structure before treating apparent gaps or concatenations as errors.
+
+The command preserves preview/execute, unique-match and required-revision checks. It requires returned suggestion IDs and confirmed thread persistence, then independently checks that rejecting only the new suggestions restores the original text and accepting them produces the exact replacement across the document's tabs. Concurrent edits can make readback inconclusive. A partial or uncertain result may already have saved changes: inspect the reported IDs and document before retrying; never automatically resend.
+
 ## Comments and verification
 Comments use the Drive API but do not require a separate Drive skill. Comment listing needs a suitable Drive read grant; adding comments on existing files outside this app's per-file grants uses the explicit `--docs-comment` authorization option. See the provider skill before changing grants. A quoted comment must match once and is checked again before posting; it has no atomic Docs revision guard. The quote is included with the comment, not a highlighted native text anchor; see [Google's comment constraints](https://developers.google.com/workspace/drive/api/guides/manage-comments).
 
-The tool confirms writes using API responses: plain replacement checks the occurrence count, Markdown/body edits require a successful update response, and commenting requires a returned comment ID. These are not independent readback checks. Re-read the affected document or comments when verifying a consequential write; if the result is uncertain, inspect before retrying to avoid duplicate comments. Do not claim a local fixture proves live access.
+The tool confirms writes using API responses: plain replacement checks the occurrence count, Markdown/body edits require a successful update response, and commenting requires a returned comment ID. These direct-write confirmations are not independent readback checks; `--suggest` additionally performs the projection checks above. Re-read the affected document or comments when verifying a consequential write; if the result is uncertain, inspect before retrying to avoid duplicate comments. Do not claim a local fixture proves live access.

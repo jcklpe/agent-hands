@@ -2,6 +2,7 @@
 """Read/edit existing Google Docs and list/add comments using provider-supplied authorization."""
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -34,7 +35,7 @@ def api_json(method, url, access_token, body=None):
 
 
 def get_document(document_id, access_token):
-    url = f"{DOCS_API}/{urllib.parse.quote(document_id)}?includeTabsContent=true"
+    url = f"{DOCS_API}/{urllib.parse.quote(document_id)}?includeTabsContent=true&suggestionsViewMode=SUGGESTIONS_INLINE"
     return api_json("GET", url, access_token)
 
 
@@ -276,12 +277,81 @@ def print_replacement_plan(document, document_id, tab_ids, old_text, new_text, l
     print("--- end plan ---")
 
 
+def suggestion_projection(document, suggestion_ids, accept):
+    """Project only our new text suggestions; retain other collaborators' inline text."""
+    projected = copy.deepcopy(document)
+
+    def visit(node):
+        if isinstance(node, dict):
+            run = node.get("textRun")
+            if run:
+                field = "suggestedDeletionIds" if accept else "suggestedInsertionIds"
+                if suggestion_ids.intersection(run.get(field, [])):
+                    run["content"] = ""
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+    visit(projected)
+    return {tab["id"]: tab["text"] for tab in document_tabs(projected)}
+
+
+def check_suggestion_range(document, old_range, old_text):
+    if old_range["end_index"] - old_range["start_index"] != utf16_length(old_text):
+        raise ValueError("Suggestion target crosses a native element or structural gap; select contiguous plain text")
+    _, target = get_target_tab(document, [old_range["tab_id"]] if old_range["tab_id"] else [])
+
+    def visit(node):
+        if isinstance(node, dict):
+            start, end = node.get("startIndex"), node.get("endIndex")
+            if start is not None and end is not None and start < old_range["end_index"] and end > old_range["start_index"]:
+                owners = [node, node.get("textRun", {}), node.get("paragraph", {})]
+                if any(value for owner in owners for key, value in owner.items() if key.startswith("suggested")):
+                    raise ValueError("Target overlaps an existing suggestion; review it before proposing another replacement")
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+    visit(target)
+
+
+def execute_suggestion(document_id, token, document, old_range, old_text, new_text):
+    request = {"replaceText": new_text, "containsText": {"text": old_text, "matchCase": True, "searchByRegex": False}}
+    if old_range["tab_id"]:
+        request["tabsCriteria"] = {"tabIds": [old_range["tab_id"]]}
+    payload = {"requests": [{"replaceAllText": request}], "writeControl": {"requiredRevisionId": document["revisionId"], "writeMode": "SUGGEST"}}
+    try:
+        result = api_json("POST", f"{DOCS_API}/{urllib.parse.quote(document_id)}:batchUpdate", token, payload)
+    except Exception as exc:
+        raise RuntimeError(f"Suggestion request failed or outcome is uncertain; inspect the document before retrying. No direct-edit fallback was attempted. {exc}") from exc
+    ids = {sid for response in result.get("suggestionResponses", []) for sid in response.get("createdSuggestionIds", [])}
+    print("Suggestion IDs: " + (", ".join(sorted(ids)) or "<not returned>"))
+    if result.get("commentUpdateState") != "ALL_SAVED" or not ids:
+        raise RuntimeError("PARTIAL: suggestion/model changes may have been saved, but thread persistence was not confirmed; inspect the document and do not resend automatically")
+    try:
+        saved = get_document(document_id, token)
+        before = {tab["id"]: tab["text"] for tab in document_tabs(document)}
+        expected = dict(before)
+        expected[old_range["tab_id"]] = expected[old_range["tab_id"]].replace(old_text, new_text, 1)
+        if suggestion_projection(saved, ids, False) != before or suggestion_projection(saved, ids, True) != expected:
+            raise ValueError("pending insertion/deletion text or surrounding text differs from the approved replacement")
+    except Exception as exc:
+        raise RuntimeError(f"PARTIAL: suggestion submitted but readback failed; inspect the reported IDs, do not resend. {exc}") from exc
+    print("Verified pending suggestion: original text preserved; accepting these IDs produces the exact replacement. No suggestion was accepted.")
+    return 0
+
+
 def command_replace_once(args):
     document_id = document_id_from(args)
     old_text = text_argument(args.old, args.old_file, "Old")
     new_text = text_argument(args.new, args.new_file, "New")
     if not old_text:
         raise ValueError("Old text must not be empty")
+    suggest = getattr(args, "suggest", False)
+    if suggest and (args.markdown or args.link or not new_text or old_text == new_text or any(c in old_text + new_text for c in "\r\n")):
+        raise ValueError("--suggest supports a changed, nonempty single-paragraph plain-text replacement only; omit --markdown/--link and paragraph breaks")
     token = access_token()
     document = get_document(document_id, token)
     matches = count_matches(document, args.tab_id, old_text)
@@ -293,10 +363,14 @@ def command_replace_once(args):
         raise ValueError("--markdown takes links as [text](url) in the Markdown; do not combine it with --link")
     links = [] if args.markdown else parse_link_specs(args.link, new_text)
     old_range = exact_text_range(document, args.tab_id, old_text)
+    if suggest:
+        check_suggestion_range(document, old_range, old_text)
     blocks = parse_markdown_blocks(new_text) if args.markdown else None
     if args.markdown and not blocks:
         raise ValueError("New Markdown is empty")
     print_replacement_plan(document, document_id, args.tab_id, old_text, new_text, links)
+    if suggest:
+        print("Mode: SUGGEST — pending tracked replacement, never a direct edit")
     if args.markdown:
         print(f"Formatting: Markdown ({len(blocks)} block(s): headings, bullets, nested bullets, bold, italic, links); the rest of the Doc is untouched.")
     if not args.execute:
@@ -313,6 +387,11 @@ def command_replace_once(args):
     live_old_range = exact_text_range(live_document, args.tab_id, old_text)
     if live_old_range != old_range:
         raise ValueError("Document changed before execution; exact text moved to a different range")
+    if suggest:
+        if revision_id != document.get("revisionId"):
+            raise ValueError("Document changed after the suggestion preview; review a fresh preview")
+        check_suggestion_range(live_document, live_old_range, old_text)
+        return execute_suggestion(document_id, token, live_document, live_old_range, old_text, new_text)
     if args.markdown:
         requests, _ = build_markdown_replace_requests(live_old_range["tab_id"], live_old_range, blocks)
         payload = {"requests": requests, "writeControl": {"requiredRevisionId": revision_id}}
@@ -734,6 +813,7 @@ def build_parser():
         help="Treat the replacement as Markdown (headings, bullets, nested bullets, bold, italic, links) and format it in place",
     )
     replace_parser.add_argument("--execute", action="store_true")
+    replace_parser.add_argument("--suggest", action="store_true", help="Propose a pending tracked single-paragraph plain-text replacement; verify suggestion IDs and preserved original")
     replace_parser.set_defaults(func=command_replace_once)
 
     setbody_parser = subparsers.add_parser("set-body", help="Replace the document body in place with formatted content from markdown; dry-run by default")
