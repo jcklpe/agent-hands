@@ -70,6 +70,12 @@ class SkillLinksTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, plan)
         self.assertEqual({x["skill"] for x in plan["links"]}, {"setup-google-services", "use-google-calendar", "render-calendar-agenda"})
 
+    def test_powerpoint_adds_only_its_shared_office_dependencies(self):
+        result, plan = self.invoke("setup-microsoft-services", "--skill", "use-powerpoint-presentations")
+        self.assertEqual(result.returncode, 0, result.stderr or plan)
+        self.assertEqual({x["skill"] for x in plan["links"]}, {"setup-microsoft-services", "use-powerpoint-presentations", "use-word-documents", "use-microsoft-files"})
+        self.assertFalse(self.dest.exists())
+
     def test_every_owner_selection_has_real_sources(self):
         choices = {"setup-google-services": "use-google-docs", "setup-microsoft-services": "use-planner", "setup-github": "use-github-issues", "setup-slack": "use-slack-lists"}
         entrypoints = list(self.repo.glob("*/scripts/link-skills.py"))

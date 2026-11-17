@@ -4,7 +4,7 @@ description: "Help a new user install selected external-service capabilities fro
 ---
 
 # Setup Agent Hands
-Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Canvas reads/exports and bounded writes, Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
+Start with the collection's [available capability list](../README.md). Match the user's requested service to an implemented skill, not a planned name. Currently Canvas reads/exports and bounded writes, Odoo, Penpot, Slack, Trello, GitHub, Google Docs/Contacts/Sheets/Drive/Gmail/Calendar, Microsoft Mail/Calendar/Contacts/Files/Excel/Word/PowerPoint/Planner, and Markdown-to-PDF rendering are extracted; do not route another service to an empty placeholder or install the entire collection's future dependencies.
 
 ## Setup dialogue
 Begin by asking what the user wants to do. Resolve the selected service and capabilities, then ask which supported local agent clients they use and whether they want those skills linked for global discovery. Offer direct checkout use without links as an equal choice. Reuse choices already supplied; ask only what is missing, in short steps rather than a form with placeholders. Keep global skill discovery, runtime installation, account authorization and MCP registration as separate choices.
@@ -33,6 +33,8 @@ For Google Docs, Contacts, Sheets, Drive, Gmail, or Calendar, use [setup-google-
 For Outlook Mail/Calendar/Contacts, Microsoft Files, Excel Workbooks, or Planner, use [setup-microsoft-services](../setup-microsoft-services/SKILL.md) and select only the requested capability plus setup-microsoft-services provider support. MSAL dependencies belong only to that provider environment, and PowerShell remains an optional alternative.
 
 For supported in-place cloud Word text editing, default to [use-word-documents](../use-word-documents/SKILL.md), Microsoft Files and Microsoft setup. Its automatic per-document setup, Node/Chrome dependencies and separate browser authentication belong to [Word browser setup](../setup-microsoft-services/references/word-browser.md). Ordinary Chrome profiles must remain untouched. Consult the Word capability’s recorded acceptance limits; one tested tenant and platform do not establish general deployment or recovery support.
+
+For supported cloud PowerPoint text editing on macOS, use [use-powerpoint-presentations](../use-powerpoint-presentations/SKILL.md), Microsoft Files and Microsoft setup. PowerPoint also requires Word’s shared runtime modules; [PowerPoint browser setup](../setup-microsoft-services/references/powerpoint-browser.md) owns its distinct add-in and automatic per-presentation preparation. Reuse an existing owned Office profile without importing ordinary Chrome state.
 
 For local Markdown export, use [render-markdown-pdf](../render-markdown-pdf/SKILL.md). It has no authorization dependency; select only its own uv environment, Pandoc, native Pango, and fonts. The bundled plain theme is a general baseline, not an academic-style commitment.
 
