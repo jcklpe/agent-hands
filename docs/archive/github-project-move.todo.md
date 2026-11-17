@@ -1,8 +1,10 @@
 ---
-attention: live
+attention: historical
+closed: 2026-11-17
 ---
 
 # GitHub Project Move Reliability — Tasks
+Historical record — closed 2026-11-17. Stable slug: `github-project-move`. The complete development record is retained below; use [maintained guidance](https://github.com/jcklpe/agent-hands/blob/aaf5f3f1d6c9c5c67095806d3b1e07fc9da85461/use-github-projects/references/collaboration.md) for current behavior and limits. Closure and the exact archival wording were approved.
 Opened: 2026-10-27. Slug: `github-project-move`. [Concept](github-project-move.md).
 
 ## To Do
@@ -18,3 +20,6 @@ Windows fresh-install validation and live account/write verification are not per
 
 ## Recovery and privacy
 Use ordinary Git recovery for the scoped local changes; do not rewrite or publish history as part of this task. All fixtures contain synthetic repositories and IDs. This repair does not read or write private credential/config files; no credential store is needed for these checks.
+
+## Closure preparation — 2026-11-17
+The published Projects collaboration runtime supersedes this original repair and retains its malformed-response, target-identity and explicit-null protections. All 13 move-card regressions passed against the public implementation during this review. Its stronger actor/fingerprint/journal/readback contract is maintained in the [published Projects guide](https://github.com/jcklpe/agent-hands/blob/aaf5f3f1d6c9c5c67095806d3b1e07fc9da85461/use-github-projects/references/collaboration.md); the selected API validation and provider closure are recorded in the [published collaboration archive](https://github.com/jcklpe/agent-hands/blob/aaf5f3f1d6c9c5c67095806d3b1e07fc9da85461/docs/archive/github-collaboration-operations.todo.md). The source checkout predates those changes, so its older implementation and publication-hold language must not overwrite the newer public runtime. This repair is ready for closure as superseded, without repeating the recovered live move. Windows/fresh-client validation remains unproved. See the closure review (local preparation record); no local archival has occurred.
