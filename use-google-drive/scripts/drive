@@ -6,8 +6,8 @@ source "$SCRIPT_DIR/operations.sh"
 case "${1:---help}" in
     --help|-h|help) cat <<'EOF'
 drive accounts
-drive search ALIAS QUERY [--json]
-drive list ALIAS FOLDER_ID [--json]
+drive search ALIAS QUERY [--page-token TOKEN] [--json]
+drive list ALIAS FOLDER_ID [--page-token TOKEN] [--json]
 drive meta ALIAS FILE_URL_OR_ID [--json]
 drive read ALIAS FILE_URL_OR_ID [--range A1_RANGE]
 drive download ALIAS FILE_URL_OR_ID [--out PATH] [--mime MIME] [--force]
@@ -15,6 +15,8 @@ drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days
 drive import-doc ALIAS SOURCE_FILE --title TITLE [--folder FOLDER_ID] [--execute]
 drive rename ALIAS FILE_URL_OR_ID --name NEW_NAME [--expect PREVIEW_SHA256 --execute]
 Import and rename preview by default and require account write opt-in; rename executes only with its preview fingerprint. Exports/downloads write local files only.
+Search/list fetch one page per call. For continuation, reuse the same account, query/folder and page-size setting with the returned nextPageToken. Failed or expired tokens do not restart automatically.
+Results can change or overlap between pages; deduplicate by file ID when combining them. Full-text search retains Drive's relevance ordering.
 EOF
     exit 0 ;;
 esac
