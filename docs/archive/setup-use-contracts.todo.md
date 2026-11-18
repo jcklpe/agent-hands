@@ -1,17 +1,21 @@
 ---
-attention: live
+attention: historical
 ---
 # Setup and use contracts — Tasks
+
+Historical record. Closed 2026-11-18. Slug: `setup-use-contracts`. Closure and the full archival wording were approved. The implemented setup/use separation and selected macOS acceptance are complete. Fresh-machine bootstrap, optional real-server relay, public artwork rendering and OS process inspection remain unverified; Windows/Linux testing is deferred. Maintained behavior belongs to the provider setup/use skills, including [setup-agent-hands](../../setup-agent-hands/SKILL.md), [use-trello](../../use-trello/SKILL.md) and [use-penpot](../../use-penpot/SKILL.md).
+
+The retained entries below record development and earlier review states; pending-approval language there is historical.
 Opened: 2026-10-26. Slug: `setup-use-contracts`. [Concept](setup-use-contracts.md).
 
 ## Current state
-The approved implementation and available local verification are complete. The workstream remains active for the explicit verification limits below; no archival or publication is implied. Credentials, account access and live service records were not changed.
+The approved implementation and selected macOS acceptance are complete. Ordinary Codex/Claude Code discovery and local precedence are user-confirmed; representative provider reads and current focused offline checks supply the recorded operational evidence. The workstream is ready for archival review with the explicit limits below. Credentials, account access and live service records were not changed by this reconciliation.
 
 ## To Do
-No implementation items remain in this approved follow-up. Real OS process inspection remains unverified and prohibited in this session.
+No implementation items remain in this approved follow-up. Review the complete archival wording and retained limits before closure. Real OS process inspection remains unverified and prohibited in this session.
 
 ## Ready for Human QA
-Fresh Codex/Claude session discovery, fresh-machine setup and live account operations remain unverified. No live write is requested as a test. The compact README artwork is unchanged; height-only sizing preserves intrinsic proportions in the local render, while actual public GitHub rendering remains unverified under the publication hold.
+No repeated discovery test is needed for the user-confirmed ordinary macOS Codex/Claude Code use. Fresh-machine setup and broader platform bootstrap remain unverified; Windows/Linux testing is parked until relevant. Representative provider access is recorded in Done, without implying fresh authorization for every account or capability. The compact README artwork is unchanged; public GitHub rendering remains unverified. The proposed closure retains these limits and does not request a live write as a setup test.
 
 ## Done
 - [x] Cut over the retained private configuration into each setup folder and remove the adjacent authorize fallback. Approved 2026-10-27. All 18 files kept inode, mode, owner, size and mtime; all six providers resolve to their setup folders and pass offline checks, and 66 synthetic setup/use test programs pass. One authorized read per provider succeeded: GitHub auth status and alias list, a Google calendar list for one of five accounts, Microsoft profile, Odoo project list, Slack identity and Trello boards. Credential contents were not read.
@@ -29,6 +33,7 @@ Fresh Codex/Claude session discovery, fresh-machine setup and live account opera
 - [x] Promote the captured Trello preview topic into this approved setup/use workstream and add a paired plan plus index entry.
 
 ## Verification evidence
+- Acceptance reconciliation, 2026-11-18: 19 current provider-root/link tests, ten Trello mutation tests, five deterministic Penpot launch tests and the Penpot literal-configuration program pass on macOS. Existing user confirmation resolves ordinary Codex/Claude Code discovery and precedence, as recorded in [Selective Global Skill Installation](../active-spikes/selective-skill-installation.todo.md). Existing representative provider-read evidence remains valid for its recorded targets; no credentials, client links or runtime files changed. Actual OS process inspection was not retried. Fresh-machine bootstrap, optional real-server relay and public artwork rendering remain unverified and explicit in the proposed closure.
 - Follow-up on 2026-10-27: the supported connector program and setup configuration program both pass. The connector program includes five passing deterministic launch/harness tests and both successful JSON/SSE stand-in relay modes. Two categories are explicitly skipped/unverified: real OS process inspection and the optional real-server relay. The OS assertion remains separately runnable with explicit opt-in where permitted; synthetic harness success is not OS-level verification. No denied process scan, live account operation or credential change occurred.
 - Original full-suite checkpoint (2026-10-26): 68 of 69 programs passed. `use-penpot/tests/test-penpot-mcp.sh` stopped with exit 126 because the sandbox denied `/bin/ps` at line 30. The restriction was not bypassed or retried. Penpot connector implementation was not changed by this workstream; its guidance was clarified.
 - After final Trello corrections, all ten CLI fixture tests and the existing scheduling, checklist and failure tests passed. Coverage includes all 15 mutations, both supersede forms, complete multi-item plans, zero default mutation requests, explicit execution/readback, stale fingerprints, preflight races, incomplete label listings, closed/wrong targets, invalid dates, reserved literal markers, empty DELETE responses and uncertain/partial failures.
