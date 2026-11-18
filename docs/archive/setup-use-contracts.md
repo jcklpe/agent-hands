@@ -1,7 +1,11 @@
 ---
-attention: live
+attention: historical
 ---
 # Setup and use contracts
+
+Historical record. Closed 2026-11-18. Slug: `setup-use-contracts`. Closure and the full archival wording were approved. The implemented setup/use separation and selected macOS acceptance are complete. Fresh-machine bootstrap, optional real-server relay, public artwork rendering and OS process inspection remain unverified; Windows/Linux testing is deferred. Maintained behavior belongs to the provider setup/use skills, including [setup-agent-hands](../../setup-agent-hands/SKILL.md), [use-trello](../../use-trello/SKILL.md) and [use-penpot](../../use-penpot/SKILL.md).
+
+The retained entries below record development and earlier review states; pending-approval language there is historical.
 Opened: 2026-10-26. Slug: `setup-use-contracts`.
 
 ## Goal and adopted scope
@@ -30,12 +34,15 @@ Use synthetic request fixtures to test preview and executed paths, not live writ
 Scoped commits provide source recovery. Private material stays in place; it must not depend on Git rollback. Keep records active until implementation and remaining verification limits are accounted for; closure is a separate workflow decision.
 
 ## Implemented design
-The six setup skills now own provider scripts, tests and account-access references. Their source roots are separate from private data roots: explicit configuration overrides retain precedence; an existing adjacent authorize directory is selected only when its real env/account marker exists; fresh installations use the setup owner. This preserves existing credential locations without retaining executable compatibility skills. Setup handles establishment and repair; normal use loads the same provider runtime, including automatic refresh where supported.
+The six setup skills own provider scripts, tests and account-access references. Private configuration defaults to its setup owner, with explicit configuration overrides retaining precedence; there is no adjacent authorize-directory fallback or executable compatibility skill. Setup handles establishment and repair; normal use loads the same provider runtime, including automatic refresh where supported.
 
 Trello’s existing bounded parsers build an ordered immutable request plan through a capture transport. Preview uses reads only. Execution rebuilds that plan, optionally compares its fingerprint with `--expect`, revalidates all read dependencies, sends each request once, and independently reads it back. Compound resources reference earlier creation steps. The public command requires `--execute`; direct builder writes are disabled. Empty successful DELETE responses are verified through readback, while uncertain writes stop with prior verified-step evidence. The [use skill](../../use-trello/SKILL.md) owns the maintained contract and concurrency limits.
 
 Penpot remains an explicitly documented exception because arbitrary `execute_code` cannot honestly offer a generic dry run. Credential access, action authority, target selection and result verification are distinct. No Penpot connector or credential setting was changed.
 
-The [paired task record](setup-use-contracts.todo.md) records verification, recovery and remaining platform/live-access limits. Implementation is complete locally; the restricted process-inspection check and unperformed fresh-client/live tests are not represented as successes. On 2026-10-27, a test-only follow-up isolated OS process inspection, added deterministic launch coverage, and allowed JSON/SSE loopback relay checks to complete. Production behavior is unchanged; the real OS scan remains unverified. The spike remains active and nothing was pushed.
+The [paired task record](setup-use-contracts.todo.md) records verification, recovery and remaining platform/live-access limits. The bounded implementation and selected macOS acceptance are complete: ordinary client discovery/precedence is user-confirmed, representative provider access is recorded, and focused configuration, installation, Trello and Penpot launch checks pass. Fresh-machine bootstrap and real OS process inspection remain unverified; Windows/Linux testing is parked until relevant. The implementation is ready for archival review with those limits stated. No runtime, credential or installation change was required during the November 18 reconciliation.
 
 On 2026-10-27 the user chose a clean cutover. The 18 retained private files moved into their setup folders with path metadata preserved, and the loaders no longer select an adjacent authorize directory; explicit overrides keep their precedence. The emptied authorize folders were moved to Trash.
+
+## Acceptance reconciliation — 2026-11-18
+The existing installation acceptance covers ordinary macOS Codex/Claude Code discovery and local-over-global selection. The earlier representative provider reads establish actual access for their recorded accounts; they are not a fresh authorization claim for every service. Nineteen current provider-root/link tests, ten Trello mutation tests, five deterministic Penpot launch tests and the Penpot configuration program pass. Actual OS process inspection remains prohibited and was not retried. Fresh-machine bootstrap, optional real-server relay and public artwork rendering are retained limitations, with no broader platform success inferred. Closure remains subject to review of the complete archival wording.

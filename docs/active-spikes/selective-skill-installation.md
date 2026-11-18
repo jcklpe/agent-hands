@@ -5,7 +5,7 @@ attention: live
 Opened: 2026-10-26. Slug: `selective-skill-installation`.
 
 ## Scope
-Optional global discovery belongs to the selected capability's setup owner. The setup-agent-hands dialogue asks what the user needs, which supported local clients they use, and whether they want global links at all. A service setup selects its own setup/use skills; a shared primitive implements filesystem behavior without copying an installer into every service. This extends the completed [setup/use contract](setup-use-contracts.md), not provider access or account configuration.
+Optional global discovery belongs to the selected capability's setup owner. The setup-agent-hands dialogue asks what the user needs, which supported local clients they use, and whether they want global links at all. A service setup selects its own setup/use skills; a shared primitive implements filesystem behavior without copying an installer into every service. This extends the completed [setup/use contract](../archive/setup-use-contracts.md), not provider access or account configuration.
 
 ## Design
 Service-owned entrypoints declare their capability choices and required skill dependencies. Multi-capability providers require an explicit selection; single-capability services select their setup/use pair. Standalone renderers and the setup dialogue can link only themselves. The shared Python standard-library primitive previews destinations by default and applies only with `--execute`. Python 3.9+ is an optional link-installer prerequisite, not a new runtime requirement for Bash-only service commands.
