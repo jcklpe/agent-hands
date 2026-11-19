@@ -10,7 +10,7 @@ from unittest.mock import patch
 from canvas_write_fixture import WriteFixture,NOW
 from canvas_auth import CanvasError
 from canvas_history import History
-from canvas_write import Builder,run_write,date_input
+from canvas_write import Builder,run_write,date_input,stable
 import canvas
 
 
@@ -122,6 +122,51 @@ class WritesTest(unittest.TestCase):
                 with self.assertRaises(CanvasError) as error:self.run_command(args)
                 self.assertEqual(error.exception.kind,'preview_stale')
         self.assertEqual(self.fixture.writes,[])
+
+    def unsubmitted_fixture(self):
+        self.fixture=WriteFixture()
+        self.fixture.submission.update(assignment_id='456',user_id=self.fixture.reader().client.account.user_id,workflow_state='unsubmitted',submitted_at=None,attempt=0,seconds_late=100,late_policy_status=None,seconds_late_override=None)
+        self.fixture.data['assignments'][0]['submission']=dict(self.fixture.submission)
+        self.fixture.data['assignments'][0]['submission_types']=['online_upload','online_text_entry']
+
+    def test_ticking_unsubmitted_lateness_preserves_preview(self):
+        self.unsubmitted_fixture()
+        args,plan=self.preview('submit-assignment','--assignment','456','--file',str(self.file))
+        self.fixture.submission['seconds_late']=104
+        self.fixture.data['assignments'][0]['submission']['seconds_late']=103
+        args.execute=True;args.expect=plan['preview_hash']
+        result,code=self.run_command(args)
+        self.assertEqual(code,0,result)
+        self.assertEqual(self.fixture.submission['attempt'],1)
+        self.assertTrue(self.fixture.uploads)
+
+    def test_lateness_normalization_preserves_material_submission_guards(self):
+        for target,field,value in (
+                ('submission','attempt',1),('submission','body','Changed elsewhere'),
+                ('submission','workflow_state','submitted'),('submission','submitted_at','2026-10-30T11:59:00Z'),
+                ('submission','late',True),('submission','late_policy_status','late'),
+                ('submission','seconds_late_override',50),
+                ('assignment','due_at','2026-10-31T12:00:00Z'),
+                ('assignment','allowed_attempts',2),('assignment','description','Changed requirements'),
+                ('permissions','manage_files_add',False)):
+            with self.subTest(target=target,field=field):
+                self.unsubmitted_fixture()
+                args,plan=self.preview('submit-assignment','--assignment','456','--file',str(self.file))
+                row=self.fixture.submission if target=='submission' else self.fixture.permissions if target=='permissions' else self.fixture.data['assignments'][0]
+                row[field]=value
+                self.fixture.submission['seconds_late']=105
+                args.execute=True;args.expect=plan['preview_hash']
+                with self.assertRaises(CanvasError) as error:self.run_command(args)
+                self.assertEqual(error.exception.kind,'preview_stale')
+                self.assertEqual(self.fixture.writes,[])
+                self.assertEqual(self.fixture.uploads,[])
+
+    def test_lateness_is_retained_for_submitted_overridden_and_unknown_shapes(self):
+        row={'assignment_id':'456','user_id':'1','workflow_state':'unsubmitted','submitted_at':None,'attempt':None,'seconds_late':100,'late_policy_status':None}
+        self.assertNotIn('seconds_late',stable(row))
+        for changes in ({'workflow_state':'submitted'},{'submitted_at':'2026-10-30T11:59:00Z'},{'attempt':1},{'late_policy_status':'late'},{'seconds_late_override':10},{'seconds_late':'100'},{'seconds_late':-1},{'user_id':None}):
+            with self.subTest(changes=changes):self.assertIn('seconds_late',stable({**row,**changes}))
+        self.assertIn('seconds_late',stable({'seconds_late':100}))
 
     def test_new_duplicate_after_preview_blocks_create(self):
         args,plan=self.preview('create-page','--title','New')
