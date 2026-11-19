@@ -1,4 +1,4 @@
-"""Native Outlook reply drafts for manual sending; no send or generic update command."""
+"""Native Outlook reply drafts and guarded saved-draft body edits; never sends."""
 import argparse
 import html
 from html.parser import HTMLParser
@@ -14,6 +14,9 @@ from bounded_client import Client, Store, digest, identifier
 
 SELECT = "id,subject,body,from,sender,replyTo,toRecipients,ccRecipients,bccRecipients,conversationId,internetMessageId,isDraft,changeKey,webLink,hasAttachments"
 PREFER = {'Prefer': 'IdType="ImmutableId", outlook.body-content-type="html"'}
+ATTACHMENT_SELECT = "id,name,contentType,size,isInline"
+EDIT_KIND = "outlook-draft-body-edit-v1"
+EDIT_PRESERVED = ("id", "subject", "from", "sender", "replyTo", "toRecipients", "ccRecipients", "bccRecipients", "conversationId", "internetMessageId", "hasAttachments")
 
 
 def address(value):
@@ -178,9 +181,101 @@ def safe_link(value):
     return value if url.scheme == "https" and url.hostname in ("outlook.office.com", "outlook.office365.com", "outlook.live.com") and not url.username and not url.password and not url.port else None
 
 
+def draft_etag(value):
+    etag = value.get("@odata.etag")
+    if not isinstance(etag, str) or not etag or any(c in etag for c in "\r\n"):
+        raise ValueError("Missing draft ETag; refuse an unguarded update")
+    return etag
+
+
+def check_edit_target(value, account):
+    if value.get("isDraft") is not True:
+        raise ValueError("Select an existing unsent draft; sent or received messages cannot be edited")
+    # New-message drafts may omit From/Sender until sending. The /me route and verified identity bind the mailbox; an explicit alternate sender is refused.
+    for field in ("from", "sender"):
+        if value.get(field) and address(value[field]["emailAddress"]["address"]) != account:
+            raise ValueError("Draft sender does not match the selected mailbox")
+    for field in ("toRecipients", "ccRecipients", "bccRecipients", "replyTo"):
+        recipients(value.get(field, []))
+    draft_etag(value)
+
+
+def attachment_state(client, message):
+    value = client.request("GET", message_path(message) + "/attachments?$select=" + ATTACHMENT_SELECT + "&$top=100", headers=PREFER)
+    items = value.get("value")
+    if value.get("@odata.nextLink") or not isinstance(items, list) or len(items) > 100:
+        raise ValueError("Incomplete attachment metadata; inspect the draft instead of editing it")
+    result = []
+    for item in items:
+        if not all(k in item for k in ATTACHMENT_SELECT.split(",")):
+            raise ValueError("Missing attachment metadata; inspect the draft instead of editing it")
+        identifier(item["id"])
+        result.append({k: item[k] for k in ATTACHMENT_SELECT.split(",")})
+    if len({item["id"] for item in result}) != len(result):
+        raise ValueError("Duplicate attachment identity")
+    return sorted(result, key=lambda item: item["id"])
+
+
+def edit_snapshot(client, message, account):
+    value = read_message(client, message)
+    check_edit_target(value, account)
+    attachments = attachment_state(client, value["id"])
+    fresh = read_message(client, value["id"])
+    if fresh != value:
+        raise ValueError("Draft changed while reading; preview again after editing stops")
+    return {"message": value, "attachments": attachments}
+
+
+def preview_edit(client, store, message, text):
+    proposed = paragraphs(text)
+    identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+    current = edit_snapshot(client, message, account)
+    # Replacing a rich body would silently discard signatures, quotations and inline resource placement. Keep this first surface explicitly plain-text-only.
+    original = current["message"]["body"]["content"]
+    if re.search(r"<(?:img|table|a|blockquote)\b|\b(?:src|href)\s*=", original, re.I) or any(a["isInline"] for a in current["attachments"]):
+        raise ValueError("Rich or inline content requires a formatting-preserving editor; this command replaces the whole body with plain text")
+    plan = store.plan({"kind": EDIT_KIND, "alias": client.alias, "identity": identity, "account": account, "current": current, "currentHash": digest(current), "bodyHTML": proposed})
+    return {"status": "preview", **plan, "manualSendOnly": True, "replacement": "Entire body, including any signature and quoted text; supply all text to retain. Subject, recipients and attachments are unchanged."}
+
+
+def verify_edit(client, plan):
+    if client.identity() != plan["identity"]: raise ValueError("Mailbox identity changed")
+    saved = edit_snapshot(client, plan["current"]["message"]["id"], plan["account"])
+    before = plan["current"]["message"]
+    for key in EDIT_PRESERVED:
+        if saved["message"].get(key) != before.get(key):
+            raise ValueError("Draft metadata changed: " + key)
+    if saved["attachments"] != plan["current"]["attachments"]:
+        raise ValueError("Draft attachment metadata changed")
+    if lines(saved["message"]["body"]["content"]) != lines(plan["bodyHTML"]):
+        raise ValueError("Saved draft text or paragraph boundaries differ from the preview")
+    return {"status": "draft_edit_verified", "draft": before["id"], "manualSendOnly": True, "webLink": safe_link(saved["message"].get("webLink")), "limits": "Stored text, unsent state, mailbox, metadata and attachment identities/sizes checked; attachment bytes and visual rendering are not certified."}
+
+
+def apply_edit(client, store, operation, plan):
+    if store.dispatched(operation): raise ValueError("Already dispatched; inspect draft-status/draft-verify before another edit")
+    client.require_write()
+    if client.identity() != plan["identity"]: raise ValueError("Mailbox identity changed")
+    current = edit_snapshot(client, plan["current"]["message"]["id"], plan["account"])
+    if digest(current) != plan["currentHash"]:
+        raise ValueError("Draft changed since preview; preserve the newer draft and preview again")
+    draft = current["message"]
+    store.dispatch(operation, {"status": "uncertain_after_dispatch", "draft": draft["id"], "hash": plan["hash"]})
+    result = {"operation": operation, "draft": draft["id"], "status": "uncertain_after_dispatch", "manualSendOnly": True, "replayAllowed": False}
+    try:
+        client.request("PATCH", message_path(draft["id"]), {"body": {"contentType": "HTML", "content": plan["bodyHTML"]}}, {**PREFER, "If-Match": draft_etag(draft)})
+        result.update(verify_edit(client, plan))
+    except Exception:
+        result["detail"] = "The saved draft may have changed. Use draft-status/draft-verify; never retry automatically or overwrite intervening edits."
+    store.receipt(operation, result)
+    return result
+
+
 def apply(client, store, operation, expected_hash, execute, allow_draft):
     if not execute or not allow_draft: raise ValueError("Require --execute and --allow-draft for this authorized manual-send draft")
     plan = store.load(operation, expected_hash)
+    if plan.get("kind") == EDIT_KIND and plan.get("alias") == client.alias:
+        return apply_edit(client, store, operation, plan)
     if plan.get("kind") != "outlook-reply-draft-v1" or plan.get("alias") != client.alias: raise ValueError("Wrong operation/account")
     if store.dispatched(operation): raise ValueError("Already dispatched; inspect draft-status/draft-verify and Outlook Drafts. Never recreate automatically.")
     client.require_write()
@@ -225,6 +320,7 @@ def main(argv=None):
     p = subs.add_parser("reply-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
     p.add_argument("--to", action="append", required=True); p.add_argument("--cc", action="append", default=[]); p.add_argument("--reply-all", action="store_true")
     signatures = p.add_mutually_exclusive_group(required=True); signatures.add_argument("--signature-file"); signatures.add_argument("--no-signature", action="store_true")
+    p = subs.add_parser("edit-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
     for command in ("draft-apply", "draft-status", "draft-verify"):
         p = subs.add_parser(command); p.add_argument("alias"); p.add_argument("--plan", required=True)
         if command == "draft-apply": p.add_argument("--hash", required=True); p.add_argument("--execute", action="store_true"); p.add_argument("--allow-draft", action="store_true")
@@ -232,13 +328,17 @@ def main(argv=None):
     if args.command == "reply-draft":
         data = json.loads(Path(args.signature_file).read_text()) if args.signature_file else None
         result = preview(client, store, args.message, Path(args.body_file).read_text(), args.to, args.cc, data, args.no_signature, args.reply_all)
+    elif args.command == "edit-draft": result = preview_edit(client, store, args.message, Path(args.body_file).read_text(encoding="utf-8"))
     elif args.command == "draft-apply": result = apply(client, store, args.plan, args.hash, args.execute, args.allow_draft)
     elif args.command == "draft-status": result = store.status(args.plan)
     else:
         plan = store.load(args.plan)
         if plan.get("alias") != args.alias or client.identity() != plan["identity"]: raise ValueError("Mailbox mismatch")
-        created = store.read(store.path(args.plan, ".quote.json"))
-        result = verify_saved(read_message(client, created["draft"]), plan, created)
+        if plan.get("kind") == EDIT_KIND:
+            result = verify_edit(client, plan)
+        else:
+            created = store.read(store.path(args.plan, ".quote.json"))
+            result = verify_saved(read_message(client, created["draft"]), plan, created)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 1 if result.get("status") == "uncertain_after_dispatch" else 0
 

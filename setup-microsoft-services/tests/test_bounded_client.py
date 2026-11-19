@@ -65,5 +65,16 @@ print(json.dumps({'id':'synthetic','name':'ok','mail':'me@example.com'}))
             with self.assertRaises(mod.ProviderError) as error: mod.Client("example", "mail").identity()
         self.assertNotIn("SECRET", str(error.exception))
 
+    def test_draft_attachment_metadata_is_bounded_and_body_updates_cannot_edit_recipients(self):
+        client = mod.Client("example", "mail")
+        with patch.object(client, "_call", return_value={"value": []}) as call:
+            client.request("GET", "/me/messages/id/attachments?$select=id,name,contentType,size,isInline&$top=100")
+            self.assertEqual(call.call_count, 1)
+            call.reset_mock()
+            for path in ("/me/messages/id/attachments", "/me/messages/id/attachments?$select=contentBytes", "/me/messages/id/attachments/attachment"):
+                with self.assertRaises(ValueError): client.request("GET", path)
+            with self.assertRaises(ValueError): client.request("PATCH", "/me/messages/id", {"toRecipients": []}, {"If-Match": "version"})
+            call.assert_not_called()
+
 
 if __name__ == "__main__": unittest.main()

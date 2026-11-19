@@ -156,4 +156,119 @@ class Drafts(unittest.TestCase):
         self.assertIsNone(mod.safe_link("https://evil.example/draft"))
 
 
+class EditMailbox(Mailbox):
+    def __init__(self):
+        super().__init__()
+        self.draft = copy.deepcopy(self.source)
+        self.draft.update(id="draft", isDraft=True, **{"@odata.etag": 'W/"one"'})
+        self.draft["from"] = recipient("me@example.com")
+        self.draft["toRecipients"] = [recipient("reader@example.com")]
+        self.draft["ccRecipients"] = [recipient("copy@example.com")]
+        self.draft["bccRecipients"] = [recipient("private@example.com")]
+        self.draft["hasAttachments"] = True
+        self.attachments = [{"id": "attachment", "name": "proposal.pdf", "contentType": "application/pdf", "size": 1234, "isInline": False}]
+        self.paged = False; self.race = False; self.lose_patch = False; self.fail_read = False
+
+    def request(self, method, path, body=None, headers=None, output=None):
+        if method == "GET" and urlsplit(path).path.endswith("/attachments"):
+            return {"value": copy.deepcopy(self.attachments), **({"@odata.nextLink": "more"} if self.paged else {})}
+        if method == "GET" and self.fail_read and self.writes: raise RuntimeError("read failed")
+        if method == "PATCH" and self.race:
+            self.draft["@odata.etag"] = 'W/"user-edit"'
+            self.draft["body"]["content"] = "<p>User's latest edit</p>"
+        result = super().request(method, path, body, headers, output)
+        if method == "PATCH" and self.lose_patch: raise RuntimeError("lost patch response")
+        return result
+
+
+class EditDrafts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.store = mod.Store(Path(self.tmp.name) / "state", "example"); self.client = EditMailbox()
+        self.body = "Hi reader,\n\nNew dates — January 7–14.\n\nRegards,\nExample Person"
+
+    def plan(self): return mod.preview_edit(self.client, self.store, "draft", self.body)
+    def apply(self, p, execute=True, allowed=True): return mod.apply(self.client, self.store, p["operation"], p["hash"], execute, allowed)
+
+    def test_edits_same_draft_once_and_preserves_subject_audience_and_attachment(self):
+        before = copy.deepcopy(self.client.draft); attachments = copy.deepcopy(self.client.attachments)
+        p = self.plan(); self.assertEqual(self.client.writes, [])
+        result = self.apply(p)
+        self.assertEqual(result["status"], "draft_edit_verified")
+        self.assertEqual(result["draft"], before["id"])
+        self.assertEqual(len(self.client.writes), 1)
+        method, path, payload, headers = self.client.writes[0]
+        self.assertEqual((method, path), ("PATCH", "/me/messages/draft"))
+        self.assertEqual(set(payload), {"body"}); self.assertEqual(headers["If-Match"], before["@odata.etag"])
+        for key in mod.EDIT_PRESERVED: self.assertEqual(self.client.draft.get(key), before.get(key))
+        self.assertEqual(self.client.attachments, attachments)
+        self.assertTrue(self.client.draft["isDraft"])
+        self.assertEqual(mod.lines(self.client.draft["body"]["content"]), ["Hi reader,", "New dates — January 7–14.", "Regards,", "Example Person"])
+        with self.assertRaisesRegex(ValueError, "Already dispatched"): self.apply(p)
+
+    def test_new_draft_without_sender_is_bound_to_verified_mailbox(self):
+        self.client.draft.pop("from")
+        self.assertEqual(self.apply(self.plan())["status"], "draft_edit_verified")
+
+    def test_received_sent_alternate_sender_missing_etag_and_partial_attachments_refused(self):
+        changes = [lambda: self.client.draft.update(isDraft=False), lambda: self.client.draft.update(sender=recipient("other@example.com")), lambda: self.client.draft.pop("@odata.etag"), lambda: setattr(self.client, "paged", True)]
+        for change in changes:
+            self.client = EditMailbox(); change()
+            with self.assertRaises(ValueError): self.plan()
+            self.assertEqual(self.client.writes, [])
+
+    def test_blank_body_and_rich_or_inline_content_refused_before_mutation(self):
+        self.body = "   "
+        with self.assertRaises(ValueError): self.plan()
+        self.body = "Replacement"
+        for content in ('<a href="https://example.com">Link</a>', '<img src="cid:photo">', '<table><tr><td>Cell</td></tr></table>'):
+            self.client.draft["body"]["content"] = content
+            with self.assertRaisesRegex(ValueError, "formatting-preserving"): self.plan()
+        self.client.draft["body"]["content"] = "<p>Simple</p>"; self.client.attachments[0]["isInline"] = True
+        with self.assertRaisesRegex(ValueError, "formatting-preserving"): self.plan()
+        self.assertEqual(self.client.writes, [])
+
+    def test_changed_body_recipients_subject_or_attachment_stops_before_write(self):
+        changes = [lambda: self.client.draft["body"].update(content="User edit"), lambda: self.client.draft.update(subject="Other subject"), lambda: self.client.draft["toRecipients"].append(recipient("new@example.com")), lambda: self.client.attachments[0].update(size=999)]
+        for change in changes:
+            self.client = EditMailbox(); p = self.plan(); change()
+            with self.assertRaisesRegex(ValueError, "changed since preview"): self.apply(p)
+            self.assertEqual(self.client.writes, [])
+
+    def test_patch_race_preserves_intervening_edit_and_blocks_replay(self):
+        p = self.plan(); self.client.race = True
+        self.assertEqual(self.apply(p)["status"], "uncertain_after_dispatch")
+        self.assertEqual(self.client.draft["body"]["content"], "<p>User's latest edit</p>")
+        with self.assertRaisesRegex(ValueError, "Already dispatched"): self.apply(p)
+        self.assertEqual(len(self.client.writes), 1)
+
+    def test_uncertain_patch_or_readback_recovers_by_read_only_verification(self):
+        for flag in ("lose_patch", "fail_read"):
+            self.client = EditMailbox(); p = self.plan(); setattr(self.client, flag, True)
+            result = self.apply(p); self.assertEqual(result["status"], "uncertain_after_dispatch")
+            self.assertEqual(self.store.status(p["operation"])["dispatch"]["draft"], "draft")
+            setattr(self.client, flag, False)
+            self.assertEqual(mod.verify_edit(self.client, p)["status"], "draft_edit_verified")
+            with self.assertRaisesRegex(ValueError, "Already dispatched"): self.apply(p)
+            self.assertEqual(len(self.client.writes), 1)
+
+    def test_verification_rejects_metadata_body_attachment_or_sent_state_changes(self):
+        changes = [lambda: self.client.draft.update(isDraft=False), lambda: self.client.draft.update(subject="Changed"), lambda: self.client.attachments.clear(), lambda: self.client.draft["body"].update(content="Wrong body")]
+        for change in changes:
+            self.client = EditMailbox(); p = self.plan(); self.apply(p); change()
+            with self.assertRaises(ValueError): mod.verify_edit(self.client, p)
+
+    def test_write_optin_identity_hash_and_execution_flags_are_required(self):
+        p = self.plan()
+        for execute, allowed in ((False, True), (True, False)):
+            with self.assertRaisesRegex(ValueError, "Require"): self.apply(p, execute, allowed)
+        with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            mod.apply(self.client, self.store, p["operation"], "wrong", True, True)
+        self.client.allow = False
+        with self.assertRaisesRegex(ValueError, "opted"): self.apply(p)
+        self.client.allow = True; self.client.identity = lambda: {"id": "other", "mail": "other@example.com"}
+        with self.assertRaisesRegex(ValueError, "Mailbox identity changed"): self.apply(p)
+        self.assertEqual(self.client.writes, [])
+
+
 if __name__ == "__main__": unittest.main()

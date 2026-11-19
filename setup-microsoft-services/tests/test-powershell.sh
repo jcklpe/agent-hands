@@ -11,6 +11,11 @@ function Get-MgContext { [pscustomobject]@{ Account='person@example.com'; Tenant
 function Invoke-MgGraphRequest {
     param($Method,$Uri,$OutputType,$Headers,$Body,$ContentType)
     Set-Content -LiteralPath $env:TEST_REQUEST_MARKER -Value $Uri
+    if ($Uri.EndsWith('/no-chat')) {
+        $e=[System.Management.Automation.ErrorRecord]::new([System.Exception]::new('NotFound (Not Found)'), 'GraphFixture', [System.Management.Automation.ErrorCategory]::ObjectNotFound, $null)
+        $e.ErrorDetails=[System.Management.Automation.ErrorDetails]::new('HTTP/2 404; SYNTHETIC_HEADER_MUST_NOT_LEAK {"error":{"code":"ItemNotFound","message":"Task fixture does not have an associated chat thread. Create a message on the task first to initialize the thread"}}')
+        throw $e
+    }
     '{"id":"synthetic-user"}'
 }
 function Set-MgRequestContext { param($MaxRetry) Set-Content -LiteralPath $env:TEST_RETRY_MARKER -Value $MaxRetry }
@@ -45,4 +50,8 @@ if run_fixture "$WORK/invalid.json" > "$WORK/out" 2> "$WORK/error"; then printf 
 jq '.method="POST" | .uri="https://graph.microsoft.com/v1.0/$batch" | .body="{}"' "$WORK/matched.json" > "$WORK/mutation.json"
 run_fixture "$WORK/mutation.json" > "$WORK/out"
 [ "$(tr -d '\r\n' < "$TEST_RETRY_MARKER")" = 0 ]
+jq '.uri="https://graph.microsoft.com/beta/planner/tasks/fixture/no-chat"' "$WORK/matched.json" > "$WORK/no-chat.json"
+if run_fixture "$WORK/no-chat.json" > "$WORK/out" 2> "$WORK/error"; then printf 'Expected Graph error\n' >&2; exit 1; fi
+grep -F 'does not have an associated chat thread' "$WORK/error" >/dev/null
+if grep -F 'SYNTHETIC_HEADER_MUST_NOT_LEAK' "$WORK/error" >/dev/null; then printf 'Graph headers leaked\n' >&2; exit 1; fi
 printf '%s\n' 'PowerShell identity and endpoint checks passed with a synthetic module; no account access'
