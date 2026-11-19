@@ -73,8 +73,8 @@ _gmail_get() (
         case "$http_code" in
             2??) cat "$response"; rm -f "$response"; return 0 ;;
         esac
-        reason="$(jq -r '.error.errors[0].reason // .error.status // empty' "$response" 2>/dev/null)"
-        message="$(jq -r '.error.message // empty' "$response" 2>/dev/null)"
+        reason="$(jq -r '.error.errors[0].reason // .error.status // empty' "$response" 2>/dev/null)" || reason=""
+        message="$(jq -r '.error.message // empty' "$response" 2>/dev/null)" || message=""
         case "$http_code:$reason" in
             429:*|403:rateLimitExceeded|403:userRateLimitExceeded)
                 attempt=$((attempt + 1))
@@ -89,7 +89,7 @@ _gmail_get() (
         rm -f "$response"
         _google_error "Gmail returned HTTP ${http_code} for '$alias'${reason:+ ($reason)}: ${message:-request failed}"
         case "$reason" in
-            rateLimitExceeded|userRateLimitExceeded) _google_say "NEXT: wait a minute and retry, or narrow the sync with --query or --max-results" >&2 ;;
+            rateLimitExceeded|userRateLimitExceeded) _google_say "NEXT: wait before retrying; for message listings or exports, narrow --query or lower --limit/--max-results" >&2 ;;
             insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT) _google_say "NEXT: run 'setup-google-services/scripts/authorize auth $alias' to refresh the granted scopes" >&2 ;;
         esac
         return 1
@@ -198,7 +198,7 @@ _gmail_send() (
 )
 
 _gmail_labels_fetch() {
-    _google_get_url "$1" "${_GMAIL_API}/labels"
+    _gmail_get "$1" "${_GMAIL_API}/labels"
 }
 
 _gmail_labels() {
@@ -263,10 +263,10 @@ _gmail_list() (
     fi
     [ -n "$query" ] && args+=(--data-urlencode "q=${query}")
     dir="$(mktemp -d "$GMAIL_WORK/gmail-list.XXXXXX")" || return 1
-    list="$(_google_get_url "$alias" "${_GMAIL_API}/messages" "${args[@]}")" || return 1
+    list="$(_gmail_get "$alias" "${_GMAIL_API}/messages" "${args[@]}")" || return 1
     if printf '%s' "$list" | jq -e '.nextPageToken != null' >/dev/null; then _gmail_warn "More messages exist beyond this listing bound"; fi
     for id in $(printf '%s' "$list" | jq -r '.messages[]?.id'); do
-        _google_get_url "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" \
+        _gmail_get "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" \
             --data-urlencode "format=metadata" \
             --data-urlencode "metadataHeaders=From" \
             --data-urlencode "metadataHeaders=Subject" \
@@ -303,11 +303,11 @@ _gmail_change_run() (
     # Fetch each target so missing IDs fail up front and the plan can show what will change.
     while IFS=$'\t' read -r kind id; do
         if [ "$kind" = "thread" ]; then
-            _google_get_url "$alias" "${_GMAIL_API}/threads/$(_gmail_urlencode "$id")" --data-urlencode "format=metadata" --data-urlencode "metadataHeaders=From" --data-urlencode "metadataHeaders=Subject" > "${dir}/t-${n}.json" \
-                || printf '{"missing": true}\n' > "${dir}/t-${n}.json"
+            _gmail_get "$alias" "${_GMAIL_API}/threads/$(_gmail_urlencode "$id")" --data-urlencode "format=metadata" --data-urlencode "metadataHeaders=From" --data-urlencode "metadataHeaders=Subject" > "${dir}/t-${n}.json" \
+                || { _google_error "Could not read Gmail $kind '$id'; nothing was changed"; return 1; }
         else
-            _google_get_url "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" --data-urlencode "format=metadata" --data-urlencode "metadataHeaders=From" --data-urlencode "metadataHeaders=Subject" > "${dir}/t-${n}.json" \
-                || printf '{"missing": true}\n' > "${dir}/t-${n}.json"
+            _gmail_get "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" --data-urlencode "format=metadata" --data-urlencode "metadataHeaders=From" --data-urlencode "metadataHeaders=Subject" > "${dir}/t-${n}.json" \
+                || { _google_error "Could not read Gmail $kind '$id'; nothing was changed"; return 1; }
         fi
         jq -c --arg kind "$kind" --arg id "$id" '
           (if $kind == "thread" then (.messages // []) else [.] end) as $msgs |
@@ -371,7 +371,7 @@ _gmail_change_run() (
     # Read back every affected message and confirm the added labels are present and the removed ones gone.
     : > "${dir}/readback.jsonl"
     for id in $(jq -r '.[].messageIds[]' "${dir}/targets.json"); do
-        _google_get_url "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" --data-urlencode "format=minimal" | jq -c '{id, labelIds: (.labelIds // [])}' >> "${dir}/readback.jsonl" || return 1
+        _gmail_get "$alias" "${_GMAIL_API}/messages/$(_gmail_urlencode "$id")" --data-urlencode "format=minimal" | jq -c '{id, labelIds: (.labelIds // [])}' >> "${dir}/readback.jsonl" || { _google_error "Gmail changes were sent but verification failed; inspect current state before retrying"; return 1; }
     done
     ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     jq -s --slurpfile t "${dir}/targets.json" --argjson add "$add" --argjson remove "$remove" '
@@ -551,7 +551,7 @@ _gmail_require_filters() {
 }
 
 _gmail_filters_fetch() {
-    _google_get_url "$1" "${_GMAIL_API}/settings/filters"
+    _gmail_get "$1" "${_GMAIL_API}/settings/filters"
 }
 
 # Render FILTERS (the API's {filter: [...]}) with label IDs shown as names, using LABELS ({labels: [...]}).
@@ -635,7 +635,7 @@ _gmail_create_filter() (
     if [ "$execute" -ne 1 ]; then _google_say "DRY RUN: no filter was created. Re-run with --execute to create it."; return 0; fi
     _gmail_require_filters "$alias" || return 1
     created="$(_gmail_send POST "$alias" "${_GMAIL_API}/settings/filters" "$body")" || { _google_say "NEXT: if the token predates gmail.filters_enabled, run 'setup-google-services/scripts/authorize auth $alias' to grant gmail.settings.basic" >&2; return 1; }
-    readback="$(_google_get_url "$alias" "${_GMAIL_API}/settings/filters/$(_gmail_urlencode "$(printf '%s' "$created" | jq -r '.id')")")" || return 1
+    readback="$(_gmail_get "$alias" "${_GMAIL_API}/settings/filters/$(_gmail_urlencode "$(printf '%s' "$created" | jq -r '.id')")")" || return 1
     ok="$(jq -n --argjson want "$body" --argjson got "$readback" '($got.criteria == $want.criteria) and (($got.action.addLabelIds // []) == ($want.action.addLabelIds // [])) and (($got.action.removeLabelIds // []) == ($want.action.removeLabelIds // []))')"
     jq -nc --arg ts "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" --arg alias "$alias" --argjson f "$readback" --argjson ok "$ok" '{ts: $ts, service: "gmail", alias: $alias, action: "create-filter", filter_id: $f.id, criteria: $f.criteria, filter_action: $f.action, verified: $ok}' | _gmail_audit_append || _gmail_warn "Could not append to the mail audit log: $(_gmail_audit_log_path)"
     [ "$ok" = true ] || { _google_error "Created filter $(printf '%s' "$created" | jq -r '.id') but readback did not match"; return 1; }
@@ -658,7 +658,7 @@ _gmail_delete_filter() (
     done
     [ -n "$filter_id" ] || { _google_error "delete-filter requires --filter ID"; return 1; }
     _gmail_require_enabled "$alias" || return 1
-    filter="$(_google_get_url "$alias" "${_GMAIL_API}/settings/filters/$(_gmail_urlencode "$filter_id")")" || { _google_error "No Gmail filter with ID $filter_id"; return 1; }
+    filter="$(_gmail_get "$alias" "${_GMAIL_API}/settings/filters/$(_gmail_urlencode "$filter_id")")" || { _google_error "Could not read Gmail filter '$filter_id'; no delete request was sent"; return 1; }
     labels="$(_gmail_labels_fetch "$alias")" || return 1
     _google_say "Gmail filter delete plan (removes the rule only; no mail is touched):"
     _google_say "Account: $alias"

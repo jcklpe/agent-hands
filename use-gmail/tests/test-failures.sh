@@ -27,7 +27,7 @@ expect_failure _gmail_export example --output "$WORK/export.md"
 _gmail_export example --output "$WORK/export.md" --query in:inbox > /dev/null
 grep -F 'Synthetic subject' "$WORK/export.md" >/dev/null
 _gmail_labels_fetch() { printf '%s' '{"labels":[]}'; }
-_google_get_url() { printf '%s' '{"id":"synthetic-filter","criteria":{"from":"news@example.com"},"action":{"removeLabelIds":["INBOX"]}}'; }
+_gmail_get() { printf '%s' '{"id":"synthetic-filter","criteria":{"from":"news@example.com"},"action":{"removeLabelIds":["INBOX"]}}'; }
 _gmail_send() { printf '%s\n' deleted >> "$WORK/deletes"; }
 _gmail_filters_fetch() {
     [ "${FAIL_READBACK:-0}" = 0 ] || return 1

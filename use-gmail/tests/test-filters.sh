@@ -21,7 +21,7 @@ GOOGLE_ACCOUNTS_PATH="${WORK}/g-off.json"
 
 _gmail_labels_fetch() { printf '%s\n' '{"labels":[{"id":"INBOX","name":"INBOX","type":"system"},{"id":"Label_1","name":"delete-me","type":"user"}]}'; }
 _gmail_list() { printf 'preview for: %s\n' "$3"; }
-_google_get_url() {
+_gmail_get() {
     case "$2" in
         */settings/filters) printf '%s\n' '{"filter":[{"id":"f-old","criteria":{"from":"news@example.com"},"action":{"addLabelIds":["Label_1"],"removeLabelIds":["INBOX"]}}]}' ;;
         */settings/filters/f-new) printf '%s\n' '{"id":"f-new","criteria":{"from":"statements@bank.example.com","subject":"Your eStatement has arrived"},"action":{"addLabelIds":["Label_1"],"removeLabelIds":["INBOX"]}}' ;;
