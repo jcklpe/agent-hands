@@ -18,6 +18,8 @@ Check the actual platform and existing tools. The entrypoints require Bash 3.2+,
 
 If access fails, distinguish a missing API, insufficient scope, wrong account, or document permission. Do not broaden permissions automatically. Reuse working configuration rather than replacing tokens or forcing a new consent flow.
 
+For cache, interpreter, transport or authorization failures, use the [runtime diagnostics](references/account-access.md#runtime-diagnostics). `bash scripts/authorize runtime` reports the actual selected Python version without checking accounts or tokens. Explicit `GOOGLE_PYTHON` overrides must pass the Python 3.11 minimum before a Python service operation starts. Preserve the original error and classify its layer before retrying; do not change grants, downgrade Python or broaden filesystem permissions to diagnose it.
+
 ## Account access and shared runtime
 Read [account access and provider support](references/account-access.md) for configuration, account selection, initial authorization, reconnection and diagnosis. This setup skill owns the provider scripts, examples and tests that the selected use skills load. Automatic refresh, where supported, stays in that runtime; normal operations do not require rerunning setup or granting broader access. Keep credential establishment separate from permission for each service action, and preserve existing user approval within its stated scope.
 

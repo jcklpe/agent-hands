@@ -5,12 +5,24 @@ _google_error() { printf 'ERROR: %s\n' "$*" >&2; }
 _google_say() { printf '%s\n' "$*"; }
 _google_trim() { printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 _google_python() {
-    local project="$1"
+    local project="$1" runtime_status
     shift
-    if [ -n "${GOOGLE_PYTHON:-}" ]; then "$GOOGLE_PYTHON" "$@"
+    if [ -n "${GOOGLE_PYTHON:-}" ]; then
+        if "$GOOGLE_PYTHON" "$GOOGLE_AUTH_DIR/scripts/runtime.py" --check; then
+            "$GOOGLE_PYTHON" "$@"
+        else
+            runtime_status=$?
+            _google_error 'Python preflight failed before the requested operation. Check GOOGLE_PYTHON; use an existing Python 3.11+ executable. See setup-google-services/references/account-access.md#runtime-diagnostics.'
+            return "$runtime_status"
+        fi
     elif command -v uv >/dev/null 2>&1; then uv run --project "$project" python "$@"
     else _google_error 'Install uv or set GOOGLE_PYTHON to a compatible Python 3.11+ executable'; return 1
     fi
+}
+_google_runtime_report() {
+    local runner=uv
+    [ -z "${GOOGLE_PYTHON:-}" ] || runner=GOOGLE_PYTHON
+    _google_python "$GOOGLE_AUTH_DIR" "$GOOGLE_AUTH_DIR/scripts/runtime.py" --runner "$runner"
 }
 _google_load_env() {
     local config line key value present
