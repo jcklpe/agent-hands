@@ -12,11 +12,13 @@ planner task ALIAS --task ID [--json]
 planner export ALIAS --output PATH
 planner create-task ALIAS --plan ID --bucket ID --title TEXT [--due DATE|none] [--progress STATUS] [--assign USER] [--desc TEXT|--desc-file FILE] [--execute]
 planner update-task ALIAS --task ID [--title TEXT] [--bucket ID] [--due DATE|none] [--progress STATUS] [--assign USER] [--unassign USER] [--desc TEXT|--desc-file FILE] [--execute]
+planner delete-task ALIAS --task ID [--expected-sha256 HASH --execute | --verify]
 planner move-task ALIAS --task ID --plan ID --bucket ID [--execute]
 planner labels ALIAS --plan ID [--json]
 planner label|unlabel ALIAS --task ID --label NAME [--execute]
-planner comments ALIAS --task ID [--json]
-planner comment ALIAS --task ID --file FILE [--execute]
+planner comments ALIAS --task ID [--legacy] [--json]
+planner comment ALIAS --task ID --file FILE [--format markdown|html|plain] [--execute]
+planner edit-comment ALIAS --task ID --message ID --file FILE [--format markdown|html|plain] [--expected-sha256 PREVIEW_HASH] [--execute]
 Writes preview by default; existing plan allowlist/write opt-in and comment permission gates apply.
 HELP
         exit 0 ;;

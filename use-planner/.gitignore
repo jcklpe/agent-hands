@@ -1,2 +1,4 @@
 *.jsonl
 planner-comments/
+planner-task-chat/
+planner-task-delete/
