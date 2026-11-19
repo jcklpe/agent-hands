@@ -19,6 +19,7 @@ outlook-mail rules ALIAS [--json]
 outlook-mail create-rule ALIAS --name NAME [--from ADDRESS] [--sender-contains TEXT] [--subject-contains TEXT] [--recipient-contains TEXT] [--category NAME] [--folder NAME|PATH|ID] [--delete] [--stop] [--execute]
 outlook-mail delete-rule ALIAS --rule ID [--execute]
 outlook-mail reply-draft ALIAS --message ID --body-file TEXT --to EMAIL [--cc EMAIL] [--reply-all] (--signature-file JSON | --no-signature)
+outlook-mail edit-draft ALIAS --message ID --body-file TEXT
 outlook-mail draft-apply ALIAS --plan ID --hash SHA256 --execute --allow-draft
 outlook-mail draft-status|draft-verify ALIAS --plan ID
 Writes preview by default and need account opt-in. --delete rules require full sender and recipient addresses and move future matching mail to Deleted Items. No send, forward, direct message deletion, or permanent deletion command exists.
@@ -27,6 +28,6 @@ HELP
 esac
 _m365_load_env
 case "${1:-}" in
-    reply-draft|draft-apply|draft-status|draft-verify) _m365_python "$SCRIPTS/.." "$SCRIPTS/drafts.py" "$@"; exit $? ;;
+    reply-draft|edit-draft|draft-apply|draft-status|draft-verify) _m365_python "$SCRIPTS/.." "$SCRIPTS/drafts.py" "$@"; exit $? ;;
 esac
 _m365_mail_dispatch "$@"

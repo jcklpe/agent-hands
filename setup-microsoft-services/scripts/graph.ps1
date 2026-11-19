@@ -100,7 +100,15 @@ try {
         [string]$response
     }
 } catch {
+    # Surface only Graph's JSON error, never headers or authentication material.
+    $graphError = $null
+    if ($null -ne $_.ErrorDetails -and $_.ErrorDetails.Message -match '(?s)(\{"error":.*\})\s*$') {
+        try { $graphError = ($Matches[1] | ConvertFrom-Json).error } catch { }
+    }
     $message = $_.Exception.Message -replace "[\r\n]+", " "
+    if ($null -ne $graphError) {
+        $message += " | Graph: " + [string]$graphError.code + ": " + ([string]$graphError.message -replace "[\r\n]+", " ")
+    }
     [Console]::Error.WriteLine("ERROR: Microsoft Graph PowerShell request failed: $message")
     exit 1
 }

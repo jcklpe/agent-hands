@@ -90,10 +90,11 @@ fi
             if method == "DELETE" and body is not None: raise ValueError("Recycle does not accept a body")
         else:
             resource = re.fullmatch(r"/me/messages/" + segment, parsed.path)
-            allowed = method == "GET" and resource or method == "PATCH" and resource and not parsed.query or method == "POST" and re.fullmatch(r"/me/messages/" + segment + r"/createReply(?:All)?", parsed.path) and not parsed.query
+            attachment_metadata = re.fullmatch(r"/me/messages/" + segment + r"/attachments", parsed.path) and parsed.query == "$select=id,name,contentType,size,isInline&$top=100"
+            allowed = method == "GET" and (resource or attachment_metadata) or method == "PATCH" and resource and not parsed.query or method == "POST" and re.fullmatch(r"/me/messages/" + segment + r"/createReply(?:All)?", parsed.path) and not parsed.query
             if method == "POST" and body != {}: raise ValueError("Reply creation starts from the provider-generated draft")
             if method == "PATCH" and (not isinstance(body, dict) or set(body) != {"body"} or set(body["body"]) != {"contentType", "content"} or body["body"]["contentType"] != "HTML"):
-                raise ValueError("Only a guarded reply-body population is supported")
+                raise ValueError("Only a guarded draft-body update is supported")
         if not profile and not allowed: raise ValueError("Request is outside the selected capability")
         headers = headers or {}
         if any(k not in ("If-Match", "Prefer") or not isinstance(v, str) or any(c in v for c in "\r\n") for k, v in headers.items()):

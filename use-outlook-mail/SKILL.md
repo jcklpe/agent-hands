@@ -1,6 +1,6 @@
 ---
 name: use-outlook-mail
-description: "Read, search and export Outlook mail; create manual-send reply drafts, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
+description: "Read, search and export Outlook mail; create reply drafts, edit saved draft text, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
 ---
 
 # Use Outlook Mail
@@ -44,9 +44,22 @@ Preview resolves the exact source and sending account, verifies explicit To/CC a
 
 The generated quotation is retained while new paragraphs and the supplied account-specific signature are prefixed. Existing draft changes or missing ETags stop population and preserve the created draft for inspection. Independent readback checks unsent state, identity, sender, explicit recipients, conversation, subject, visible paragraph boundaries, signature and quote content/resource references. It does not certify every HTML style, visual rendering or recipient-side threading. A signature inside quoted history does not satisfy the new-reply signature requirement. Native signature settings are not read or changed.
 
-A durable dispatch record prevents duplicate creation, including after failed acknowledgment or readback. Returned draft identity is saved before later work. `uncertain_after_dispatch` can leave a blank or partly populated reply draft; inspect status, the saved draft and Outlook Drafts before doing anything else. Never automatically recreate, overwrite user changes, delete or send it. There is no general existing-draft editing command, new-message draft, forwarding or new attachment surface.
+A durable dispatch record prevents duplicate creation, including after failed acknowledgment or readback. Returned draft identity is saved before later work. `uncertain_after_dispatch` can leave a blank or partly populated reply draft; inspect status, the saved draft and Outlook Drafts before doing anything else. Never automatically recreate, overwrite user changes, delete or send it. Saved draft body edits have the separate bounded surface below. New-message creation, forwarding and new attachments remain unavailable.
 
 Twelve stateful draft tests and four shared provider-boundary tests pass. An authorized macOS test with existing Graph PowerShell access created one native reply, verified its unsent state and preserved source, and confirmed that server-side stale-ETag rejection retained a newer draft edit. The temporary test edit was conditionally restored and independently verified. Stored paragraphs, Unicode, supplied synthetic signature and native quotation passed readback; the user confirmed the draft looked correct in Outlook. This establishes the tested plain-text reply case, not exact style fidelity, live reply-all behavior, recipient-side threading or broader tenant/platform acceptance. Nothing was sent.
+
+## Edit a saved draft
+```sh
+bash scripts/mail edit-draft example --message DRAFT_ID --body-file /private/complete-body.txt
+bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute --allow-draft
+bash scripts/mail draft-status example --plan OPERATION_ID
+bash scripts/mail draft-verify example --plan OPERATION_ID
+```
+This replaces the entire body with supplied UTF-8 plain text, using the existing draft ID. Include every signature line and quotation to retain; this operation does not append or recover omitted text. Blank lines become paragraphs, single newlines become line breaks, and HTML characters are escaped. It refuses existing links, images, tables, blockquotes or inline attachments that need a formatting-preserving editor. Other styling is not preserved. Subject, To/CC/BCC, sender, reply metadata and attachments are not editable through this command.
+
+Preview records the current body, metadata, attachment identities/sizes, verified mailbox and proposed body privately. Review that full replacement before applying the hash. Execution requires existing mail-write opt-in, `--execute`, `--allow-draft`, a still-unsent draft, unchanged preview state and a fresh ETag. It patches only the body with If-Match, then independently checks the body, preserved metadata and attachment inventory. New drafts with absent From/Sender fields are supported through the verified `/me` mailbox; an explicit alternate sender is refused. Incomplete attachment metadata stops execution. Attachment bytes and visual rendering are not certified.
+
+The existing `.draft-state/ALIAS/` receipts also cover edits. A dispatched edit is never automatically replayed, including when its response or readback fails. Use `draft-status` and read-only `draft-verify` to reconcile it; retain intervening user changes. Do not create a new plan to bypass an uncertain outcome. Nine stateful edit tests and the bounded attachment-read transport test pass alongside the reply-draft tests. Live edit execution remains unverified; no mailbox mutation is implied by implementing this capability. [Microsoft's update-message API](https://learn.microsoft.com/en-us/graph/api/message-update?view=graph-rest-1.0) permits body updates only on drafts.
 
 ## Inbox rules
 `rules`, `create-rule`, and `delete-rule` operate on Inbox rules. Reads need mail enabled; executed rule changes separately require `mail.rules_enabled` and `--execute`, requesting MailboxSettings.ReadWrite. Rule creation supports sender addresses/fragments, subject fragments, recipient fragments, a category, an allowed destination folder, and stop-processing. Different condition types must all match; alternatives within a type are OR conditions. New rules affect future incoming mail, not existing messages.
