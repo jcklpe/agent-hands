@@ -118,6 +118,96 @@ def structural_links(elements):
     return links
 
 
+def read_link_target(link):
+    """Describe only a supplied destination; internal references are not invented URLs."""
+    if link.get("url"):
+        return link["url"]
+    for kind in ("bookmark", "heading"):
+        if kind in link:
+            target = link[kind]
+            return f"{kind}: {target.get('id') or '<unavailable>'}; tab: {target.get('tabId') or '<unavailable>'}"
+        if link.get(kind + "Id"):
+            return f"{kind}: {link[kind + 'Id']} (legacy reference)"
+    if link.get("tabId"):
+        return f"tab: {link['tabId']}"
+    return "<target unavailable>"
+
+
+def read_paragraph_element(element):
+    """Return display text and supplied references without assigning editable indices."""
+    if "textRun" in element:
+        run = element["textRun"]
+        text = run.get("content", "")
+        link = run.get("textStyle", {}).get("link")
+        links = [{"text": text, "target": read_link_target(link)}] if link is not None else []
+        return text, links
+    for field, properties, label_field, target_field, kind in (
+        ("richLink", "richLinkProperties", "title", "uri", "link"),
+        ("person", "personProperties", "name", "email", "person"),
+    ):
+        if field in element:
+            values = element[field].get(properties, {})
+            target = values.get(target_field)
+            label = values.get(label_field) or (target if kind == "person" else None) or "label unavailable"
+            display = f"[{kind}: {label}{'' if target else '; target unavailable'}]"
+            destination = (f"email: {target}" if kind == "person" else target) if target else "<target unavailable>"
+            return display, [{"text": label, "target": destination}]
+    for field, properties, label_field, kind in (
+        ("dateElement", "dateElementProperties", "displayText", "date"),
+        ("dropdown", "dropdownProperties", "displayValue", "dropdown"),
+    ):
+        if field in element:
+            label = element[field].get(properties, {}).get(label_field) or "label unavailable"
+            return f"[{kind}: {label}]", []
+    if "footnoteReference" in element:
+        reference = element["footnoteReference"]
+        label = f"footnote {reference.get('footnoteNumber') or '<number unavailable>'}"
+        return f"[{label}; content not rendered]", [{"text": label, "target": f"footnote: {reference.get('footnoteId') or '<unavailable>'}"}]
+    kinds = sorted(key for key in element if key not in {"startIndex", "endIndex"} and not key.startswith("suggested"))
+    return f"[unsupported element: {', '.join(kinds)}]" if kinds else "[unavailable element]", []
+
+
+def structural_read_view(elements):
+    chunks, links = [], []
+    for element in elements or []:
+        if "paragraph" in element:
+            for part in element["paragraph"].get("elements", []):
+                text, references = read_paragraph_element(part)
+                chunks.append(text)
+                links.extend(references)
+        elif "table" in element:
+            for row in element["table"].get("tableRows", []):
+                for cell in row.get("tableCells", []):
+                    text, references = structural_read_view(cell.get("content", []))
+                    chunks.append(text)
+                    links.extend(references)
+        elif "tableOfContents" in element:
+            text, references = structural_read_view(element["tableOfContents"].get("content", []))
+            chunks.append(text)
+            links.extend(references)
+        elif "sectionBreak" not in element:
+            chunks.append("[unsupported document structure]\n")
+    return "".join(chunks), links
+
+
+def document_read_tabs(document, tab_ids):
+    """Keep reference labels out of document_tabs, which owns mutation text and spans."""
+    def view(tab_id, title, body):
+        text, links = structural_read_view(body.get("content", []))
+        return {"id": tab_id, "title": title, "text": text, "links": links}
+
+    def visit(tabs):
+        for tab in tabs or []:
+            properties = tab.get("tabProperties", {})
+            yield view(properties.get("tabId", ""), properties.get("title", "Untitled tab"), tab.get("documentTab", {}).get("body", {}))
+            yield from visit(tab.get("childTabs", []))
+
+    tabs = list(visit(document.get("tabs", [])))
+    if not tabs:
+        tabs = [view("", "Document", document.get("body", {}))]
+    return select_tab_ids(tabs, tab_ids)
+
+
 def walk_tabs(tabs):
     for tab in tabs or []:
         properties = tab.get("tabProperties", {})
@@ -144,7 +234,10 @@ def document_tabs(document):
 
 
 def selected_tabs(document, tab_ids):
-    tabs = document_tabs(document)
+    return select_tab_ids(document_tabs(document), tab_ids)
+
+
+def select_tab_ids(tabs, tab_ids):
     if not tab_ids:
         return tabs
     wanted = set(tab_ids)
@@ -184,13 +277,13 @@ def command_read(args):
     print(f"# {document.get('title', 'Untitled document')}")
     print(f"Document ID: {document_id}")
     print(f"Revision ID: {document.get('revisionId', '<missing>')}")
-    for tab in selected_tabs(document, args.tab_id):
+    for tab in document_read_tabs(document, args.tab_id):
         print(f"\n## {tab['title']} [{tab['id'] or 'first-tab'}]\n")
         print(tab["text"], end="" if tab["text"].endswith("\n") else "\n")
         if args.show_links:
             print("\nEmbedded links:")
             for link in tab["links"]:
-                print(f"- {link['text']} -> {link['url']}")
+                print(f"- {link['text']} -> {link['target']}")
     return 0
 
 
@@ -211,6 +304,9 @@ def exact_text_range(document, tab_ids, value):
     end_position = position + len(value)
     if not value or end_position > len(tab["spans"]):
         raise ValueError("Unable to resolve the exact text to Google Docs indices")
+    matched_spans = tab["spans"][position:end_position]
+    if any(left[1] != right[0] for left, right in zip(matched_spans, matched_spans[1:])):
+        raise ValueError("Exact text crosses a native element or structural gap; select contiguous plain text")
     return {
         "tab_id": tab["id"],
         "start_index": tab["spans"][position][0],
@@ -785,10 +881,10 @@ def command_comment(args):
 def build_parser():
     parser = argparse.ArgumentParser(description="Read Google Docs and perform one exact, revision-guarded replacement.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    read_parser = subparsers.add_parser("read", help="Render document text")
+    read_parser = subparsers.add_parser("read", help="Render text and supplied reference labels; mark unavailable or unsupported content")
     read_parser.add_argument("--document-id")
     read_parser.add_argument("--tab-id", action="append", default=[])
-    read_parser.add_argument("--show-links", action="store_true")
+    read_parser.add_argument("--show-links", action="store_true", help="List supplied URLs, emails and internal reference IDs per tab; never fetch linked resources")
     read_parser.set_defaults(func=command_read)
 
     replace_parser = subparsers.add_parser("replace-once", help="Replace one exact text occurrence; dry-run by default")
