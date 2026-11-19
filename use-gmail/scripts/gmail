@@ -3,19 +3,23 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../../setup-google-services/scripts/client.sh"
 source "$SCRIPT_DIR/operations.sh"
+source "$SCRIPT_DIR/content.sh"
 case "${1:---help}" in
     --help|-h|help) cat <<'EOF'
 gmail export ALIAS --output FILE [--query QUERY] [--max-results N]
 gmail labels ALIAS [--json]
 gmail list ALIAS [--label NAME_OR_ID] [--query QUERY] [--limit N] [--json]
 gmail spam ALIAS [--limit N] [--json]
+gmail attachments ALIAS --message ID [--json]
+gmail download-attachment ALIAS --message ID --part PART_ID --output FILE [--overwrite]
+gmail create-draft ALIAS --to EMAIL --body-file FILE [--subject TEXT] [--cc EMAIL] [--bcc EMAIL] [--attach FILE] [--reply-to-message ID] [--execute --allow-draft-write]
 gmail archive|unarchive|not-spam ALIAS (--message ID|--thread ID|--ids-file FILE)... [--execute]
 gmail label|unlabel ALIAS --label NAME_OR_ID (--message ID|--thread ID|--ids-file FILE)... [--skip-inbox] [--execute]
 gmail create-label ALIAS --name NAME [--execute]
 gmail filters ALIAS [--json]
 gmail create-filter ALIAS [--from TEXT] [--to TEXT] [--subject TEXT] [--query QUERY] [--label NAME_OR_ID] [--skip-inbox] [--execute]
 gmail delete-filter ALIAS --filter ID [--execute]
-Writes preview by default and require account opt-ins. --skip-inbox applies only to label/create-filter. No send, trash, delete-message, mark-read, or report-spam commands.
+Remote writes preview by default and require opt-in. Draft creation needs action-time --allow-draft-write; it never sends. --skip-inbox applies only to label/create-filter. No send, trash, delete-message, mark-read, or report-spam commands.
 EOF
     exit 0 ;;
 esac
@@ -26,6 +30,9 @@ case "$command" in
     labels) _gmail_labels "$@" ;;
     list) _gmail_list "$@" ;;
     spam) _gmail_spam "$@" ;;
+    attachments) _gmail_attachments "$@" ;;
+    download-attachment) _gmail_download_attachment "$@" ;;
+    create-draft) _gmail_create_draft "$@" ;;
     archive) _gmail_archive "$@" ;;
     unarchive) _gmail_unarchive "$@" ;;
     label) _gmail_label "$@" ;;

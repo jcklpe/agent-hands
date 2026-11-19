@@ -173,11 +173,15 @@ _gmail_change_cap() {
     _google_account_value "$1" '.gmail.max_changes_per_call // 50' 2>/dev/null || printf '50'
 }
 
-# _gmail_send METHOD ALIAS URL BODY: a Gmail write that surfaces Google's error message instead of curl's bare status.
+# _gmail_send is the internal mutation transport, not an email-send operation. Only the bounded native mutation endpoints below are accepted.
 _gmail_send() (
     set -o pipefail
     _gmail_work_begin || return 1
     local method="$1" alias="$2" url="$3" body="$4" token response http_code message
+    case "$method:$url" in
+        "POST:${_GMAIL_API}/messages/batchModify"|"POST:${_GMAIL_API}/threads/"*/modify|"POST:${_GMAIL_API}/labels"|"POST:${_GMAIL_API}/settings/filters"|"DELETE:${_GMAIL_API}/settings/filters/"*|"POST:${_GMAIL_API}/drafts") ;;
+        *) _google_error 'Gmail mutation endpoint is not allowed. Sending email is unavailable through this CLI.'; return 1 ;;
+    esac
     token="$(_google_access_token "$alias")" || return 1
     response="$(mktemp "$GMAIL_WORK/gmail-response.XXXXXX")" || return 1
     http_code="$(curl -sS -o "$response" -w '%{http_code}' -X "$method" "$url" \
