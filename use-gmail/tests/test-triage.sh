@@ -20,7 +20,7 @@ GOOGLE_ACCOUNTS_PATH="${WORK}/google-write.json" _google_account_scopes example 
 
 # Synthetic mailbox: m-inbox (INBOX), m-spam (SPAM), thread t-1 holding m-inbox. Label changes are recorded in a state file so readback sees them.
 printf '{"m-inbox": ["INBOX", "UNREAD"], "m-spam": ["SPAM"]}\n' > "${WORK}/gmail-state.json"
-_google_get_url() {
+_gmail_get() {
     local url="$2" id
     case "$url" in
         */labels) printf '%s\n' '{"labels":[{"id":"INBOX","name":"INBOX","type":"system"},{"id":"TRASH","name":"TRASH","type":"system"},{"id":"Label_1","name":"Receipts","type":"user"}]}' ;;
@@ -53,7 +53,7 @@ grep -F "not enabled for alias 'example'" "${WORK}/err.txt" >/dev/null || fail "
 expect_fail _gmail_archive example --message m-spam
 grep -F "Trash or Spam" "${WORK}/err.txt" >/dev/null || fail "spam targets are refused"
 expect_fail _gmail_archive example --message m-missing
-grep -F "were not found" "${WORK}/err.txt" >/dev/null || fail "missing Gmail IDs fail"
+grep -F "Could not read Gmail" "${WORK}/err.txt" >/dev/null || fail "missing Gmail IDs fail"
 expect_fail _gmail_label example --label TRASH --message m-inbox
 grep -F "system label" "${WORK}/err.txt" >/dev/null || fail "system labels are refused"
 expect_fail _gmail_label example --label Nope --message m-inbox
