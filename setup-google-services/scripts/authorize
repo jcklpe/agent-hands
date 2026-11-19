@@ -2,11 +2,12 @@
 set -eu
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/client.sh"
 case "${1:---help}" in
-    -h|--help|help) printf '%s\n' 'authorize check | accounts | scopes ALIAS | auth ALIAS [--no-browser] [--docs-write] [--docs-comment]' 'check validates local account configuration only; auth opens a consent flow and writes a local token.'; exit 0 ;;
+    -h|--help|help) printf '%s\n' 'authorize runtime | check | accounts | scopes ALIAS | auth ALIAS [--no-browser] [--docs-write] [--docs-comment]' 'runtime reports the selected Python version without account access; check validates local account configuration only; auth opens a consent flow and writes a local token.'; exit 0 ;;
 esac
 _google_load_env
 command="$1"; shift
 case "$command" in
+    runtime) [ "$#" -eq 0 ] || { _google_error 'runtime takes no account or options'; exit 1; }; _google_runtime_report ;;
     check) _google_accounts_ready; printf '%s\n' 'Google account configuration is valid (offline; credentials/access not checked).' ;;
     accounts) _google_accounts_list ;;
     scopes) _google_account_scopes "${1:?Expected ALIAS}" ;;
