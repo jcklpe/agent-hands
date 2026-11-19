@@ -112,7 +112,16 @@ def digest(value):
 
 
 def stable(value):
-    if isinstance(value,dict): return {k:stable(v) for k,v in value.items() if k not in VOLATILE}
+    if isinstance(value,dict):
+        ignored=VOLATILE
+        # Canvas recomputes seconds_late on every read before the first submission; all dates, policy overrides, attempt/state and content remain fingerprinted.
+        if (value.get('assignment_id') and value.get('user_id') and value.get('workflow_state')=='unsubmitted'
+                and 'submitted_at' in value and value['submitted_at'] is None and 'attempt' in value
+                and (value['attempt'] is None or type(value['attempt']) is int and value['attempt']==0)
+                and value.get('late_policy_status') is None and value.get('seconds_late_override') is None
+                and type(value.get('seconds_late')) is int and value['seconds_late']>=0):
+            ignored=VOLATILE|{'seconds_late'}
+        return {k:stable(v) for k,v in value.items() if k not in ignored}
     if isinstance(value,list): return sorted((stable(v) for v in value),key=canonical)
     return value
 
