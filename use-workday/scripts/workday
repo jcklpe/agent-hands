@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Offline Workday read/preview CLI. No live adapter is installed."""
+import argparse
+import json
+import sys
+from workday_core import Refusal, read_timesheet, preview, verify_plan
+
+
+def load(path):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise Refusal('INVALID_JSON', 'Remove duplicate JSON object keys.')
+            result[key] = value
+        return result
+    with open(path, 'rb') as f:
+        data = f.read(1_000_001)
+    if len(data) > 1_000_000:
+        raise Refusal('INPUT_TOO_LARGE', 'Limit each input to one normalized week under 1 MB.')
+    return json.loads(data.decode('utf-8'), object_pairs_hook=pairs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('doctor', help='Report the transport blocker; performs no network or browser access')
+    read = sub.add_parser('read-timesheet', help='Validate an offline snapshot for an exact target')
+    read.add_argument('--target', required=True, help='Target JSON file')
+    read.add_argument('--snapshot', help='Normalized offline snapshot JSON; no live read without an adapter')
+    pre = sub.add_parser('preview', help='Preview a complete desired week without writes')
+    pre.add_argument('--snapshot', required=True)
+    pre.add_argument('--allocation', required=True)
+    save = sub.add_parser('save-draft', help='Inspect a plan; execution is blocked until a live adapter is verified')
+    save.add_argument('--plan', required=True)
+    save.add_argument('--execute', action='store_true')
+    save.add_argument('--approved-fingerprint')
+    args = parser.parse_args()
+    try:
+        if args.command == 'doctor' or (args.command == 'read-timesheet' and not args.snapshot):
+            raise Refusal('TRANSPORT_UNAVAILABLE', 'No verified Workday API or supported browser attachment is configured. Complete setup-workday transport discovery and an authorized read-only proof; offline snapshots are not live reads.')
+        if args.command == 'read-timesheet':
+            result = read_timesheet(load(args.snapshot), load(args.target))
+        elif args.command == 'preview':
+            result = {'source': 'offline-snapshot', 'plan': preview(load(args.snapshot), load(args.allocation))}
+        else:
+            plan = load(args.plan)
+            verify_plan(plan)
+            if args.execute:
+                raise Refusal('TRANSPORT_UNAVAILABLE', 'Draft execution is unavailable until a supported live transport, atomic revision guard and durable reconciliation are verified. No entries were saved.')
+            result = {'status': 'preview-only', 'source': 'offline-plan', 'plan': plan, 'live_execution_available': False}
+        print(json.dumps(result, sort_keys=True, indent=2))
+        return 0
+    except Refusal as exc:
+        print(json.dumps({'status': 'blocked', 'code': exc.code, 'remedy': exc.remedy}), file=sys.stderr)
+        return 2
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        print(json.dumps({'status': 'blocked', 'code': 'INVALID_INPUT', 'remedy': 'Supply readable files matching the documented v1 contract. No live action was attempted.'}), file=sys.stderr)
+        return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
