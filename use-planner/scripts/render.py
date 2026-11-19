@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from comments import task_url
 
 _support_path = Path(__file__).resolve().parents[2] / "setup-microsoft-services/scripts/text.py"
 _spec = importlib.util.spec_from_file_location("microsoft_text", _support_path)
@@ -38,7 +39,7 @@ def planner_person(users, user_id, me):
 def planner_date(value):
     return (value or "")[:10]
 
-def render_planner_task(lines, task, plan_entry, users, me, limit):
+def render_planner_task(lines, task, plan_entry, users, me, limit, tenant=""):
     categories = (plan_entry.get("details") or {}).get("categoryDescriptions") or {}
     labels = [categories.get(key) or key for key, on in sorted((task.get("appliedCategories") or {}).items()) if on]
     assignees = [planner_person(users, uid, me) for uid in sorted((task.get("assignments") or {}).keys())]
@@ -55,6 +56,8 @@ def render_planner_task(lines, task, plan_entry, users, me, limit):
         lines.append(f"- Labels: {', '.join(labels)}")
     created_by = ((task.get("createdBy") or {}).get("user") or {}).get("id")
     lines.append(f"- Created: {planner_date(task.get('createdDateTime'))}" + (f" by {planner_person(users, created_by, me)}" if created_by else ""))
+    if task.get("id") and task.get("planId"):
+        lines.append(f"- Task: [Open task]({task_url(task, tenant)})")
     lines.append(f"- Task ID: `{task.get('id') or ''}`")
     description = truncate(clean_text(details.get("description") or ""), limit)
     if description:
@@ -115,7 +118,7 @@ def render_planner(args, data):
                 continue
             in_bucket.sort(key=lambda task: (task.get("dueDateTime") or "9999", task.get("orderHint") or ""))
             for task in in_bucket:
-                render_planner_task(lines, task, entry, users, me, args.description_limit)
+                render_planner_task(lines, task, entry, users, me, args.description_limit, args.tenant)
         if done_tasks:
             names = {bucket.get("id"): bucket.get("name") for bucket in buckets}
             lines.extend(["### Completed", ""])
@@ -134,6 +137,7 @@ def main(argv):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--description-limit", required=True, type=int)
     parser.add_argument("--me", default="")
+    parser.add_argument("--tenant", default="")
     args = parser.parse_args(argv)
     with open(args.input, encoding="utf-8") as handle:
         data = json.load(handle)
