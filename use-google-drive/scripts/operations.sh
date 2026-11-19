@@ -685,3 +685,49 @@ EOF
     return 1
 )
 
+
+# Upload preserves bytes and creates a new item in one explicit folder. A staged body prevents source changes during the request.
+_drive_upload() (
+    set -o pipefail
+    _drive_work_begin || return 1
+    local alias="${1:-}" source_file="${2:-}" folder="" name="" expect="" execute=0
+    local parent duplicates plan_hash token status id boundary
+    [ -n "$alias" ] && [ -n "$source_file" ] || { _google_error 'upload requires ALIAS SOURCE_FILE --folder ID'; return 1; }
+    shift 2
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --folder|--name|--expect)
+                [ -n "${2:-}" ] || { _google_error "$1 requires a value"; return 1; }
+                case "$1" in --folder) folder="$2" ;; --name) name="$2" ;; --expect) expect="$2" ;; esac
+                shift 2 ;;
+            --execute) execute=1; shift ;;
+            *) _google_error "Unknown upload option: $1"; return 1 ;;
+        esac
+    done
+    folder="$(_drive_file_id "$folder")" || return 1
+    [ -n "$name" ] || name="$(basename "$source_file")"
+    _google_python "$GOOGLE_DRIVE_DIR" "$GOOGLE_DRIVE_DIR/scripts/upload_payload.py" "$alias" "$source_file" "$folder" "$name" "$DRIVE_WORK" || return 1
+    parent="$(_google_get_url "$alias" "https://www.googleapis.com/drive/v3/files/$folder" --data-urlencode 'supportsAllDrives=true' --data-urlencode 'fields=id,name,mimeType,driveId,trashed,capabilities(canAddChildren)')" || return 1
+    printf '%s' "$parent" | jq -e --arg id "$folder" '.id == $id and .mimeType == "application/vnd.google-apps.folder" and (.trashed != true) and .capabilities.canAddChildren == true' >/dev/null || { _google_error 'Destination must be an accessible writable folder; inspect its ID and account access'; return 1; }
+    duplicates="$(_drive_rename_siblings "$alias" "$folder" "$(printf '%s' "$parent" | jq -r '.driveId // ""')" "$name" '')" || return 1
+    [ -z "$duplicates" ] || { _google_error "Destination name already exists ($duplicates); inspect it before uploading"; return 1; }
+    plan_hash="$(cat "$DRIVE_WORK/upload.hash")"
+    jq . "$DRIVE_WORK/upload.plan"
+    printf 'Destination: %s\nPreview SHA-256: %s\n' "$(printf '%s' "$parent" | jq -r .name)" "$plan_hash"
+    if [ "$execute" -ne 1 ]; then
+        printf 'DRY RUN: use --expect PREVIEW_SHA256 --execute after approval.\n'
+        return 0
+    fi
+    [ "$expect" = "$plan_hash" ] || { _google_error 'Preview fingerprint missing or changed; nothing uploaded. Preview the exact source and destination again'; return 1; }
+    _drive_write_enabled "$alias" || { _google_error 'Drive upload requires existing drive.write_enabled opt-in and drive.file scope; see setup-google-services'; return 1; }
+    token="$(_google_access_token "$alias")" || return 1
+    boundary="$(cat "$DRIVE_WORK/upload.boundary")"
+    status="$(curl -sS -o "$DRIVE_WORK/upload.result" -w '%{http_code}' -X POST 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink' -H "Authorization: Bearer $token" -H "Content-Type: multipart/related; boundary=$boundary" --data-binary "@$DRIVE_WORK/upload.body")" || { _google_error 'Upload outcome unknown; inspect destination before retrying'; return 1; }
+    case "$status" in 2??) ;; *) _google_error "Upload failed (HTTP $status); inspect destination before retrying"; cat "$DRIVE_WORK/upload.result" >&2; return 1 ;; esac
+    id="$(jq -er '.id | select(type == "string" and length > 0)' "$DRIVE_WORK/upload.result")" || { _google_error 'Upload returned no ID; inspect destination before retrying'; return 1; }
+    id="$(_drive_file_id "$id")" || return 1
+    printf 'Created ID: %s\n' "$id"
+    _google_get_url "$alias" "https://www.googleapis.com/drive/v3/files/$id" --data-urlencode 'supportsAllDrives=true' --data-urlencode 'fields=id,name,mimeType,parents,size,md5Checksum,webViewLink' > "$DRIVE_WORK/upload.after" || { _google_error "Readback failed for $id; inspect before retrying"; return 1; }
+    jq -e --arg id "$id" --slurpfile plan "$DRIVE_WORK/upload.plan" '.id == $id and .name == $plan[0].name and .mimeType == $plan[0].mimeType and .parents == [$plan[0].folder] and (.size | tonumber) == $plan[0].size and .md5Checksum == $plan[0].md5' "$DRIVE_WORK/upload.after" >/dev/null || { _google_error "Upload $id readback mismatch; preserve source and inspect before retrying"; return 1; }
+    jq . "$DRIVE_WORK/upload.after"
+)

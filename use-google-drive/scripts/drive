@@ -12,9 +12,10 @@ drive meta ALIAS FILE_URL_OR_ID [--json]
 drive read ALIAS FILE_URL_OR_ID [--range A1_RANGE]
 drive download ALIAS FILE_URL_OR_ID [--out PATH] [--mime MIME] [--force]
 drive export-index ALIAS --output FILE [--folders N] [--recent N] [--recent-days N] [--exclude-folder NAME]...  # --recent 0 skips the recent-file query
+drive upload ALIAS SOURCE_FILE --folder FOLDER_ID [--name NAME] [--expect PREVIEW_SHA256 --execute]
 drive import-doc ALIAS SOURCE_FILE --title TITLE [--folder FOLDER_ID] [--execute]
 drive rename ALIAS FILE_URL_OR_ID --name NEW_NAME [--expect PREVIEW_SHA256 --execute]
-Import and rename preview by default and require account write opt-in; rename executes only with its preview fingerprint. Exports/downloads write local files only.
+Upload, import and rename preview by default and require account write opt-in; upload and rename execute only with their preview fingerprints. Exports/downloads write local files only.
 Search/list fetch one page per call. For continuation, reuse the same account, query/folder and page-size setting with the returned nextPageToken. Failed or expired tokens do not restart automatically.
 Results can change or overlap between pages; deduplicate by file ID when combining them. Full-text search retains Drive's relevance ordering.
 EOF
@@ -30,6 +31,7 @@ case "$command" in
     read) _drive_read "$@" ;;
     download) _drive_download "$@" ;;
     export-index) _drive_export_index "$@" ;;
+    upload) _drive_upload "$@" ;;
     import-doc) _drive_import_doc "$@" ;;
     rename) _drive_rename "$@" ;;
     *) _google_error 'Unknown Drive command'; exit 1 ;;
