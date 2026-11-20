@@ -1,18 +1,20 @@
 ---
-attention: live
+attention: historical
 ---
 
 # CLI Review Feedback
-Opened: 2026-10-25. Slug: `cli-review-feedback`.
+Opened: 2026-10-25. Closed: 2026-11-18. Slug: `cli-review-feedback`.
+
+Historical record of the completed spike. Current behavior and limits belong to the [Docs skill](../../use-google-docs/SKILL.md), [Drive skill](../../use-google-drive/SKILL.md) and [Google provider diagnostics](../../setup-google-services/references/account-access.md#runtime-diagnostics).
 
 The reviewed CLI routes were useful: Drive reads, multi-tab Docs reads, comment listing, and GitHub reads succeeded during an authorized review on 2026-10-25. The strongest improvement candidates are a way to continue bounded Drive discovery and more explicit treatment of Docs references that are not ordinary text links. The observed runtime failures do not establish a refactor regression.
 
-This spike records feedback and the selected Drive pagination implementation. Explicit search/list continuation was authorized on 2026-11-17 and is implemented; Docs reference rendering and runtime diagnostics remain proposals. The spike stays active for those remaining decisions. See the [task record](cli-review-feedback.todo.md) for evidence checks and remaining work.
+This spike records feedback and the selected Drive pagination implementation. Explicit search/list continuation was authorized on 2026-11-17 and is implemented; Docs reference rendering and runtime diagnostics were selected on 2026-11-17. Both are implemented and verified; closure and the complete archival wording were approved on 2026-11-18. See the [task record](cli-review-feedback.todo.md) for verification evidence and acceptance limits.
 
 ## Scope and boundaries
 Keep this work in Agent Hands, which owns the portable capabilities behind the compatibility commands. Preserve bounded requests, provider isolation, account/target selection, and existing write guards. Successful reads establish that the exercised routes worked for that review; they do not establish write access, complete discovery, fresh-machine setup, or all-platform behavior.
 
-Selected implementation scope includes bounded Drive search/list continuation, its synthetic tests and command guidance. Tool installation, credential/configuration changes, remote writes, browser use, broad audit and parent-repository pin updates remain outside scope. Do not copy interview content, participant identities, private document IDs, account aliases, exports, or private conversation links into this public repository. Command examples below use placeholders.
+Selected implementation scope includes bounded Drive search/list continuation, Docs reference rendering, runtime diagnostics, their synthetic checks and maintained guidance. Tool installation, credential/configuration changes, remote writes, browser use, broad audit and parent-repository pin updates remain outside scope. Do not copy interview content, participant identities, private document IDs, account aliases, exports, or private conversation links into this public repository. Command examples below use placeholders.
 
 ## Evidence and interpretation
 The live observations in this section were supplied by the completed review; they were not replayed while writing the spike. Local checks inspected current skill instructions, entrypoint help, and only the relevant implementation paths.
@@ -39,13 +41,13 @@ Implemented acceptance criteria:
 - Command help and the owning skill document continuation together; examples use the native entrypoint without personal routing.
 
 ## Docs: make missing reference content visible
-In [docs.py](../../use-google-docs/scripts/docs.py), `get_document` requests `includeTabsContent=true`, `walk_tabs` recurses into child tabs, and `selected_tabs` supports explicit tab selection. `structural_text` and `structural_text_with_spans` extract paragraph text only from `textRun`; `structural_links` extracts only `textRun.textStyle.link.url`. Those helpers traverse tables and tables of contents, but other paragraph-element types contribute no text or links. `command_read` prints the resulting tab text and, with `--show-links`, the collected ordinary URL links.
+The [Docs reader](../../use-google-docs/scripts/docs.py) has a separate display traversal, leaving the mutation text-run/UTF-16 model intact. It renders API-supplied rich-link titles, person names or emails, date display text and dropdown values. `--show-links` lists supplied URIs, emails and internal heading/bookmark/tab/footnote identities per selected tab. It traverses tables, tables of contents and nested tabs. Missing properties produce unavailable markers; unknown elements and unrendered footnote content remain visible. It never infers a URL or retrieves a linked resource.
 
-This is direct evidence of an omission path, but not proof that the reviewed references were a particular chip type or that their target URLs were present in the API response. The [Docs skill](../../use-google-docs/SKILL.md) already warns that reads flatten structure. The missing piece is a clearer fidelity signal and, where supported by the actual response, useful reference rendering.
+The response shapes come from Google's current [ParagraphElement](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents#ParagraphElement), [RichLink](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents#RichLink), [Person](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents#Person) and [Link](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents#Link) schemas. Synthetic fixtures establish supported rendering, not the identity of the originally omitted live references. Date/dropdown labels are used only when supplied; images, equations, footnote bodies, headers/footers and visual layout remain outside this reader's fidelity claim.
 
-Proposal: inspect a minimal synthetic fixture or separately authorized, sanitized response to identify relevant non-text reference shapes. Render labels/targets where the API supplies them; otherwise surface an explicit unsupported or unavailable reference marker rather than an unexplained blank. Do not invent a target URL from visible text or fetch linked resources automatically.
+Display labels never enter replacement matching. The exact-range resolver also refuses noncontiguous API spans for plain, Markdown and suggestion replacements, preventing a flattened match from crossing an omitted chip or table boundary. Existing revision checks remain in place.
 
-Proposed acceptance criteria:
+Implemented acceptance criteria:
 - Establish the actual supported reference shape before claiming smart-chip coverage. Tests distinguish ordinary linked text, supported non-text references, and unknown or missing reference data.
 - Supported labels remain in reading order; `--show-links` exposes supplied targets in the correct tab context. Unavailable targets and unsupported elements are distinguishable from genuinely empty content.
 - Plain text, ordinary links, selected tabs, child tabs, tables, and tables of contents retain their current readable behavior. Fixtures cover each affected traversal path without private source material.
@@ -53,17 +55,17 @@ Proposed acceptance criteria:
 - Update read help/skill fidelity notes to describe supported content and remaining omissions. Do not imply visual/layout parity or that Markdown body replacement preserves native chips.
 
 ## Runtime: distinguish environment friction from service failure
-The [Google provider helper](../../setup-google-services/scripts/client.sh), `_google_python`, invokes an explicit `GOOGLE_PYTHON` when set, otherwise uses `uv run --project`. The [setup guide](../../setup-google-services/SKILL.md) and Python manifests require Python 3.11+. These facts explain why cache access and runtime selection matter; they do not prove a new runtime defect.
+The [Google provider helper](../../setup-google-services/scripts/client.sh) now checks an explicit `GOOGLE_PYTHON` against the documented 3.11 minimum before dispatching its Python operation. The credential-free `authorize runtime` command reports actual version and runner; it does not read account JSON, inspect tokens or call a Google service. Existing `uv run --project` selection is retained. Errors, stdout and failure status from the selected operation are preserved without automatic fallback or retry.
 
-Proposal: consider concise diagnostic guidance that separates cache/filesystem denial, unsupported runtime selection, DNS/network failure, and provider authorization failure. For sandbox denials, the agent should follow its execution environment's approval mechanism for the exact authorized operation, not treat tool installation or a successful read elsewhere as blanket permission.
+The [provider diagnostics](../../setup-google-services/references/account-access.md#runtime-diagnostics) distinguish unsupported/missing interpreters, cache/filesystem denial, DNS/transport failures, actual provider authorization/resource/policy/quota responses and command/validation errors. They retain the original error, require actual version evidence, preserve the selected operation and approval boundary, and avoid grant expansion, automatic reauthorization, cache deletion or broad permission changes. These are diagnoses and supported-runtime guards, not evidence that the original incidents were refactor regressions.
 
-Proposed acceptance criteria:
+Implemented acceptance criteria:
 - Guidance records the failed layer and actual runtime version, preserves the original error, and avoids reporting service or refactor failure before the evidence supports it.
 - Any suggested Python override is checked against the documented minimum. Do not recommend the abandoned 3.9.6 workaround, automatic downgrade, credential changes, or broad filesystem permission changes.
 - Diagnostic examples contain no tokens, account configuration, or private document data. Any supported-runtime or alternate-environment retry keeps the requested operation unchanged and follows the applicable authorization rules.
 
-## Open decisions
-Drive continuation is implemented and verified with nine synthetic tests spanning both commands; the existing Drive operation regression program also passes. The bounded macOS live check confirmed both continuation routes and recorded overlapping full-text search results. Docs reference rendering still needs a representative response shape and a design that separates presentation from mutation ranges. Runtime guidance remains a possible usability improvement, not an assertion that the reviewed migration broke the tools.
+## Completion and limits
+Drive continuation is implemented and verified with nine synthetic tests spanning both commands; the existing Drive operation regression program also passes. The bounded macOS live check confirmed both continuation routes and recorded overlapping full-text search results. Docs reference rendering is verified against synthetic fixtures matching the current API schemas, with separate read and mutation models. Runtime reporting and the explicit-interpreter minimum guard pass eight synthetic runtime tests, three OAuth tests and actual supported/unsupported interpreter checks. No required implementation remains. Fresh-machine/platform onboarding and the shape of the originally omitted live reference remain unproved and are outside this bounded acceptance.
 
-## Active follow-up — 2026-11-17
-The user kept this spike open and selected Drive pagination for implementation. That gap is complete; the Docs reference-rendering and runtime-diagnostic proposals remain undecided and unimplemented. Maintained command behavior belongs to [Google Drive](../../use-google-drive/SKILL.md) and [Google Docs](../../use-google-docs/SKILL.md). The closure review (local preparation record) tracks this active owner alongside the separately approved closures.
+## Completion — 2026-11-18
+The user kept this spike open and selected Drive pagination for implementation. Drive pagination, Docs reference rendering and runtime diagnostics are complete. The user approved closure and the complete archival wording on 2026-11-18; the full pair is archived. Maintained command behavior belongs to [Google Drive](../../use-google-drive/SKILL.md) and [Google Docs](../../use-google-docs/SKILL.md). The [closure review](../active-spikes/spike-closure-review.todo.md) tracks this closure alongside the other reviewed scopes.
