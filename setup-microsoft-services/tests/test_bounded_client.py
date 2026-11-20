@@ -20,7 +20,8 @@ class Boundary(unittest.TestCase):
             executable.write_text('''#!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
-if '-RequestPath' not in sys.argv: sys.exit(0)
+if '-RequestPath' not in sys.argv:
+    print('AGENT_HANDS_GRAPH_READY'); sys.exit(0)
 request = json.loads(Path(sys.argv[sys.argv.index('-RequestPath')+1]).read_text())
 Path(os.environ['TEST_BOUNDED_LOG']).write_text(json.dumps(request))
 print(json.dumps({'id':'synthetic','name':'ok','mail':'me@example.com'}))

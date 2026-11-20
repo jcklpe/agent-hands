@@ -12,6 +12,10 @@ MSAL HTTP requests pass the bearer header to curl through stdin, without placing
 
 The optional `graph-powershell` route uses PowerShell and Microsoft.Graph.Authentication, with SDK-managed CurrentUser context/cache rather than an adjacent MSAL JSON cache. Its portable account entry requires `expected_account`; the active SDK account must match before any service request. Non-GET requests, including batches, disable SDK retries to avoid repeating uncertain side effects. This route uses the SDK's application and may require tenant approval. It is not an independent SDK cache per alias. Compatibility callers using this provider must also configure `expected_account`; they must not bypass the identity check. Preserve the known identity when migrating a working profile, without requesting new grants merely to check the migration.
 
+Each PowerShell child receives its own private temporary startup/module cache, removed on normal completion or a handled exit. This avoids concurrent access to PowerShell's corruptible startup JIT cache without changing the executable, Graph SDK sign-in store or browser profile. Cache isolation applies only to that child, not the caller's environment. The readiness probe requires an explicit successful marker: a crash or a zero exit with unexpected output is a runtime failure, not evidence that Graph is missing. Only a confirmed missing module suggests installation. See the [upstream startup-cache issue](https://github.com/PowerShell/PowerShell/issues/26528).
+
+Provider request files and disposable caches use the OS temporary location (`TMPDIR` when set, otherwise the macOS user temporary directory or `/tmp` on Unix). The selected directory must exist outside the capability source and any Git checkout, including through symlinks; an invalid override fails instead of falling back into the checkout. Abrupt machine/process termination can leave private temporary files. They are not authentication or write-recovery journals, and OS retention is not the normal cleanup mechanism.
+
 ## Commands
 ```sh
 bash scripts/authorize check

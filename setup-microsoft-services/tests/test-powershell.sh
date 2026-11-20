@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -eu
 AUTH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-command -v pwsh >/dev/null || { printf 'SKIP: PowerShell is unavailable\n'; exit 0; }
+source "$AUTH/scripts/client.sh"
+command -v "$(_m365_powershell_bin)" >/dev/null || { printf 'SKIP: PowerShell is unavailable\n'; exit 0; }
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/modules/Microsoft.Graph.Authentication"
@@ -35,7 +36,7 @@ exit $LASTEXITCODE
 PS
 export TEST_REQUEST_MARKER="$WORK/request-sent"
 export TEST_RETRY_MARKER="$WORK/retry"
-run_fixture() { pwsh -NoLogo -NoProfile -File "$WORK/run.ps1" -ScriptPath "$AUTH/scripts/graph.ps1" -RequestPath "$1"; }
+run_fixture() { _m365_powershell_run -NoLogo -NoProfile -NonInteractive -File "$WORK/run.ps1" -ScriptPath "$AUTH/scripts/graph.ps1" -RequestPath "$1"; }
 if run_fixture "$WORK/request.json" > "$WORK/out" 2> "$WORK/error"; then printf 'Unexpected identity acceptance\n' >&2; exit 1; fi
 grep -F 'does not match' "$WORK/error" >/dev/null || { cat "$WORK/error" >&2; exit 1; }
 [ ! -e "$TEST_REQUEST_MARKER" ]
