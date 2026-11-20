@@ -30,6 +30,10 @@ _m365_http() {
   [ "${DELETE_FAIL:-0}" = 0 ] || return 1
   touch "$CASE/deleted"
 }
+_m365_batch() {
+  jq -e 'length==1 and .[0].method=="GET" and .[0].url=="/planner/tasks/task-1"' "$2" >/dev/null || return 1
+  printf '[{"id":"0","status":%s,"body":{"error":{"code":"itemNotFound"}}}]' "${LOOKUP_STATUS:-404}" > "$3"
+}
 _m365_get_paginated() {
   [ "${M365_REQUIRE_COMPLETE:-0}" = 1 ] || return 1
   printf '%s\n' "$4" >> "$CASE/readbacks"
@@ -137,6 +141,19 @@ class DeleteTests(unittest.TestCase):
         self.assertIn("remains present", result.stderr)
         self.assertNotIn("deletion confirmed", result.stdout)
         self.assertEqual(len(self.writes()), 1)
+
+    def test_absence_from_original_plan_does_not_prove_deletion(self):
+        fingerprint = self.preview()
+        for code in ('200', '403', '429', '500'):
+            with self.subTest(status=code):
+                if not self.writes():
+                    result = self.execute(fingerprint, LOOKUP_STATUS=code)
+                else:
+                    result = self.run_cli('--verify', LOOKUP_STATUS=code)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('deletion confirmed', result.stdout)
+        self.assertEqual(len(self.writes()), 1)
+        self.assertEqual(self.run_cli('--verify').returncode, 0)
 
     def test_verify_is_read_only_and_unknown_options_fail(self):
         for args in (("--verify", "--execute"), ("--verify", "--expected-sha256", "0" * 64), ("--force",), ("--verify",)):

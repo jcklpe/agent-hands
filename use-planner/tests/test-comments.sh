@@ -6,6 +6,7 @@ source "$SKILL/../setup-microsoft-services/scripts/client.sh"
 source "$SKILL/scripts/operations.sh"
 M365_PYTHON="${M365_PYTHON:-python3}"
 WORK="$(mktemp -d)"
+WORK="$(cd "$WORK" && pwd -P)"
 trap 'rm -rf "$WORK"' EXIT
 M365_PLANNER_AUDIT_LOG="$WORK/audit.jsonl"; export M365_PLANNER_AUDIT_LOG
 refute() { if "$@"; then printf 'Expected failure: %s\n' "$*" >&2; exit 1; fi; }
@@ -140,6 +141,21 @@ refute _m365_planner_dispatch comment example --task task-1 --file "$WORK/commen
 printf '  \n' > "$WORK/blank"
 refute _m365_planner_dispatch comment example --task task-1 --file "$WORK/blank" --execute >/dev/null 2>&1
 # Editing never crosses authorship/mention boundaries, and ambiguous applied edits recover in place.
+reset_fixture
+(
+    _m365_planner_chat_journal() { return 1; }
+    refute _m365_planner_dispatch comment example --task task-1 --file "$WORK/comment" --execute >/dev/null 2>&1
+    [ ! -s "$WORK/writes" ]
+)
+reset_fixture
+(
+    mkdir() {
+        command mkdir "$@" || return
+        case "$1" in *.lock) printf '%s' '{"value":[{"id":"peer","parentEntityId":"task-1","content":"Concurrent message","createdBy":{"user":{"id":"peer"}},"mentions":[]}]}' > "$WORK/messages" ;; esac
+    }
+    refute _m365_planner_dispatch comment example --task task-1 --file "$WORK/comment" --execute >/dev/null 2>&1
+    [ ! -s "$WORK/writes" ]
+)
 reset_fixture
 _m365_planner_dispatch comment example --task task-1 --file "$WORK/comment" --execute >/dev/null
 prior="$(cat "$WORK/messages"|_m365_planner_python "$SKILL/scripts/comments.py" hash msg-1)"

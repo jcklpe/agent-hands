@@ -559,7 +559,7 @@ _m365_planner_label() {
 _m365_planner_delete() (
     set -o pipefail
     _m365_work_begin || return 1
-    local alias="${1:-}" task_id="" expected="" execute=0 verify=0 snapshot prepared receipt plan_id etag title root listing
+    local alias="${1:-}" task_id="" expected="" execute=0 verify=0 snapshot prepared receipt plan_id etag title root listing lookup request
     [ -n "$alias" ] || { _m365_error 'delete-task requires ALIAS'; return 1; }
     shift
     while [ "$#" -gt 0 ]; do
@@ -601,6 +601,10 @@ _m365_planner_delete() (
     fi
     listing="$M365_WORK/remaining-tasks.json"
     M365_REQUIRE_COMPLETE=1 _m365_get_paginated "$alias" "$(_m365_planner_max_tasks "$alias")" "$listing" "$(_m365_planner_url "$alias" "planner/plans/$(_m365_uri_encode "$plan_id")/tasks")" || { _m365_error 'Deletion verification failed; inspect the receipt and use --verify. No write will be repeated.'; return 1; }
+    request="$M365_WORK/task-lookup-request.json"; lookup="$M365_WORK/task-lookup.json"
+    jq -nc --arg task "$task_id" '[{method:"GET",url:("/planner/tasks/"+($task|@uri))}]' > "$request" || return 1
+    _m365_batch "$alias" "$request" "$lookup" || { _m365_error 'Exact task absence is unverified; retain the deletion receipt and do not replay.'; return 1; }
+    jq -e 'length==1 and .[0].id=="0" and .[0].status==404 and (.[0].body.error|type=="object")' "$lookup" >/dev/null || { _m365_error 'The exact task still exists or its read was denied/failed; absence from the original plan does not confirm deletion.'; return 1; }
     _m365_planner_python "$PLANNER_DIR/scripts/task_delete.py" confirm --alias "$alias" --task "$task_id" --root "$root" < "$listing" >/dev/null || return 1
     title="$(printf '%s' "$prepared" | jq -r '.title')"
     _m365_planner_audit "$alias" delete-task "$task_id" "$title" true "$(printf '%s' "$prepared" | jq '{fingerprint,plan_id}')"
@@ -664,9 +668,7 @@ _m365_planner_chat_posts() (
 )
 
 _m365_planner_chat_journal() {
-    local dest="$1" state="$2" operation="$3" hash="$4" message="$5" tmp
-    tmp="$(mktemp "${dest}.XXXXXX")" || return 1
-    jq -nc --arg state "$state" --arg op "$operation" --arg hash "$hash" --arg id "$message" '{route:"task-chat",state:$state,operation:$op,hash:$hash,message_id:$id}' > "$tmp" && mv "$tmp" "$dest"
+    _m365_planner_python "$PLANNER_DIR/scripts/chat_journal.py" "$@"
 }
 
 _m365_planner_legacy_read() {
@@ -746,6 +748,10 @@ _m365_planner_comments() (
     trap 'rmdir "$lock"' EXIT
     trap 'exit 130' HUP INT TERM
     trap 'exit 141' PIPE
+    # The initial preview was read before taking the shared task lock; do not dispatch from that stale view.
+    local fresh_posts
+    fresh_posts="$(_m365_planner_chat_posts "$alias" "$task_id")" || return 1
+    [ "$(printf '%s' "$fresh_posts" | jq -Sc '.value|sort_by(.id)')" = "$(printf '%s' "$posts" | jq -Sc '.value|sort_by(.id)')" ] || { _m365_error 'Task chat changed while acquiring the lock; prepare a fresh preview. No write was sent.'; return 1; }
     journal="$recovery/$key.json"
     if [ "$mode" = edit-comment ]; then journal="$recovery/$key-edit-$(printf '%s' "$message" | _m365_planner_python -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())').json"; fi
     state=""; saved_hash=""; saved_id=""
