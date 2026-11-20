@@ -14,8 +14,27 @@ _m365_python() {
     else _m365_error 'Install uv or select a compatible M365_PYTHON'; return 1
     fi
 }
+_m365_temp_dir() {
+    local root ancestor source_root
+    root="${TMPDIR:-}"
+    if [ -z "$root" ]; then
+        if [ "$(uname -s)" = Darwin ]; then root="$(getconf DARWIN_USER_TEMP_DIR)" || return 1
+        else root=/tmp
+        fi
+    fi
+    case "$root" in /*) ;; *) _m365_error 'The temporary directory must be an existing absolute path outside a checkout'; return 1 ;; esac
+    root="$(cd "$root" && pwd -P)" || return 1
+    source_root="$(cd "$M365_AUTH_DIR/.." && pwd -P)" || return 1
+    case "$root/" in "$source_root/"*) _m365_error 'Temporary files cannot be stored in the capability checkout'; return 1 ;; esac
+    ancestor="$root"
+    while [ "$ancestor" != / ]; do
+        [ ! -e "$ancestor/.git" ] || { _m365_error 'Temporary files cannot be stored inside a Git checkout'; return 1; }
+        ancestor="${ancestor%/*}"; [ -n "$ancestor" ] || ancestor=/
+    done
+    (umask 077; mktemp -d "$root/microsoft-work.XXXXXX")
+}
 _m365_work_begin() {
-    M365_WORK="$(mktemp -d "${TMPDIR:-/tmp}/microsoft-work.XXXXXX")" || return 1
+    M365_WORK="$(_m365_temp_dir)" || return 1
     trap 'rm -rf "$M365_WORK"' EXIT
     trap 'exit 130' HUP INT TERM
 }
@@ -147,15 +166,31 @@ _m365_powershell_helper() {
     printf '%s/scripts/graph.ps1\n' "$M365_AUTH_DIR"
 }
 
+_m365_powershell_run() (
+    local cache pwsh
+    pwsh="$(_m365_powershell_bin)"
+    cache="$(_m365_temp_dir)" || return 1
+    trap 'rm -rf "$cache"' EXIT
+    trap 'exit 130' HUP INT TERM
+    mkdir "$cache/powershell" || return 1
+    # Concurrent PowerShell processes can corrupt the shared startup JIT cache. Each process owns disposable caches; the Graph SDK authentication store stays unchanged.
+    XDG_CACHE_HOME="$cache" PSModuleAnalysisCachePath="$cache/powershell/ModuleAnalysisCache" "$pwsh" "$@"
+)
+
 _m365_powershell_ready() {
-    local pwsh
+    local pwsh result status
     pwsh="$(_m365_powershell_bin)"
     command -v "$pwsh" >/dev/null 2>&1 || { _m365_error "PowerShell is required for Microsoft 365 auth_provider graph-powershell"; return 1; }
-    "$pwsh" -NoLogo -NoProfile -Command 'if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) { exit 1 }' >/dev/null 2>&1 || {
+    if result="$(_m365_powershell_run -NoLogo -NoProfile -NonInteractive -Command 'try { if (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication -ErrorAction Stop) { "AGENT_HANDS_GRAPH_READY" } else { "AGENT_HANDS_GRAPH_MISSING"; exit 2 } } catch { exit 3 }' 2>/dev/null)"; then status=0; else status=$?; fi
+    if [ "$status" -eq 0 ] && [ "$result" = AGENT_HANDS_GRAPH_READY ]; then return 0; fi
+    if [ "$status" -eq 2 ] && [ "$result" = AGENT_HANDS_GRAPH_MISSING ]; then
         _m365_error "Microsoft.Graph.Authentication is not installed for PowerShell"
         _m365_say "NEXT: Install-Module Microsoft.Graph.Authentication -Scope CurrentUser"
         return 1
-    }
+    fi
+    _m365_error "PowerShell startup or module discovery failed (exit $status); Graph module availability was not established"
+    _m365_say 'NEXT: Check the selected M365_PWSH_BIN and PowerShell runtime; preserve existing sign-ins. A zero exit without the readiness marker is also a failure.'
+    return 1
 }
 
 _m365_msal_ready() {
@@ -233,9 +268,8 @@ _m365_prepare_powershell_request() {
 }
 
 _m365_powershell_invoke() {
-    local mode="$1" request_path="$2" pwsh
-    pwsh="$(_m365_powershell_bin)"
-    "$pwsh" -NoLogo -NoProfile -File "$(_m365_powershell_helper)" -Mode "$mode" -RequestPath "$request_path"
+    local mode="$1" request_path="$2"
+    _m365_powershell_run -NoLogo -NoProfile -NonInteractive -File "$(_m365_powershell_helper)" -Mode "$mode" -RequestPath "$request_path"
 }
 
 _m365_powershell_auth() (
