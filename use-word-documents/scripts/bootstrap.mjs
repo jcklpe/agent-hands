@@ -56,6 +56,8 @@ export async function openAddinAutomatically(browser, bridge, account, target) {
       await catalog.locator('input[type=file]').setInputFiles({name: 'agent-hands-word.xml', mimeType: 'text/xml', buffer: Buffer.from(manifest(account))}, {timeout: 8000});
       await click(catalog.getByRole('button', {name: 'Upload', exact: true}));
       installed = true;
+      // Word can open the uploaded task pane before exposing its ribbon command. The authenticated bridge is sufficient; a missing ribbon control must not turn an established session into a setup failure.
+      if (await ready(5000)) { guard(); return 'installed'; }
       await frame.locator('[aria-label="Open Word bridge"]').waitFor({state: 'attached', timeout: 20_000});
       // Refresh the ribbon layout after installation; Word can initially leave the new command hidden in overflow.
       await click(frame.getByRole('tab', {name: 'Insert', exact: true}));

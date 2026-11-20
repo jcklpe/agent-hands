@@ -26,6 +26,8 @@ The command verifies the selected account and document, opens the bridge from th
 
 Preparation is a metadata write covered by an authorized editing task that permits this route, not by a read-only request. It requires `--execute` and the existing file-write opt-in. There is no bulk enrollment of unrelated documents, tenant-wide deployment, new permission grant or whole-file replacement. A missing sign-in needs `login`; unavailable/localized upload controls, tenant restrictions or a failed bridge connection require the visible `configure` fallback below. A failed setup may already have inserted the add-in reference, so report that partial result and inspect it; do not bypass policy or repeat content edits.
 
+Uploading can open the task pane before Word exposes its ribbon button. Setup accepts the authenticated bridge for the exact document in that case; ribbon appearance is not an additional success requirement. A cloud startup flag alone does not establish that the current browser can load the add-in. If a read returns `addin_setup_required`, an authorized `prepare` can restore the catalog/pane connection while reusing a verified existing startup setting.
+
 ## Authenticate and configure an authorized document
 Resolve the selected document through Microsoft Files and retain both drive and item IDs. For sign-in alone, run `login` with those IDs. For visible fallback when automatic preparation cannot complete, run:
 
