@@ -31,18 +31,21 @@ bash use-trello/scripts/trello --help
 
 Cloning does not install skills into an agent client automatically. The setup dialogue offers optional global discovery for selected services in Codex and Claude Code. Each service setup owns its `scripts/link-skills.py` entrypoint: preview first, then apply the authorized selection with `--execute`. See [global link choices and conflict-safe repair](setup-agent-hands/references/global-skill-links.md). Direct use of a `SKILL.md` remains available without links. If distributing only selected skills, retain their declared dependencies and sibling folder layout; optional link entrypoints also require the shared `setup-agent-hands/scripts/skill_links.py` primitive. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
 
+## Workday implementation in progress
+[use-workday](use-workday/SKILL.md) provides offline normalized timesheet reads and allocation previews. [setup-workday](setup-workday/SKILL.md) records the unresolved live transport requirements. Draft execution is fake-tested internally but unavailable against Workday; no submission command exists. This capability is not globally installed or connected.
+
 ## Available capabilities
 The names below group related reads, writes, and comments where implemented. A `use-*` skill is a bounded interface, not a promise of the service's full API.
 
 | Provider | Skill | Supported operations |
 | --- | --- | --- |
-| Google | [use-gmail](use-gmail/SKILL.md) | Read/search/export mail, label and archive exact targets, rescue Spam, and manage limited filters. |
+| Google | [use-gmail](use-gmail/SKILL.md) | Read/search/export mail and attachments, create drafts for manual sending, label/archive exact targets, rescue Spam, and manage limited filters. |
 | Google | [use-google-calendar](use-google-calendar/SKILL.md) | List calendars, find/export events, and create/update events with calendar and notification controls. |
 | Google | [use-google-contacts](use-google-contacts/SKILL.md) | Look up names and email addresses in saved and other contacts; read-only. |
 | Google | [use-google-docs](use-google-docs/SKILL.md) | Read existing Docs, replace uniquely matched text or a tab's content from Markdown, and list/add comments. |
 | Google | [use-google-drive](use-google-drive/SKILL.md) | Search/list/inspect/read/download files, export metadata indexes, and import a local file as a Google Doc. |
 | Google | [use-google-sheets](use-google-sheets/SKILL.md) | Read a selected cell range as Markdown; read-only. |
-| Microsoft | [use-outlook-mail](use-outlook-mail/SKILL.md) | Read/search/export mail and attachments, file/categorize messages, manage bounded Inbox rules, and prepare manual-send native reply drafts with explicit recipients/signatures. A macOS native reply passed live readback, stale-ETag refusal and user visual review; broader rendering/platform coverage remains unverified. |
+| Microsoft | [use-outlook-mail](use-outlook-mail/SKILL.md) | Read/search/export mail and attachments, file/categorize messages, manage bounded Inbox rules, prepare manual-send native reply drafts, and edit saved drafts with a guarded plain-text body replacement. Recipients and attachments are preserved. Reply creation passed macOS live readback and visual review; saved-draft editing has offline checks, with live execution and broader rendering/platform coverage unverified. |
 | Microsoft | [use-outlook-calendar](use-outlook-calendar/SKILL.md) | List calendars, find/export events, and create/update events with invitation and writable-calendar controls. |
 | Microsoft | [use-outlook-contacts](use-outlook-contacts/SKILL.md) | Find/list/export contacts and create/update contacts. |
 | Microsoft | [use-microsoft-files](use-microsoft-files/SKILL.md) | Search/inspect/download OneDrive and SharePoint files, upload/replace files, create folders, inspect sharing/versions and preview bounded move/rename/recycle operations. Disposable macOS tests passed move/rename, pagination, concurrency guards and separately approved recycle requests; restoration remains unverified. |
