@@ -2,6 +2,7 @@
 Use this file as a short map; detailed reasoning and task state belong in the relevant spike pair.
 
 ## Active
+- Google Docs inline image repair: bounded inspection and revision-guarded local-file replacement, with private temporary imports and independent readback. [Scope](docs/active-spikes/google-docs-images.md); [tasks](docs/active-spikes/google-docs-images.todo.md).
 - Planner recovery reliability: exact-task absence checks, durable chat receipts and lock-time read validation pass synthetic checks and are published. [Scope](docs/active-spikes/planner-recovery-reliability.md); [tasks](docs/active-spikes/planner-recovery-reliability.todo.md).
 - Runtime file lifecycle: disposable Office verification downloads use private system temp storage; maintained [file inventory](docs/runtime-files.md) distinguishes persistent state and retained evidence. Legacy-state migration and retirement classification remain explicit. [Scope](docs/active-spikes/runtime-file-lifecycle.md); [tasks](docs/active-spikes/runtime-file-lifecycle.todo.md).
 - Outlook saved-draft editing (opened 2026-11-17): guarded body replacement with preserved recipients/attachments, stale-edit refusal and read-only recovery. [Scope](docs/active-spikes/outlook-saved-draft-editing.md); [checks](docs/active-spikes/outlook-saved-draft-editing.todo.md).

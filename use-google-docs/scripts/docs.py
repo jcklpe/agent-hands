@@ -878,6 +878,23 @@ def command_comment(args):
     return 0
 
 
+def image_tools():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("google_docs_images", Path(__file__).with_name("images.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def command_images(args):
+    return image_tools().command_images(args, globals())
+
+
+def command_replace_images(args):
+    return image_tools().command_replace(args, globals())
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Read Google Docs and perform one exact, revision-guarded replacement.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -934,6 +951,21 @@ def build_parser():
     comment_parser.add_argument("--tab-id", action="append", default=[])
     comment_parser.add_argument("--execute", action="store_true")
     comment_parser.set_defaults(func=command_comment)
+    images_parser = subparsers.add_parser("images", help="Inspect existing inline images without printing signed content URIs")
+    images_parser.add_argument("--document-id")
+    images_parser.add_argument("--json", action="store_true")
+    images_parser.add_argument("--out-dir", help="Save image bytes in a new/noncolliding local directory")
+    images_parser.set_defaults(func=command_images)
+
+    repair_parser = subparsers.add_parser("replace-images", help="Reinsert explicit inline images from local files; private import and revision/fingerprint guards")
+    repair_parser.add_argument("--document-id")
+    repair_parser.add_argument("--plan", required=True, help="JSON array of object_id, optional tab_id, image_file and width_pt")
+    repair_parser.add_argument("--temporary-folder", required=True, help="Explicit writable Drive folder for the operation's private temporary import")
+    repair_parser.add_argument("--expect", help="Exact preview fingerprint, required to execute")
+    repair_parser.add_argument("--record", help="New private operation record path, required to execute")
+    repair_parser.add_argument("--execute", action="store_true")
+    repair_parser.set_defaults(func=command_replace_images)
+
     return parser
 
 
