@@ -143,6 +143,7 @@ bash use-odoo-projects/tests/test-odoo-shell.sh
 Offline checks do not prove live permissions, tenant eligibility, or fresh-machine installation. Check help and local configuration first, then use an authorized read to verify the selected account and service. Routine setup should not mutate external records.
 
 ## Security
+The [runtime file inventory](docs/runtime-files.md) documents affected provider outputs, private state, path overrides and cleanup boundaries. Disposable verification downloads use private system temp directories; unresolved write journals and sign-ins must survive routine cleanup.
 Keep secrets and private data out of commits and public reports. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## License

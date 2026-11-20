@@ -5,6 +5,7 @@ import {promisify} from 'node:util';
 import {unzipSync, strFromU8} from 'fflate';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 import {ROOT, MAX_TEXT, fail, targetFromMetadata} from './core.mjs';
+import {privateTempDir} from './temporary.mjs';
 
 const exec = promisify(execFile);
 async function provider(relative, args, json = true) {
@@ -82,8 +83,7 @@ export function docxParagraphs(bytes) {
   return paragraphs;
 }
 async function download(account, target, inspect) {
-  const dir = fs.mkdtempSync(path.join(account.dir, 'download-'));
-  fs.chmodSync(dir, 0o700);
+  const dir = privateTempDir('agent-hands-word-readback-');
   try {
     const file = path.join(dir, 'readback.docx');
     await provider('use-microsoft-files/scripts/files', ['download', target.alias, target.item, '--drive', target.drive, '--out', file], false);
