@@ -1,7 +1,11 @@
 ---
-attention: live
+attention: historical
 ---
 # LifeOS Slack List Comments Tasks
+Historical record. Closed 2026-11-21 after approval of closure and the complete archival wording. Slug: `lifeos-slack-list-comments`. Maintained commands and safeguards belong to [Use Slack Lists](../../use-slack-lists/SKILL.md). The bounded read/comment scope is verified; unknown-List mapping, genuinely missing roots and reliable direct navigation retain the limits below. The disposable test item remains for user cleanup.
+
+The retained development entries describe their dated checkpoints; pending statements below are historical.
+
 
 Ownership update (2026-10-30): moved from `configs/docs/active-spikes/lifeos-slack-list-comments.todo.md` into Agent Hands. Stable slug, recorded decisions, completed work and open QA are preserved; this move does not close or reactivate the spike. Current native guidance: [use-slack-lists](../../use-slack-lists/SKILL.md). The aggregate `lifeos` launcher and compatibility tree are retired; old commands and test paths below record the original implementation, not a current entrypoint.
 
