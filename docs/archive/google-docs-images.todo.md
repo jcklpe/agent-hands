@@ -1,7 +1,11 @@
 ---
-attention: live
+attention: historical
 ---
 # Google Docs inline image repair tasks
+Historical record. Closed 2026-11-20. Slug: `google-docs-images`. Maintained commands and safeguards belong to [Google Docs](../../use-google-docs/SKILL.md). The bounded image-repair capability is implemented, published and independently checked; document-specific visual acceptance, wider platforms and interrupted-upload recovery are not claimed.
+
+The retained development entries describe their dated checkpoints; later pending or local-only statements are historical.
+
 ## Background
 Implement the explicitly requested native capability expansion without broadening authentication or adding a general API escape hatch.
 ## Current State Overview
@@ -12,8 +16,8 @@ Implemented and exercised on an authorized live document. Independent export and
 - [x] Verify rejection cases, text preservation, unaffected images, source hashes and cleanup with synthetic fixtures.
 - [x] Exercise the authorized live target and inspect an independent export.
 - [x] Document actual behavior, limits and recovery.
-## Ready for human visual QA
-Live repair and independent export inspected. Broader human acceptance remains with the caller.
+## Acceptance and retained limits
+The selected native capability is implemented, published and checked through an authorized live repair plus independent export/pixel inspection. No further implementation item remains in this scope. Acceptance of an individual document's appearance remains with its caller; closure does not claim broader visual acceptance, animation preservation, other-platform validation or interrupted-upload recovery. The added publication safeguards have synthetic coverage and were not established by repeating the real write.
 ## Done
 - Scoped the operation and private temporary-import lifecycle.
 - Reviewed the complete publication patch and added regression checks for private file modes, repository/symlink rejection, shared-folder refusal, safe redirects, preserved dispatch receipts, cleanup of only the created import and display-size mismatch. The private runtime inventory records recovery retention separately from disposable outputs.
