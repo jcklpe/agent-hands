@@ -37,6 +37,6 @@ Comment preview performs reads and identity validation but sends nothing. Execut
 
 A `record_id` navigation URL does not prove the item's detail panel opens. Keep record verification, discussion links, and UI navigation distinct; do not invent URLs or create a comment merely to manufacture a link. The tool cannot verify browser navigation.
 
-Run `python use-slack-lists/tests/test_operations.py` from the collection root for offline discussion/partial-failure checks. No live write has been performed as part of this extraction.
+Run `python use-slack-lists/tests/test_operations.py` from the collection root for offline discussion/partial-failure checks. The extraction itself performed no live write. A subsequent authorized macOS test created one disposable item, discovered its zero-reply root and posted one comment with exact author/text/thread readback and an API permalink. Slack search visually confirmed the comment; direct List navigation remained stalled. Unknown-List mapping and missing-root creation retain the limits above.
 
 Run `python3 tests/test-write-guards.py` from this skill folder for the migrated synthetic write/validation checks. Shared URL/paging checks live in `../setup-slack/tests/test_request_helpers.py`.
