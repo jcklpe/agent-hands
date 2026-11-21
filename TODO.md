@@ -47,7 +47,7 @@ Moved from configs on 2026-10-30. Stable filenames/slugs, recorded work and rema
 - [CLI tool provisioning](docs/scratch/agent-hands-cli-tool-provisioning.md): remaining selected-runtime installation gaps across Linux/WSL and native Windows, with configs installer observations preserved. Captured only; no implementation started.
 
 ## Workday capability — transport blocked
-- Agent-directed time entry: offline snapshot reads/previews and a fake-tested draft executor are implemented; 30 synthetic tests pass. Live transport, settled recovery, client discovery and human QA remain unverified. No actual time entries or browser access were performed. [Concept and scope](docs/active-spikes/workday-capabilities.md); [investigation and coding handoff](docs/active-spikes/workday-capabilities.todo.md).
+- Agent-directed time entry: offline snapshot reads/previews and a fake-tested draft executor are implemented; 30 synthetic tests pass. Official MCP/client prerequisites are verified in vendor documentation, but tenant authorization, live transport, conditional draft persistence, settled recovery and client discovery remain unproved. No actual time entries or Workday browser access were performed. [Concept and scope](docs/active-spikes/workday-capabilities.md); [investigation and coding handoff](docs/active-spikes/workday-capabilities.todo.md).
 
 ## Bitwarden scratch spikes
 - Runtime service credentials: selected Secrets Manager Free plus official `bws` CLI, with optional Agent Hands integration, native desktop setup/no human terminal and OS-protected bootstrap. Implementation is not started. [Decision and scope](docs/scratch/bitwarden-capabilities.md); [handoff](docs/scratch/bitwarden-capabilities.todo.md).

@@ -2,7 +2,7 @@
 attention: live
 status: transport-blocked
 implementation: offline-contract
-reviewed: 2026-11-16
+reviewed: 2026-11-20
 ---
 # Workday capabilities — investigation and implementation handoff
 [Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry and browser fallback remain outside this implementation scope.
@@ -12,6 +12,11 @@ reviewed: 2026-11-16
 - The existing scope below remains the broader acceptance backlog; partial implementation does not mark whole live-runtime items done.
 - [Transport evidence, exact blockers and next gates](../../setup-workday/references/transport.md); [contract and commands](../../use-workday/SKILL.md).
 - Validation: `python3 -m unittest discover -s use-workday/tests -v` passes on macOS/Python 3.9. CLI errors emit no stdout payload. Full selected source/document review, workflow TOML resolution, relative links, private-path ignores and unchanged child pin checked. Other platforms, fresh client discovery, live access and UI behavior are unverified.
+
+## Transport investigation — 2026-11-20
+- Retrieved the official indexed Markdown pages for external-agent MCP setup, tool discovery and REST authentication. MCP requires Extend Professional access, OAuth, registered-agent configuration and appropriate security domains; subscription/feature prerequisites are documented. Public catalog time-tracking tools do not prove tenant access or conditional draft persistence.
+- No Workday connector is available in the current tool inventory, and no approved tenant client/agent registration has been established. The next concrete gate is an authorized read-only client and worker/week proof. Existing browser attachment and guarded save requirements remain unresolved; no credentials were extracted, grants changed or payroll data written.
+- Updated the maintained transport reference with primary sources and the exact distinction between public interface availability, tenant authorization and save semantics. The first backlog item remains open for endpoint/concurrency coverage and a proven reuse/custom decision.
 
 ## Earlier planning state (2026-11-02)
 - The user wants an agent-directed deterministic tool to reduce the repeated model calls and page inspection involved in recurring Workday time entry. Existing signed-in browser reuse is preferred; browser fragility is accepted.
