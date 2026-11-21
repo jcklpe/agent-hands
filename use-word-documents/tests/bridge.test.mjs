@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {initialize} from '../scripts/browser.mjs';
 import {startBridge} from '../scripts/bridge.mjs';
+import {markDispatch, makePlan} from '../scripts/core.mjs';
 
 async function port() {
   const server = net.createServer();
@@ -42,6 +43,10 @@ test('bridge enforces local host, origin, run token, target and single delivery'
     await assert.rejects(bridge.waitReady(20), {code: 'addin_setup_required'});
     assert.equal((await call('report', {id: 'ready', host: 'Word', platform: 'OfficeOnline', url: target.origin + target.pathname})).status, 200);
     await bridge.waitReady(20);
+    const plan = makePlan(target, {find: 'old', replacement: 'new', before: 'old', after: 'new'});
+    const journal = path.join(account.dir, 'plans', plan.id + '.journal.json');
+    await assert.rejects(bridge.command('replace', {}, () => markDispatch(journal, plan), 50), {code: 'not_dispatched'});
+    assert.ok(!fs.existsSync(journal));
     let dispatches = 0;
     const result = bridge.command('replace', {edit: {}}, () => dispatches++, 2000);
     const first = await call('next');
@@ -51,9 +56,12 @@ test('bridge enforces local host, origin, run token, target and single delivery'
     assert.equal((await call('report', {id: 'wrong', status: 'save_returned'})).status, 409);
     await call('report', {id: first.body.id, status: 'save_returned'});
     assert.equal((await result).status, 'save_returned');
-    const timeout = bridge.command('replace', {}, () => {}, 100);
+    const timeout = bridge.command('replace', {}, () => markDispatch(journal, plan), 100);
     await call('next');
     await assert.rejects(timeout, {code: 'uncertain_after_dispatch'});
     assert.equal((await call('next')).body, null);
+    assert.equal(JSON.parse(fs.readFileSync(journal)).status, 'uncertain_after_dispatch');
+    assert.throws(() => markDispatch(journal, plan), {code: 'already_dispatched'});
+    assert.equal((await call('report', {id: first.body.id, status: 'save_returned'})).status, 409);
   } finally { await bridge.close(); fs.rmSync(root, {recursive: true, force: true}); }
 });

@@ -13,7 +13,17 @@ Choose an unused loopback port and retain it. The command creates private state 
 
 Chrome's sandbox remains enabled, and the launcher removes Playwright's mock-keychain/basic-password-store flags so Chrome uses its normal platform credential protection. Native credential-store access can itself need an OS prompt; do not suppress that protection to make a run headless. Platform-specific guarantees still need testing.
 
-The loopback server binds only `127.0.0.1`. The owned Chrome process trusts only the generated certificate's public-key fingerprint through Chromium's scoped SPKI switch; no operating-system trust store is modified and unrelated HTTPS errors are not disabled. The key expires after a year. A renewal workflow is not yet implemented; stop for deliberate setup maintenance if it expires. Browser local-network permission is granted only for the exact target origin and observed Microsoft Office frame origins. Tenant/browser restrictions are independent of Graph consent.
+The loopback server binds only `127.0.0.1`. The owned Chrome process trusts only the generated certificate's public-key fingerprint through Chromium's scoped SPKI switch; no operating-system trust store is modified and unrelated HTTPS errors are not disabled. The certificate expires after a year; expiry stops execution until deliberate renewal. Browser local-network permission is granted only for the exact target origin and observed Microsoft Office frame origins. Tenant/browser restrictions are independent of Graph consent.
+
+## Deliberate certificate maintenance
+Inspect expiry without changing state, then renew only when maintenance is intended:
+
+```sh
+node setup-microsoft-services/scripts/word-browser.mjs renew-certificate example
+node setup-microsoft-services/scripts/word-browser.mjs renew-certificate example --execute
+```
+
+Renewal acquires the account lock and refuses existing browser singleton markers, unsafe file ownership/permissions, symlinks or a certificate/key mismatch. It preserves the private key and public-key fingerprint, account and add-in identities, manifest, browser sign-in and dispatch journals. Only the certificate is replaced, through a validated, owner-only temporary file and atomic rename. No system trust store, document metadata or service permissions change. This is validity renewal, not key rotation or remediation for a compromised key. No automatic renewal or stale-lock reclamation is performed. A failed or interrupted maintenance operation requires inspection before another attempt; it never authorizes deleting profiles, browser singleton markers or dispatch records.
 
 ## Prepare an authorized document headlessly
 After one normal sign-in in the owned profile, Agent Hands can do per-document setup without manual manifest uploads. For an authorized Word editing target:

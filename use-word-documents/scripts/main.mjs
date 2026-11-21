@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {parseArgs} from 'node:util';
 import {aliasName, identifier, loadAccount, lockAccount, writeJSON, readJSON, operationFiles, makePlan, verifyPlan, previewParagraphs, markDispatch, fail, sleep} from './core.mjs';
-import {initialize, openBrowser, browserIdentity} from './browser.mjs';
+import {initialize, openBrowser, browserIdentity, renewCertificate} from './browser.mjs';
 import {startBridge, manifest} from './bridge.mjs';
 import {cloudTarget, requireWrite, downloadParagraphs, downloadStartup, cloudResult} from './cloud.mjs';
 import {openAddinAutomatically} from './bootstrap.mjs';
 
 const emit = value => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 const help = setup => setup ? `word-browser init ALIAS --port PORT
+word-browser renew-certificate ALIAS [--execute]
 word-browser login ALIAS --drive DRIVE --item ITEM
 word-browser prepare ALIAS --drive DRIVE --item ITEM --execute
 word-browser configure ALIAS --drive DRIVE --item ITEM --execute
@@ -29,7 +30,7 @@ function parse(argv, setup) {
   }});
   if (!parsed.positionals.length || parsed.values.help || parsed.positionals[0] === 'help') return null;
   const [command, alias, ...extra] = parsed.positionals;
-  const allowed = setup ? {init: ['port'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
+  const allowed = setup ? {init: ['port'], 'renew-certificate': ['execute'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
   if (!allowed[command] || extra.length || Object.keys(parsed.values).some(key => !allowed[command].includes(key))) fail('invalid_arguments', 'Unsupported command or option; use --help.');
   return {command, alias: aliasName(alias), options: parsed.values};
 }
@@ -57,6 +58,7 @@ export async function main(argv, setup = false) {
       return;
     }
     const account = loadAccount(alias);
+    if (command === 'renew-certificate') { emit(await renewCertificate(account, !!options.execute)); return; }
     unlock = lockAccount(account);
     let target, profile, plan, files;
     if (['status', 'apply', 'verify'].includes(command)) {

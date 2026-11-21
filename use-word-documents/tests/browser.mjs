@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import {initialize, launchOwnedBrowser} from '../scripts/browser.mjs';
+import {initialize, launchOwnedBrowser, renewCertificate} from '../scripts/browser.mjs';
 import {startBridge} from '../scripts/bridge.mjs';
 import {previewParagraphs} from '../scripts/core.mjs';
 
@@ -17,6 +17,7 @@ test('real headless owned browser runs the add-in bridge with an offline Office 
   const account = await initialize('demo', port, root);
   const sentinelAccount = await initialize('sentinel', port, root);
   const target = {origin: 'https://example.sharepoint.com', pathname: '/sites/demo/Test.docx', guid: ''};
+  assert.equal((await renewCertificate(account, true)).status, 'certificate_renewed');
   const bridge = await startBridge(account, target);
   let context, sentinel;
   try {

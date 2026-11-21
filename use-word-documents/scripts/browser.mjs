@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomBytes, randomUUID, createHash, X509Certificate} from 'node:crypto';
+import {randomBytes, randomUUID, createHash, X509Certificate, createPrivateKey, createPublicKey} from 'node:crypto';
 import {chromium} from 'playwright';
 import selfsigned from 'selfsigned';
-import {STATE, accountDir, privateDir, writeJSON, loadAccount, fail, checkAccount, sleep} from './core.mjs';
+import {STATE, accountDir, privateDir, writeJSON, loadAccount, fail, checkAccount, sleep, noSymlinks, lockAccount} from './core.mjs';
 
 export async function initialize(alias, port, root = STATE) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_port', 'Choose an unused local port from 1024 through 65535.');
@@ -23,6 +23,47 @@ export async function initialize(alias, port, root = STATE) {
   writeJSON(path.join(dir, 'browser/agent-hands-owner.json'), {owner}, true);
   writeJSON(path.join(dir, 'account.json'), {kind: 'agent-hands-word-v1', alias, owner, port, secret: randomBytes(24).toString('hex'), addinId: randomUUID()}, true);
   return loadAccount(alias, root);
+}
+export async function renewCertificate(account, execute = false) {
+  const certFile = path.join(account.dir, 'cert.pem'), keyFile = path.join(account.dir, 'key.pem');
+  const inspect = file => {
+    noSymlinks(file);
+    const stat = fs.statSync(file);
+    if (!stat.isFile() || (process.platform !== 'win32' && (stat.uid !== process.getuid() || (stat.mode & 0o077)))) fail('unsafe_state', 'Certificate material must be owner-only regular files.');
+  };
+  inspect(certFile);
+  const current = new X509Certificate(fs.readFileSync(certFile));
+  if (!execute) return {status: 'certificate_renewal_preview', expires: current.validTo, expired: Date.parse(current.validTo) <= Date.now(), preservesKey: true, authenticationChanged: false};
+  const release = lockAccount(account);
+  let temporary;
+  try {
+    // A surviving Chromium process may outlive its controller. Refuse its native singleton markers rather than reclaiming a profile automatically.
+    for (const name of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+      try { fs.lstatSync(path.join(account.browserDir, name)); fail('profile_busy', 'The owned browser has a singleton marker. Establish that it stopped before deliberate recovery.'); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    inspect(certFile); inspect(keyFile);
+    const original = fs.readFileSync(certFile);
+    const prior = new X509Certificate(original);
+    const privateKey = fs.readFileSync(keyFile, 'utf8');
+    const key = createPrivateKey(privateKey);
+    if (!prior.checkPrivateKey(key)) fail('certificate_key_mismatch', 'The certificate does not match its private key. No renewal was performed.');
+    const publicKey = createPublicKey(key).export({type: 'spki', format: 'pem'});
+    const generated = await selfsigned.generate([{name: 'commonName', value: 'localhost'}], {
+      keyPair: {privateKey, publicKey}, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      extensions: [{name: 'basicConstraints', cA: false}, {name: 'keyUsage', digitalSignature: true, keyEncipherment: true}, {name: 'extKeyUsage', serverAuth: true}, {name: 'subjectAltName', altNames: [{type: 2, value: 'localhost'}, {type: 7, ip: '127.0.0.1'}]}]
+    });
+    const renewed = new X509Certificate(generated.cert);
+    if (!renewed.checkPrivateKey(key) || !renewed.verify(renewed.publicKey) || Date.parse(renewed.validTo) <= Date.now() || !renewed.checkHost('localhost') || !renewed.checkIP('127.0.0.1')) fail('certificate_renewal_failed', 'Generated certificate did not pass local validation.');
+    inspect(certFile);
+    if (!fs.readFileSync(certFile).equals(original)) fail('certificate_changed', 'Certificate changed during renewal. Inspect before retrying.');
+    temporary = path.join(account.dir, `cert-${randomUUID()}.tmp`);
+    const fd = fs.openSync(temporary, 'wx', 0o600);
+    try { fs.writeFileSync(fd, generated.cert); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    fs.renameSync(temporary, certFile); temporary = null;
+    if (process.platform !== 'win32') { const fd = fs.openSync(account.dir, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
+    return {status: 'certificate_renewed', expires: renewed.validTo, preservesKey: true, authenticationChanged: false};
+  } finally { if (temporary) fs.rmSync(temporary, {force: true}); release(); }
 }
 export function launchOptions(account, headless = true) {
   const certificate = new X509Certificate(fs.readFileSync(path.join(account.dir, 'cert.pem')));
