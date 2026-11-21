@@ -1,4 +1,11 @@
+---
+attention: historical
+---
 # LifeOS Microsoft 365 Mail Archive
+Historical record. Closed 2026-11-21 after approval of closure and the complete archival wording. Slug: `lifeos-m365-mail-archive`. Maintained commands and safeguards belong to [Use Outlook Mail](../../use-outlook-mail/SKILL.md), [Use Gmail](../../use-gmail/SKILL.md) and the [adopted mail policy](../agent-policies/BOUND-MAIL-WRITES-limit-reversible-filing.md). Representative live round trips and delegated visual filing QA passed; optional Archive export, cap tuning and consumer triage remain separate.
+
+The retained development entries describe their dated checkpoints; pending statements below are historical.
+
 
 Privacy separation (2026-11-02): consumer-specific passages and actual account-validation chronology were preserved privately before removal from this public record. Portable requirements, recorded tooling evidence and stable slugs remain; historical instructions below are not current operating guidance.
 

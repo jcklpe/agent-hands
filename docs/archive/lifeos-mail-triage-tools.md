@@ -8,7 +8,7 @@ Historical record of the completed spike. Maintained behavior and limits belong 
 
 Ownership update (2026-10-30): moved from `configs/docs/active-spikes/lifeos-mail-triage-tools.md` into Agent Hands. Stable slug, recorded decisions, completed work and open QA are preserved; this move does not close or reactivate the spike. Current native guidance: [use-gmail](../../use-gmail/SKILL.md), [use-outlook-mail](../../use-outlook-mail/SKILL.md). The aggregate `lifeos` launcher and compatibility tree are retired; old commands and test paths below record the original implementation, not a current entrypoint.
 
-Status: closed 2026-11-18 after explicit approval of closure and the complete archival wording. Continues from [LifeOS Microsoft 365 Mail Archive](../active-spikes/lifeos-m365-mail-archive.md), which added archive, folder moves, labels, and spam rescue.
+Status: closed 2026-11-18 after explicit approval of closure and the complete archival wording. Continues from [LifeOS Microsoft 365 Mail Archive](lifeos-m365-mail-archive.md), which added archive, folder moves, labels, and spam rescue.
 
 ## Purpose
 Give the `lifeos` mail commands what an agent needs to walk a person through **per-email triage toward inbox zero**: each message gets a recommended outcome, and the person approves outcomes one message at a time. The calling vault owns the workflow and its judgment (what counts as noise, how tasks are framed, where information is filed). This repo supplies the capabilities.
@@ -46,7 +46,7 @@ The out-of-scope paragraph above preserves this triage spike's original implemen
 Same model as 0007: exact IDs, dry-run by default, per-call caps, readback, the ignored audit log, and per-account opt-in. Items 1–7 are reads or output-format changes; items 8–9 write standing rules, under their own opt-in flags (`gmail.filters_enabled`, `mail.rules_enabled`) and [BOUND-MAIL-RULES](../agent-policies/BOUND-MAIL-RULES-limit-standing-automation.md).
 
 ## Related
-- [LifeOS Microsoft 365 Mail Archive](../active-spikes/lifeos-m365-mail-archive.md), the predecessor.
+- [LifeOS Microsoft 365 Mail Archive](lifeos-m365-mail-archive.md), the predecessor.
 - [BOUND-MICROSOFT-ACCESS](../agent-policies/BOUND-MICROSOFT-ACCESS-limit-delegated-service-access.md), [REJECT-GUESSES](../agent-policies/REJECT-GUESSES-stop-writes-with-unknown-critical-values.md), [BOUND-MAIL-WRITES](../agent-policies/BOUND-MAIL-WRITES-limit-reversible-filing.md), [BOUND-MAIL-RULES](../agent-policies/BOUND-MAIL-RULES-limit-standing-automation.md).
 - `agent-hands/use-gmail/SKILL.md`, `agent-hands/use-outlook-mail/SKILL.md`.
 
