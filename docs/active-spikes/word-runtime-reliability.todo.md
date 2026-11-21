@@ -1,6 +1,6 @@
 ---
 attention: live
-reviewed: 2026-11-20
+reviewed: 2026-11-21
 tags: [microsoft, word, reliability]
 ---
 # Sustained Word runtime reliability tasks
@@ -20,6 +20,7 @@ The authorized macOS runtime repair and disposable read/edit/save verification p
 Windows/Linux onboarding is [parked](../scratch/word-windows-linux-validation.md), to resume when a concrete platform need and test environment exist. Different-user tenant deployment and complex Word structures remain outside the accepted macOS fixture coverage.
 
 ## Done
+- [x] On 2026-11-21, a fresh headless read, one previewed synthetic ALPHA replacement, single apply, independent cloud-only verify and another fresh headless read passed. Existing authentication was reused, BETA and every other paragraph were unchanged, and zero Word-owned Chrome processes remained after completion. This is another dated successful invocation; actual tenant expiry, sustained unattended use and additional interruption timings remain unverified.
 - [x] Repeat the authorized macOS disposable read/preview/apply/cloud-verify/fresh-read sequence on 2026-11-20. The new ALPHA text persisted, BETA and all other paragraphs were unchanged, and the owned browser exited after the calls. Existing authentication was reused; normal Chrome was not operated by the Word tool. This adds one bounded successful session, not working-day coverage or actual tenant-expiry evidence.
 - [x] Repair the setup branch where upload opens the pane before Word exposes the ribbon command. Nine unit/bridge cases and four isolated browser cases pass, including automatic opening without a ribbon button and exact-target refusal. The authorized disposable macOS preparation/read/preview/apply/cloud-verify/fresh-read sequence passed with all other paragraphs preserved and normal Chrome untouched. Saved startup was reused without changing it; existing authentication and journals were retained.
 - [x] Isolate every PowerShell process startup/module cache in private OS temporary storage and require a positive readiness marker. Eight synthetic cases cover concurrent isolation, cleanup, crash/false-success diagnostics and unsafe temporary overrides. Four simultaneous real startups, synthetic Graph identity/endpoint/no-retry checks, and existing-account profile, Planner and Outlook reads passed on macOS with the original shared cache unchanged.
