@@ -2,10 +2,10 @@
 attention: live
 status: transport-blocked
 implementation: offline-contract
-reviewed: 2026-11-20
+reviewed: 2026-11-21
 ---
 # Workday capabilities — investigation and implementation handoff
-[Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry and browser fallback remain outside this implementation scope.
+[Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry remains outside this implementation scope; the separately authorized read-only browser probe is recorded below.
 
 ## Current implementation checkpoint — 2026-11-16
 - Added `setup-workday` and `use-workday`, the offline read/preview CLI, guarded draft executor, durable private Unix journal and 30 synthetic tests. No production transport, live read/write, reconciliation command, submission command, installation or browser access is implemented or claimed.
@@ -17,6 +17,11 @@ reviewed: 2026-11-20
 - Retrieved the official indexed Markdown pages for external-agent MCP setup, tool discovery and REST authentication. MCP requires Extend Professional access, OAuth, registered-agent configuration and appropriate security domains; subscription/feature prerequisites are documented. Public catalog time-tracking tools do not prove tenant access or conditional draft persistence.
 - No Workday connector is available in the current tool inventory, and no approved tenant client/agent registration has been established. The next concrete gate is an authorized read-only client and worker/week proof. Existing browser attachment and guarded save requirements remain unresolved; no credentials were extracted, grants changed or payroll data written.
 - Updated the maintained transport reference with primary sources and the exact distinction between public interface availability, tenant authorization and save semantics. The first backlog item remains open for endpoint/concurrency coverage and a proven reuse/custom decision.
+
+## Browser attachment investigation — 2026-11-21
+- Verified official Chrome M144 native connection approval and current Playwright channel attachment/detachment documentation. The installed Chrome 157 and Playwright 1.65.1 support the documented surface; no runtime installation or dependency change was made.
+- An isolated headless synthetic attach/read/disconnect check preserved the owner's original page and closed only the disposable browser on fixture cleanup. It did not use normal-profile data or credentials.
+- The user explicitly authorized a read-only existing-session probe. Its first attempt failed before returning Workday headings; native connection setup and a selected signed-in Workday tab remain the next live gate. No timesheet write, cookie/profile export, security-setting change or normal-tab mutation was performed. Complete worker/week retrieval and production save semantics remain unproved.
 
 ## Earlier planning state (2026-11-02)
 - The user wants an agent-directed deterministic tool to reduce the repeated model calls and page inspection involved in recurring Workday time entry. Existing signed-in browser reuse is preferred; browser fragility is accepted.

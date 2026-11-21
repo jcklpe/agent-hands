@@ -2,10 +2,10 @@
 attention: live
 status: transport-blocked
 implementation: offline-contract
-reviewed: 2026-11-16
+reviewed: 2026-11-21
 ---
 # Workday capabilities
-[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is now authorized and the offline contract is implemented. No transport is selected; no installation, authentication, registration, credential creation, browser access or service write occurred.
+[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is now authorized and the offline contract is implemented. No production transport is selected. A separately authorized existing-browser probe and an isolated synthetic attachment check are recorded in the handoff; no Workday timesheet read or write has been established. No installation, authentication, registration or credential creation occurred.
 
 ## Implemented boundary
 The [use-workday CLI](../../use-workday/SKILL.md) validates supplied normalized weeks and previews exact allocations locally. Its draft-save engine is exercised only through an in-memory fake service. Live commands fail with a specific transport blocker. Setup owns [transport discovery and remaining gates](../../setup-workday/references/transport.md). Atomic service revision protection and settled recovery must be proved before connecting the write engine; browser preflight alone is insufficient. Submission remains future scope, not part of this implementation.
