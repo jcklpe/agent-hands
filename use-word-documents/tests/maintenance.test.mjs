@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {X509Certificate} from 'node:crypto';
 import {initialize, renewCertificate, launchOptions} from '../scripts/browser.mjs';
-import {lockAccount, writeJSON} from '../scripts/core.mjs';
+import {lockAccount, writeJSON, recoveryStatus} from '../scripts/core.mjs';
 
 test('renewal preserves key, identity, browser state and uncertain journals; refuses unsafe state', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'word-renew-')));
@@ -49,5 +49,30 @@ test('renewal preserves key, identity, browser state and uncertain journals; ref
     assert.deepEqual(fs.readFileSync(cert), good);
     fs.unlinkSync(cert); fs.symlinkSync(path.join(second.dir, 'cert.pem'), cert);
     await assert.rejects(renewCertificate(account, true), {code: 'unsafe_state'});
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('recovery inspection distinguishes controller states without removing locks or singleton markers', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'word-recovery-')));
+  try {
+    const account = await initialize('demo', 43189, root);
+    assert.equal(recoveryStatus(account).lockPresent, false);
+    const release = lockAccount(account), file = path.join(account.dir, 'lock.json');
+    const original = fs.readFileSync(file);
+    assert.equal(recoveryStatus(account).controller, 'running');
+    const missing = () => { throw Object.assign(new Error('missing'), {code: 'ESRCH'}); };
+    assert.equal(recoveryStatus(account, missing).controller, 'not_running');
+    assert.equal(recoveryStatus(account, () => { throw Object.assign(new Error('denied'), {code: 'EPERM'}); }).controller, 'unknown');
+    const marker = path.join(account.browserDir, 'SingletonLock');
+    fs.symlinkSync('synthetic-host-123', marker);
+    const result = recoveryStatus(account, missing);
+    assert.deepEqual(result.singletonMarkers, ['SingletonLock']);
+    assert.equal(result.browserStopped, 'not_established');
+    assert.equal(result.automaticRecoveryAllowed, false);
+    assert.deepEqual(fs.readFileSync(file), original);
+    assert.equal(fs.readlinkSync(marker), 'synthetic-host-123');
+    release();
+    writeJSON(file, {owner: account.owner, pid: 0}, true);
+    assert.throws(() => recoveryStatus(account), {code: 'unsafe_state'});
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });

@@ -67,6 +67,22 @@ export function lockAccount(account) {
   catch (error) { if (error.code === 'EEXIST') fail('profile_busy', 'This tool profile is locked. Do not delete the lock until its recorded process and owned browser have stopped.'); throw error; }
   return () => fs.unlinkSync(file);
 }
+export function recoveryStatus(account, probe = pid => process.kill(pid, 0)) {
+  const file = path.join(account.dir, 'lock.json');
+  let controller = 'not_recorded', lockPresent = false;
+  try {
+    const lock = readJSON(file); lockPresent = true;
+    if (lock.owner !== account.owner || !Number.isSafeInteger(lock.pid) || lock.pid <= 0) fail('unsafe_state', 'Invalid profile lock. Inspect private recovery state manually.');
+    try { probe(lock.pid); controller = 'running'; }
+    catch (error) { controller = error.code === 'ESRCH' ? 'not_running' : 'unknown'; }
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const singletonMarkers = [];
+  for (const name of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+    try { fs.lstatSync(path.join(account.browserDir, name)); singletonMarkers.push(name); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  return {status: 'recovery_inspection', lockPresent, controller, singletonMarkers, browserStopped: 'not_established', automaticRecoveryAllowed: false, next: 'Establish that the exact owned browser and controller stopped before manual lock recovery. Preserve profiles and dispatch journals; use word verify after an interrupted edit.'};
+}
 export function targetFromMetadata(alias, drive, item, meta, parent) {
   identifier(drive); identifier(item);
   if (meta.id !== item || meta.parentReference?.driveId !== drive || !meta.name?.toLowerCase().endsWith('.docx') || !meta.file) fail('target_mismatch', 'Graph metadata does not identify the requested DOCX.');
