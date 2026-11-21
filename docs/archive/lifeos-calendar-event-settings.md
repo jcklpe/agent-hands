@@ -1,7 +1,8 @@
 ---
-attention: live
+attention: historical
 ---
 # LifeOS Calendar Event Settings
+Historical record. Closed 2026-11-21 under D20. Stable slug: `lifeos-calendar-event-settings`. Current behavior and safeguards belong to [use-google-calendar](../../use-google-calendar/SKILL.md). The disposable event remains for separately approved cleanup.
 
 Ownership update (2026-10-30): moved from `configs/docs/active-spikes/lifeos-calendar-event-settings.md` into Agent Hands. Stable slug, recorded decisions, completed work and open QA are preserved; this move does not close or reactivate the spike. Current native guidance: [use-google-calendar](../../use-google-calendar/SKILL.md). The aggregate `lifeos` launcher and compatibility tree are retired; old commands and test paths below record the original implementation, not a current entrypoint.
 
@@ -31,7 +32,7 @@ Sixteen new offline tests cover helper serialization, defaults, validation, recu
 
 On 2026-11-21, an authorized disposable event passed native CLI creation with Busy and a two-minute popup, then a settings-only update to Free and a one-minute popup. Both writes passed their native post-write GET checks. An independent connected-service read confirmed the final settings and preserved title, description, times and empty attendee list. The user also confirmed that Google Calendar web displayed the popup. No invitations were sent, and no grants or writable-calendar settings changed. This establishes delivery in the selected client, not every browser/device. The test event remains for separately approved cleanup, with its identifying details outside this public record.
 
-The original installed `lifeos` wrapper invoked this repository's files directly; that aggregate wrapper is now retired. The bounded implementation and live QA are complete; archival awaits explicit closure authorization and review of the full closing message.
+The original installed `lifeos` wrapper invoked this repository's files directly; that aggregate wrapper is now retired. The bounded implementation and live QA are complete; D20 authorized this archival and its full closing message.
 
 ## Maintained guidance
 Current command behavior and examples belong to [use-google-calendar](../../use-google-calendar/SKILL.md).

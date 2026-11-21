@@ -41,7 +41,7 @@ Use this file as a short map; detailed reasoning and task state belong in the re
 ## Imported service spikes
 Moved from configs on 2026-10-30. Stable filenames/slugs, recorded work and remaining QA are preserved; relocation does not authorize closing spikes or performing live tests. The aggregate `lifeos` command is retired; use the native skills linked from each record.
 
-- LifeOS Calendar Event Settings (slug `lifeos-calendar-event-settings`, opened 2026-10-22): explicit Free/Busy and popup reminder overrides implemented with 16 offline tests. Authorized disposable create/update, independent saved-settings readback and user-confirmed Google Calendar web popup delivery passed on 2026-11-21. Ready for explicit closure and archival wording review; cleanup needs separate consent. [Reasoning](docs/active-spikes/lifeos-calendar-event-settings.md); [tasks](docs/active-spikes/lifeos-calendar-event-settings.todo.md).
+- LifeOS Calendar Event Settings (slug `lifeos-calendar-event-settings`, opened 2026-10-22): explicit Free/Busy and popup reminder overrides implemented with 16 offline tests. Authorized disposable create/update, independent saved-settings readback and user-confirmed Google Calendar web popup delivery passed on 2026-11-21. Closed under D20 on 2026-11-21; cleanup needs separate consent. [Reasoning](docs/archive/lifeos-calendar-event-settings.md); [tasks](docs/archive/lifeos-calendar-event-settings.todo.md).
 
 ## Captured setup work
 - [CLI tool provisioning](docs/scratch/agent-hands-cli-tool-provisioning.md): remaining selected-runtime installation gaps across Linux/WSL and native Windows, with configs installer observations preserved. Captured only; no implementation started.
