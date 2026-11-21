@@ -1,7 +1,11 @@
 ---
-attention: live
+attention: historical
 ---
 # Outlook saved-draft editing tasks
+Historical record. Closed 2026-11-21 after approval of closure and the complete archival wording. Slug: `outlook-saved-draft-editing`. Maintained commands and safeguards belong to [Use Outlook Mail](../../use-outlook-mail/SKILL.md). The macOS plain-text scope is verified; rich-style fidelity, nonempty attachment preservation and other platforms retain the limits below.
+
+The retained development entries describe their dated checkpoints; pending statements below are historical.
+
 [Scope](outlook-saved-draft-editing.md).
 
 ## Done
