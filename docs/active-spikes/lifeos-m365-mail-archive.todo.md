@@ -41,7 +41,7 @@ Concept and design: [lifeos-m365-mail-archive.md](lifeos-m365-mail-archive.md). 
 - [x] Verify the selected Gmail account identity and required filing scope after authorization; account-specific evidence is retained privately.
 - [x] Verify account identity after interactive authorization. Re-running authorization for the same alias replaces its token file, so verify the resulting profile against the selected account before using it. The account-specific execution chronology is retained privately.
 - [x] Verify another approved Gmail archive/unarchive round trip with readback and preserved original labels. The account-specific authorization and timing are retained privately.
-- [ ] Human QA by the user: spot-check Outlook and Gmail after a real triage pass.
+- [x] Human QA by the user: spot-check Outlook and Gmail after a real triage pass. Completed as delegated agent visual QA on 2026-11-20 under the user's request to perform the checks independently; this is not a claim of new user visual confirmation.
 
 ## Open Questions
 - Optional Archive-folder export remains a caller-driven possibility, not an implemented extension or a requirement for this scope.
@@ -49,8 +49,13 @@ Concept and design: [lifeos-m365-mail-archive.md](lifeos-m365-mail-archive.md). 
 - Consumer triage policy and its approval model are outside this tooling scope. Follow the consuming workspace’s maintained procedure.
 
 ## Ready For Human QA
-- M365 mail folders and moves, and Gmail archive and labels (both live-verified by the agent).
+- No UI filing check remains for the representative scope. Native readback and delegated visual QA agree; full archival wording review remains.
 
 ## Done
 - [x] Spike sketched and promoted to active (2026-09-29).
 - [x] Implementation, decision, docs, tests, M365 live QA (2026-09-29).
+
+## Delegated visual filing QA — 2026-11-20
+- Matched one earlier successful Outlook archive receipt to the current message in Archive. Its identifier, folder, category and read state agreed with fresh CLI metadata; Outlook web showed the archived conversation member and preserved category. The selected message was already read.
+- Matched one earlier successful Gmail label-with-skip-inbox receipt to its current thread. Native readback showed the expected user label, no Inbox label and preserved unread state. Gmail search visually showed that label and the unread result; the message was not opened.
+- These were read-only spot-checks of real prior filing operations. No new archive, label, read-state change, deletion or grant was performed for this QA. Actual message/account details, private audit rows and UI captures stay outside Git. Representative evidence does not establish every account or client.
