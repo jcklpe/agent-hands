@@ -11,4 +11,4 @@ The authorized policy amendments retain BOUND-MAIL-WRITES and BOUND-MICROSOFT-AC
 Continues from: docs/archive/outlook-reply-drafts.md
 
 ## Validation limits
-Stateful tests exercise preservation, changed previews, sent messages, ETag races and uncertain-write recovery. Live execution and visual review of this extension remain unverified. [Task record](outlook-saved-draft-editing.todo.md).
+Stateful tests exercise preservation, changed previews, sent messages, ETag races and uncertain-write recovery. An authorized macOS test passed native preview/apply/independent readback and agent visual QA on one recipient-free, attachment-free disposable draft. Unsent state, subject, sender, conversation, text and paragraph boundaries were verified. Rich structures, nonempty attachment preservation and other platforms remain outside this live fixture. [Task record](outlook-saved-draft-editing.todo.md).

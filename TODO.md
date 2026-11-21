@@ -2,7 +2,7 @@
 Use this file as a short map; detailed reasoning and task state belong in the relevant spike pair.
 
 ## Active
-- Outlook saved-draft editing (opened 2026-11-17): guarded body replacement with preserved recipients/attachments, stale-edit refusal and read-only recovery. [Scope](docs/active-spikes/outlook-saved-draft-editing.md); [checks](docs/active-spikes/outlook-saved-draft-editing.todo.md).
+- Outlook saved-draft editing (opened 2026-11-17): guarded body replacement, stale-edit refusal and read-only recovery are implemented; a recipient-free disposable live edit and delegated agent visual QA passed. Ready for archival wording review. [Scope](docs/active-spikes/outlook-saved-draft-editing.md); [checks](docs/active-spikes/outlook-saved-draft-editing.todo.md).
 - Penpot Design Capabilities (slug `penpot-design-capabilities`, opened 2026-10-29): `use-penpot` maps the capabilities Wireframe Workflows needs, tested on the hosted server; the Plugin API cannot move boards between pages, so `copy_boards.py` copies them through the backend API with the access token, tested live on 2026-10-29. [Reasoning](docs/active-spikes/penpot-design-capabilities.md); [tasks](docs/active-spikes/penpot-design-capabilities.todo.md).
 - Word Runtime Reliability (slug `word-runtime-reliability`, opened 2026-11-16): follow-up tracking for sustained macOS use, tenant-triggered session expiry, additional interruption timings and recovery/certificate maintenance. The bounded implementation is accepted; no recurring worker or new live test is running. Windows/Linux validation is [parked until relevant](docs/scratch/word-windows-linux-validation.md). [Scope](docs/active-spikes/word-runtime-reliability.md); [tasks](docs/active-spikes/word-runtime-reliability.todo.md).
 
