@@ -5,12 +5,14 @@ import {aliasName, identifier, loadAccount, lockAccount, writeJSON, readJSON, op
 import {initialize, openBrowser, browserIdentity, renewCertificate} from './browser.mjs';
 import {startBridge, manifest} from './bridge.mjs';
 import {cloudTarget, requireWrite, downloadParagraphs, downloadStartup, cloudResult} from './cloud.mjs';
+import {retentionPlan, retirePlanContent} from './retention.mjs';
 import {cleanupTempRuns} from './temporary.mjs';
 import {migrateState} from './migrate-state.mjs';
 import {openAddinAutomatically} from './bootstrap.mjs';
 
 const emit = value => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 const help = setup => setup ? `word-browser init ALIAS --port PORT
+word-browser retention ALIAS [--execute --hash SHA256]
 word-browser cleanup-temp ALIAS [--execute]
 word-browser migrate-state ALIAS [--execute]
 word-browser recovery-status ALIAS
@@ -35,7 +37,7 @@ function parse(argv, setup) {
   }});
   if (!parsed.positionals.length || parsed.values.help || parsed.positionals[0] === 'help') return null;
   const [command, alias, ...extra] = parsed.positionals;
-  const allowed = setup ? {init: ['port'], 'cleanup-temp': ['execute'], 'migrate-state': ['execute'], 'recovery-status': [], 'renew-certificate': ['execute'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
+  const allowed = setup ? {init: ['port'], retention: ['execute', 'hash'], 'cleanup-temp': ['execute'], 'migrate-state': ['execute'], 'recovery-status': [], 'renew-certificate': ['execute'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
   if (!allowed[command] || extra.length || Object.keys(parsed.values).some(key => !allowed[command].includes(key))) fail('invalid_arguments', 'Unsupported command or option; use --help.');
   return {command, alias: aliasName(alias), options: parsed.values};
 }
@@ -65,12 +67,14 @@ export async function main(argv, setup = false) {
       return;
     }
     const account = loadAccount(alias);
+    if (command === 'retention') { emit(options.execute ? retirePlanContent(account, options.hash) : retentionPlan(account)); return; }
     if (command === 'recovery-status') { emit(recoveryStatus(account)); return; }
     if (command === 'renew-certificate') { emit(await renewCertificate(account, !!options.execute)); return; }
     unlock = lockAccount(account);
     let target, profile, plan, files;
     if (['status', 'apply', 'verify'].includes(command)) {
       files = operationFiles(account, options.plan);
+      if (command === 'status' && !fs.existsSync(files.plan)) { emit({status: fs.existsSync(files.journal) ? 'plan_unavailable_with_receipt' : 'plan_unavailable', replayAllowed:false, ...(fs.existsSync(files.journal) ? {receipt:readJSON(files.journal)} : {})}); return; }
       plan = readJSON(files.plan);
       verifyPlan(plan, command === 'apply' ? options.hash : plan.hash);
       if (plan.target.alias !== alias) fail('account_mismatch', 'Preview belongs to a different account alias.');
