@@ -3,8 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 
-export function defaultStateRoot(env = process.env, platform = process.platform, home = os.homedir()) {
+export function platformStateRoot(env = {}, platform = process.platform, home = os.homedir()) {
   const base = env.AGENT_HANDS_STATE_DIR || (platform === 'darwin' ? path.join(home, 'Library/Application Support/agent-hands') : platform === 'win32' ? path.join(env.LOCALAPPDATA || path.join(home, 'AppData/Local'), 'agent-hands') : path.join(env.XDG_STATE_HOME || path.join(home, '.local/state'), 'agent-hands'));
+  if (!path.isAbsolute(base)) throw Object.assign(new Error('The private state root must be absolute.'), {code: 'unsafe_state'});
+  return path.join(base, 'office');
+}
+export function defaultStateRoot(env = process.env, platform = process.platform, home = os.homedir()) {
+  const base = env.AGENT_HANDS_STATE_DIR || path.join(home, '.agent-hands');
   if (!path.isAbsolute(base)) throw Object.assign(new Error('The private state root must be absolute.'), {code: 'unsafe_state'});
   return path.join(base, 'office');
 }

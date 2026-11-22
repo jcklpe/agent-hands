@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {defaultStateRoot, validateStateRoot} from './storage.mjs';
+import {defaultStateRoot, platformStateRoot, validateStateRoot} from './storage.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const LEGACY_STATE = path.join(ROOT, 'setup-microsoft-services/.word-state');
 export const STATE = defaultStateRoot();
+export const PLATFORM_STATE = platformStateRoot();
 export const MAX_TEXT = 200_000;
 export function fail(code, message) { throw Object.assign(new Error(message), {code}); }
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -51,8 +52,10 @@ export function accountDir(alias, root = STATE) {
   if (root === STATE) {
     validateStateRoot(root);
     if (fs.existsSync(path.join(root, `.migration-${alias}.json`))) fail('migration_incomplete', 'An Office state migration needs deliberate reconciliation before use.');
-    const legacy = path.join(LEGACY_STATE, alias);
-    if (fs.existsSync(legacy)) {
+    for (const legacyRoot of new Set([LEGACY_STATE, PLATFORM_STATE])) {
+      if (legacyRoot === root) continue;
+      const legacy = path.join(legacyRoot, alias);
+      if (!fs.existsSync(legacy)) continue;
       const marker = path.join(legacy, 'account.json');
       const value = fs.existsSync(marker) ? readJSON(marker) : {};
       if (value.kind !== 'agent-hands-office-migrated-v1' || value.destination !== path.join(root, alias)) fail('state_migration_required', 'Legacy Office state exists. Use word-browser migrate-state; do not initialize a second profile or journal.');

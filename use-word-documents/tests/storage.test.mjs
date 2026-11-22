@@ -5,15 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import {initialize} from '../scripts/browser.mjs';
 import {writeJSON, loadAccount, lockAccount} from '../scripts/core.mjs';
-import {defaultStateRoot, validateStateRoot, fingerprintTree} from '../scripts/storage.mjs';
+import {defaultStateRoot, platformStateRoot, validateStateRoot, fingerprintTree} from '../scripts/storage.mjs';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {migrateState} from '../scripts/migrate-state.mjs';
 
 test('state locations are explicit, outside checkouts and do not traverse symlinks', () => {
-  assert.equal(defaultStateRoot({}, 'darwin', '/demo'), '/demo/Library/Application Support/agent-hands/office');
-  assert.equal(defaultStateRoot({XDG_STATE_HOME:'/state'}, 'linux', '/demo'), '/state/agent-hands/office');
-  assert.equal(defaultStateRoot({LOCALAPPDATA:'/local'}, 'win32', '/demo'), '/local/agent-hands/office');
+  assert.equal(defaultStateRoot({}, 'darwin', '/demo'), '/demo/.agent-hands/office');
+  assert.equal(defaultStateRoot({}, 'linux', '/demo'), '/demo/.agent-hands/office');
+  assert.equal(defaultStateRoot({}, 'win32', '/demo'), '/demo/.agent-hands/office');
+  assert.equal(platformStateRoot({}, 'darwin', '/demo'), '/demo/Library/Application Support/agent-hands/office');
+  assert.equal(platformStateRoot({XDG_STATE_HOME:'/state'}, 'linux', '/demo'), '/state/agent-hands/office');
+  assert.equal(platformStateRoot({LOCALAPPDATA:'/local'}, 'win32', '/demo'), '/local/agent-hands/office');
   assert.equal(defaultStateRoot({AGENT_HANDS_STATE_DIR:'/chosen'}, 'darwin', '/demo'), '/chosen/office');
   assert.throws(() => defaultStateRoot({AGENT_HANDS_STATE_DIR:'relative'}), {code:'unsafe_state'});
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'word-storage-')));

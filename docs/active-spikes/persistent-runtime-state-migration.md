@@ -18,3 +18,9 @@ Continues from: docs/archive/runtime-file-lifecycle.md
 
 ## Acceptance and privacy
 Track source, synthetic fixtures and sanitized verification only. Private roots must reject checkout/symlink destinations and retain owner-only permissions. A migration must preserve complete bytes and one writer location, reject native browser singleton markers and keep crash recovery explicit. Cross-filesystem migration must refuse until a separately verified copy/switch procedure exists. macOS is the first live target; other platforms require their own validation. No service grants, remote writes, historical cleanup or publication are authorized by this work.
+
+
+## Common root and cleanup decision — 2026-11-22
+The user selected one home-directory private root, `~/.agent-hands/`, rather than platform-specific defaults. Real private configuration is untracked, with tracked synthetic examples; no secret-bearing project TOML is introduced. Office uses `office/ALIAS/` beneath that root, preserving the earlier whole-account migration and explicit override. Existing platform-specific Office state must be migrated as well, without copying ordinary browser sessions or resetting sign-ins.
+
+The user requires intentional cleanup for ephemeral files rather than reliance on OS purging. Office readbacks now register controller/time/identity metadata and clean up in `finally`; the next readback or explicit cleanup can reclaim registered folders older than 24 hours only after the controller is confirmed absent. This bounds the cleanup trigger without a background worker. Hard termination still leaves private plaintext until a subsequent cleanup; no encryption or immediate-erasure guarantee is claimed. Other writers need their own equivalent lifecycle review.
