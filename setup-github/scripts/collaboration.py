@@ -261,6 +261,15 @@ def remote_identity(value):
     return host.lower(), path.removesuffix(".git").strip("/").lower()
 
 
+def default_journal_root():
+    root = Path(os.environ.get("AGENT_HANDS_STATE_DIR", str(Path.home() / ".agent-hands"))) / "github"
+    if not root.is_absolute(): raise Refusal("Private state root must be absolute")
+    for p in (root, *root.parents):
+        if p.is_symlink(): raise Refusal("Private state root cannot traverse symlinks")
+        if (p / ".git").exists(): raise Refusal("Private state root cannot live in a Git checkout")
+    return root
+
+
 def state_location(ctx):
     args = ctx.args
     root = Path(args.project or os.getcwd()).absolute()
@@ -292,7 +301,21 @@ def state_location(ctx):
         legacy = primary / ".agent-hands" / "github"
         if legacy.exists() or legacy.is_symlink():
             raise Refusal("Previous default journal exists at .agent-hands/github; select it with --state-dir or coordinate migration of the complete journal before using the new default")
-        location = primary / ".github" / "project-collaboration"
+        location = default_journal_root()
+        old = primary / ".github" / "project-collaboration" / (ctx.host + "_" + ctx.repo.replace("/", "_"))
+        for part in (old, *old.parents):
+            if part.is_symlink(): raise Refusal("Legacy journal selection cannot traverse symlinks")
+            if part == primary: break
+        if old.exists() or old.is_symlink():
+            pointer = old / "moved.json"
+            try:
+                value = json.loads(pointer.read_text()) if not pointer.is_symlink() else None
+            except (OSError, ValueError): value = None
+            if value != {"kind":"github-journal-moved-v1", "destination":str(location / old.name)}:
+                raise Refusal("Legacy project journal exists; run the explicit setup-github migration before choosing an empty default")
+            if not (location / old.name).exists(): raise Refusal("Migrated journal is missing; restore it rather than creating an empty history")
+        if (location / (".migration-" + ctx.host + "_" + ctx.repo.replace("/", "_") + ".json")).exists():
+            raise Refusal("GitHub journal migration is incomplete; inspect private recovery state")
     else:
         raise Refusal("No local checkout: supply an explicit private --state-dir")
     for candidate in (location, *location.parents):
@@ -565,7 +588,7 @@ def add_common(parser):
     parser.add_argument("--page-limit", type=int, default=20)
     parser.add_argument("--item-limit", type=int, default=2000)
     parser.add_argument("--project", help="Local operated checkout; defaults to cwd")
-    parser.add_argument("--state-dir", help="Override the project's .github/project-collaboration recovery directory")
+    parser.add_argument("--state-dir", help="Override the private GitHub recovery root")
     parser.add_argument("--operation-id")
     parser.add_argument("--expect", help="Exact preview fingerprint")
     modes = parser.add_mutually_exclusive_group()

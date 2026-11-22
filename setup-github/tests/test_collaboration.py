@@ -33,6 +33,9 @@ class CollaborationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.work = Path(self.temp.name).resolve()
+        self.state_root = self.work / 'private/github'
+        self.state_env = patch.dict(os.environ, {'AGENT_HANDS_STATE_DIR': str(self.work / 'private')})
+        self.state_env.start(); self.addCleanup(self.state_env.stop)
         self.checkout = self.work / "project"
         self.checkout.mkdir()
         subprocess.run(["git", "init", "-q", str(self.checkout)], check=True)
@@ -79,6 +82,7 @@ class CollaborationTests(unittest.TestCase):
         self.assertIn("fingerprint", result["plan"])
         self.assertFalse(self.load().get("mutations"))
         self.assertFalse((self.checkout / ".github/project-collaboration").exists())
+        self.assertFalse(self.state_root.exists())
 
     def test_issue_create_executes_and_independently_reads_back(self):
         text = "Literal $() and `text`\n\nTrailing newline\n"
@@ -132,7 +136,7 @@ class CollaborationTests(unittest.TestCase):
 
     def test_ignored_journal_required(self):
         (self.checkout / ".gitignore").write_text("")
-        result = self.apply("comment-issue", "--issue", 1, "--body", "Hello", code=2)
+        result = self.apply("comment-issue", "--issue", 1, "--body", "Hello", "--state-dir", self.checkout / ".github/project-collaboration", code=2)
         self.assertIn("gitignored", result["message"])
         self.assertFalse(self.load().get("mutations"))
 
@@ -359,7 +363,7 @@ class CollaborationTests(unittest.TestCase):
 
     def test_journal_has_digests_not_bodies_and_refuses_reuse(self):
         result = self.apply("comment-issue", "--issue", 1, "--body", "Unique private content")
-        files = list((self.checkout / ".github/project-collaboration").rglob("*.json"))
+        files = list(self.state_root.rglob("*.json"))
         self.assertEqual(len(files), 1)
         self.assertNotIn("Unique private content", files[0].read_text())
         self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
@@ -506,7 +510,7 @@ class CollaborationTests(unittest.TestCase):
         (checkout / ".gitignore").write_text("/.github/project-collaboration/\n")
         result = self.apply("comment-issue", "--issue", 1, "--body", "Nested checkout", "--project", checkout)
         self.assertEqual(result["outcome"], "success")
-        self.assertTrue(list((checkout / ".github/project-collaboration").rglob("*.json")))
+        self.assertTrue(list(self.state_root.rglob("*.json")))
         self.assertFalse((metadata / ".github").exists())
 
     def git_commit(self, message):
@@ -694,7 +698,7 @@ class CollaborationTests(unittest.TestCase):
             result = runtime.execute(context, plan, [step])
         self.assertEqual(result["outcome"], "uncertain")
         self.assertEqual(context.client.writes_sent, 1)
-        record = next((self.checkout / ".github/project-collaboration").rglob("*.json"))
+        record = next(self.state_root.rglob("*.json"))
         self.assertEqual(json.loads(record.read_text())["steps"][0]["status"], "uncertain")
 
     def test_journal_failure_between_steps_reports_verified_partial(self):

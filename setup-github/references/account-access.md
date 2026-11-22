@@ -27,3 +27,5 @@ Read failures and ambiguous targets are errors. Export retrieval/rendering compl
 
 ## Offline checks
 Run `bash tests/test-operations.sh` and `bash tests/test-render.sh` from the setup skill folder. They cover provider configuration, shared issue/PR exports and rendering, failure preservation, and interrupted publication using synthetic data. Capability-specific writes and renderers are tested beside their owning use skills.
+
+Collaboration write receipts and their OS lock default to `~/.agent-hands/github/HOST_OWNER_REPO/`, separate from this configuration and gh authentication. These private records contain actor/target IDs, operation fingerprints and verification outcomes, not Git commits. Preserve uncertain operations; see [journal selection and migration](collaboration.md).
