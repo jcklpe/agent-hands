@@ -1,9 +1,10 @@
 ---
-attention: live
+attention: historical
 reviewed: 2026-11-22
 tags: [microsoft, word, reliability]
 ---
 # Sustained Word runtime reliability
+Historical record. Closed 2026-11-22 under D22. Stable slug: `word-runtime-reliability`. Current operation and recovery guidance belongs to [Word Documents](../../use-word-documents/SKILL.md) and [Word browser setup](../../setup-microsoft-services/references/word-browser.md). Future concrete failures can open focused spikes; retained observation limits are not claimed as passed.
 Opened: 2026-11-16. Slug: `word-runtime-reliability`.
 
 Continues from: docs/archive/live-word-editing.md
@@ -21,4 +22,4 @@ Track repeat startup and shutdown, tenant-triggered sign-in expiry, localized or
 Windows/Linux validation is [parked until relevant](../scratch/word-windows-linux-validation.md). Direct coauthoring-protocol clients, WordCraft cloud integration and broad document-structure editing are outside this follow-up unless separately selected.
 
 ## Closure disposition — 2026-11-22
-The user authorized closure of the bounded macOS reliability work. Remaining sustained-use observations, actual tenant-triggered expiry and arbitrary live network failures are documented limitations, not unfinished implementation gates. Future concrete failures should open a focused spike with reproduction evidence. No recurring observation worker is scheduled. Windows/Linux remain parked, and manual stale-lock recovery and same-range coauthoring risks remain in the maintained setup/use guidance. Archival awaits review of the complete closing message.
+The user authorized closure of the bounded macOS reliability work. Remaining sustained-use observations, actual tenant-triggered expiry and arbitrary live network failures are documented limitations, not unfinished implementation gates. Future concrete failures should open a focused spike with reproduction evidence. No recurring observation worker is scheduled. Windows/Linux remain parked, and manual stale-lock recovery and same-range coauthoring risks remain in the maintained setup/use guidance. D22 approved the complete archival message.

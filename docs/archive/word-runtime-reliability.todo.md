@@ -1,16 +1,17 @@
 ---
-attention: live
+attention: historical
 reviewed: 2026-11-22
 tags: [microsoft, word, reliability]
 ---
 # Sustained Word runtime reliability tasks
+Historical record. Closed 2026-11-22 under D22. Stable slug: `word-runtime-reliability`. Current operation and recovery guidance belongs to [Word Documents](../../use-word-documents/SKILL.md) and [Word browser setup](../../setup-microsoft-services/references/word-browser.md). Future concrete failures can open focused spikes; retained observation limits are not claimed as passed.
 Opened: 2026-11-16. Slug: `word-runtime-reliability`. [Scope and baseline](word-runtime-reliability.md).
 
 ## Current state
 The authorized macOS runtime repair and disposable read/edit/save verification passed. PowerShell uses isolated process caches while retaining existing authentication. Word setup recognizes an authenticated pane opened by upload even when its ribbon command has not appeared. Preparation reused the cloud startup setting; a fresh read, one text edit, independent cloud verification and another fresh read preserved all other paragraphs. No normal browser session was operated. Ongoing reliability and tenant-expiry observations remain open. Operational guidance remains in [Word Documents](../../use-word-documents/SKILL.md) and [Word browser setup](../../setup-microsoft-services/references/word-browser.md).
 
 ## Remaining archival step
-- Review the full closing message; closure itself was authorized on 2026-11-22.
+- D22 approved the complete closing message on 2026-11-22; archival completed.
 
 ## Retained observation limits — closure disposition
 The user accepted closure with the following original items retained as limits and future issue triggers. They are not claimed as passed or scheduled. Concrete failures during ordinary use can open a focused successor spike.
