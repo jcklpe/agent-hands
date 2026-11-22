@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {defaultStateRoot, validateStateRoot} from './storage.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const STATE = path.join(ROOT, 'setup-microsoft-services/.word-state');
+export const LEGACY_STATE = path.join(ROOT, 'setup-microsoft-services/.word-state');
+export const STATE = defaultStateRoot();
 export const MAX_TEXT = 200_000;
 export function fail(code, message) { throw Object.assign(new Error(message), {code}); }
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -44,7 +46,21 @@ export function writeJSON(file, value, exclusive = false) {
   if (!exclusive) fs.renameSync(temp, file);
   if (process.platform !== 'win32') { const directory = fs.openSync(path.dirname(file), 'r'); try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); } }
 }
-export function accountDir(alias, root = STATE) { return path.join(root, aliasName(alias)); }
+export function accountDir(alias, root = STATE) {
+  aliasName(alias);
+  if (root === STATE) {
+    validateStateRoot(root);
+    if (fs.existsSync(path.join(root, `.migration-${alias}.json`))) fail('migration_incomplete', 'An Office state migration needs deliberate reconciliation before use.');
+    const legacy = path.join(LEGACY_STATE, alias);
+    if (fs.existsSync(legacy)) {
+      const marker = path.join(legacy, 'account.json');
+      const value = fs.existsSync(marker) ? readJSON(marker) : {};
+      if (value.kind !== 'agent-hands-office-migrated-v1' || value.destination !== path.join(root, alias)) fail('state_migration_required', 'Legacy Office state exists. Use word-browser migrate-state; do not initialize a second profile or journal.');
+      if (!fs.existsSync(path.join(root, alias))) fail('migration_incomplete', 'The migrated account is missing. Restore the verified private state rather than initializing a replacement.');
+    }
+  }
+  return path.join(root, alias);
+}
 export function loadAccount(alias, root = STATE) {
   const dir = accountDir(alias, root);
   noSymlinks(dir);

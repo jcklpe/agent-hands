@@ -7,8 +7,8 @@ import {STATE, accountDir, privateDir, writeJSON, loadAccount, fail, checkAccoun
 
 export async function initialize(alias, port, root = STATE) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_port', 'Choose an unused local port from 1024 through 65535.');
-  privateDir(root);
   const dir = accountDir(alias, root);
+  privateDir(root);
   if (fs.existsSync(dir)) fail('already_initialized', 'This account state already exists. It will not be overwritten or imported.');
   fs.mkdirSync(dir, {mode: 0o700});
   const owner = randomUUID();

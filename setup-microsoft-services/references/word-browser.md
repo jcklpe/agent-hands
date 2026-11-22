@@ -9,11 +9,42 @@ npm ci --ignore-scripts --prefix use-word-documents
 node setup-microsoft-services/scripts/word-browser.mjs init example --port 43189
 ```
 
-Choose an unused loopback port and retain it. The command creates private state under this provider's ignored `.word-state/ALIAS/`: an owned browser directory, certificate/key, manifest and operation records. Check ignores before initialization in another repository. There is no arbitrary browser-directory option, profile import or cookie-copy function. Never point the launcher at ordinary browser data or delete an active profile lock. The supported setup flow establishes its own sign-in; an explicitly requested session-transfer experiment must remain separate, use only the selected service state, preserve the source browser, and verify the resulting account. Profiles persist between invocations and are never reset automatically.
+Choose an unused loopback port and retain it. The command creates private state in the designated user-state root: `~/Library/Application Support/agent-hands/office/ALIAS/` on macOS, `$XDG_STATE_HOME/agent-hands/office/ALIAS/` (default `~/.local/state/…`) on Linux, and `%LOCALAPPDATA%/agent-hands/office/ALIAS/` on Windows. `AGENT_HANDS_STATE_DIR` selects an absolute private base directory; `office/ALIAS/` is appended. Checkout and symlink roots are refused. The account contains the owned browser directory, certificate/key, manifest and operation records. Actual state is never tracked; the source inventory and synthetic fixtures are tracked. There is no arbitrary browser-directory option, profile import or cookie-copy function. Never point the launcher at ordinary browser data or delete an active profile lock. The supported setup flow establishes its own sign-in; an explicitly requested session-transfer experiment must remain separate, use only the selected service state, preserve the source browser, and verify the resulting account. Profiles persist between invocations and are never reset automatically.
 
 Chrome's sandbox remains enabled, and the launcher removes Playwright's mock-keychain/basic-password-store flags so Chrome uses its normal platform credential protection. Native credential-store access can itself need an OS prompt; do not suppress that protection to make a run headless. Platform-specific guarantees still need testing.
 
 The loopback server binds only `127.0.0.1`. The owned Chrome process trusts only the generated certificate's public-key fingerprint through Chromium's scoped SPKI switch; no operating-system trust store is modified and unrelated HTTPS errors are not disabled. The certificate expires after a year; expiry stops execution until deliberate renewal. Browser local-network permission is granted only for the exact target origin and observed Microsoft Office frame origins. Tenant/browser restrictions are independent of Graph consent.
+
+## Office file contract
+The whole account is private persistent state, never a tracked fixture or disposable run folder. Its owner-only root protects browser-created descendant files whose original modes are preserved.
+
+| Files | Purpose/content | Removal boundary |
+| --- | --- | --- |
+| `account.json`, `browser/agent-hands-owner.json` | Account alias, owner and add-in identities, loopback configuration and local bridge path; browser ownership binding | Keep with the complete account. Do not regenerate to bypass a failed write. |
+| `browser/` | Dedicated Chrome sign-in, catalog, cache and other browser-managed storage | Credential-bearing. Keep for account reuse; intentional account retirement is separate from cleanup. Do not sweep individual browser files. |
+| `key.pem`, `cert.pem`, `manifest.xml` | Private HTTPS key/certificate and generated add-in manifest | Keep with the account. Renew certificate explicitly; account retirement handles keys and manifest. |
+| `plans/*.json`, `plans/*.journal.json` | Exact document targets, before/after text, preview hashes and dispatch outcomes | Preserve unresolved operations. Completed records may be retired only after outcome verification and an intentional retention decision. |
+| `powerpoint/` | PowerPoint add-in settings and equivalent plans/receipts | Shares the browser/account lock; migrate and retire together with Word state. |
+| `lock.json`, browser singleton markers | Controller and native-browser ownership/serialization | Never expire by age. Diagnose and establish stopped owners before manual recovery. |
+| `.migration-ALIAS.json` beside account directories | Private source/destination, owner, phase and tree fingerprint | Created before a move, removed after verified success; retain on failure until explicit reconciliation. |
+| Legacy `.word-state/ALIAS/account.json` tombstone | Credential-free destination pointer and retired-store type | Retain while older installed clients could use the old location. It prevents duplicate profiles/journals. |
+| Atomic-write `*.tmp` siblings | In-progress settings/journal/certificate publication | Owner-controlled writes publish by rename; interrupted leftovers require writer/outcome inspection, not blanket deletion. |
+
+Cloud verification downloads and synthetic test profiles instead use per-run private system temp with scoped cleanup. Public evidence consists of procedures, fake fixtures and sanitized results. No default screenshot, raw response or browser-state export is retained.
+
+## Existing Office state migration
+Existing `.word-state/ALIAS/` accounts require explicit migration; normal operations and initialization stop rather than choosing an empty replacement journal. Stop every Word/PowerPoint caller, including older installed revisions, for the whole operation:
+
+```sh
+node setup-microsoft-services/scripts/word-browser.mjs migrate-state example
+node setup-microsoft-services/scripts/word-browser.mjs migrate-state example --execute
+```
+
+Preview identifies the exact locations, a content/permission fingerprint and the complete shared account scope. Execution locks the source, refuses native browser singleton markers or destination collisions, and atomically renames the whole account on the same filesystem. It verifies the complete file tree, including Word/PowerPoint plans and journals, without exporting credentials. Existing browser-created descendant file modes are preserved behind the owner-only account root. A credential-free legacy tombstone prevents old clients from loading or initializing the migrated account. It is intentional persistent routing state, not a forgotten temporary file. Keep the selected state override consistent across all callers; changing it requires another deliberate migration. Do not relocate the owned browser alone or copy an ordinary personal profile.
+
+An interrupted move retains `.migration-ALIAS.json` in the private destination root. That record blocks normal new-client use; it includes source/destination, ownership, phase and the expected tree hash. Stop all callers and inspect both locations before recovery. Before the rename, the original account is authoritative; afterward, the destination is authoritative and may retain its migration lock. Verify the complete destination fingerprint excluding the migration lock, preserve every journal, restore the source tombstone if necessary, and clear only the verified migration record/lock after confirming the controller and browser stopped. Do not merge stores, auto-retry a move, replay document writes or fall back to a fresh sign-in. Cross-filesystem migration and automated crash reconciliation are not implemented.
+
+The initial macOS migration preserved the installed shared Office account byte-for-byte and a fresh headless Word read reused its sign-in. Other platforms have synthetic path selection only; live migration is unverified there. Provider/MSAL/Graph PowerShell authentication stays with its existing owner.
 
 ## Deliberate certificate maintenance
 Inspect expiry without changing state, then renew only when maintenance is intended:

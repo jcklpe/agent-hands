@@ -12,7 +12,7 @@ If this account already has an owned Word profile, reuse it directly. Do not ini
 ```sh
 node setup-microsoft-services/scripts/powerpoint-browser.mjs init example --port 43189
 ```
-Choose an unused loopback port. State lives under the existing ignored `.word-state/ALIAS/` provider directory; PowerPoint's distinct configuration, generated fallback manifest and operation plans live in its `powerpoint/` child. The shared ownership marker and account lock serialize Word and PowerPoint operations. No path override is accepted. Verify ignores before initializing in another checkout.
+Choose an unused loopback port. State lives in the designated external Office account root documented in [Word storage and migration](word-browser.md#existing-office-state-migration); PowerPoint's distinct configuration, generated fallback manifest and operation plans live in its `powerpoint/` child. The shared ownership marker and account lock serialize Word and PowerPoint operations. The same `AGENT_HANDS_STATE_DIR` selection must be used by every Office caller. Migrate existing legacy state through `word-browser migrate-state`, including the entire shared account, rather than initializing another profile or journal.
 
 Resolve an exact PPTX through Microsoft Files, then establish or renew normal sign-in if needed:
 ```sh

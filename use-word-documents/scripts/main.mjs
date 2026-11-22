@@ -5,10 +5,12 @@ import {aliasName, identifier, loadAccount, lockAccount, writeJSON, readJSON, op
 import {initialize, openBrowser, browserIdentity, renewCertificate} from './browser.mjs';
 import {startBridge, manifest} from './bridge.mjs';
 import {cloudTarget, requireWrite, downloadParagraphs, downloadStartup, cloudResult} from './cloud.mjs';
+import {migrateState} from './migrate-state.mjs';
 import {openAddinAutomatically} from './bootstrap.mjs';
 
 const emit = value => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 const help = setup => setup ? `word-browser init ALIAS --port PORT
+word-browser migrate-state ALIAS [--execute]
 word-browser recovery-status ALIAS
 word-browser renew-certificate ALIAS [--execute]
 word-browser login ALIAS --drive DRIVE --item ITEM
@@ -31,7 +33,7 @@ function parse(argv, setup) {
   }});
   if (!parsed.positionals.length || parsed.values.help || parsed.positionals[0] === 'help') return null;
   const [command, alias, ...extra] = parsed.positionals;
-  const allowed = setup ? {init: ['port'], 'recovery-status': [], 'renew-certificate': ['execute'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
+  const allowed = setup ? {init: ['port'], 'migrate-state': ['execute'], 'recovery-status': [], 'renew-certificate': ['execute'], login: ['drive', 'item'], prepare: ['drive', 'item', 'execute'], configure: ['drive', 'item', 'execute']} : {read: ['drive', 'item'], preview: ['drive', 'item', 'find', 'replace'], apply: ['plan', 'hash', 'execute'], status: ['plan'], verify: ['plan']};
   if (!allowed[command] || extra.length || Object.keys(parsed.values).some(key => !allowed[command].includes(key))) fail('invalid_arguments', 'Unsupported command or option; use --help.');
   return {command, alias: aliasName(alias), options: parsed.values};
 }
@@ -52,6 +54,7 @@ export async function main(argv, setup = false) {
     if (!args) { process.stdout.write(help(setup)); return; }
     const {command, alias, options} = args;
     if (['apply', 'configure', 'prepare'].includes(command) && !options.execute) fail('execute_required', 'This write requires --execute and authorization for the selected document.');
+    if (command === 'migrate-state') { emit(migrateState(alias, !!options.execute)); return; }
     if (command === 'init') {
       const account = await initialize(alias, Number(options.port));
       fs.writeFileSync(path.join(account.dir, 'manifest.xml'), manifest(account), {mode: 0o600, flag: 'wx'});
