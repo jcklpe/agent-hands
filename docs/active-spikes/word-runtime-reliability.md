@@ -1,6 +1,6 @@
 ---
 attention: live
-reviewed: 2026-11-21
+reviewed: 2026-11-22
 tags: [microsoft, word, reliability]
 ---
 # Sustained Word runtime reliability
@@ -19,3 +19,6 @@ The same-range race remains a known limitation: simultaneous replacements can mi
 Track repeat startup and shutdown, tenant-triggered sign-in expiry, localized or changed setup controls, additional interruption timings and operational recovery. Any new live mutation still needs an authorized target and operation. Keep public evidence to versions, bounded scenarios and outcomes; private profiles, identifiers, document text and diagnostics retain their existing private owners. Do not copy or inspect normal browser state to diagnose an owned-profile failure.
 
 Windows/Linux validation is [parked until relevant](../scratch/word-windows-linux-validation.md). Direct coauthoring-protocol clients, WordCraft cloud integration and broad document-structure editing are outside this follow-up unless separately selected.
+
+## Closure disposition — 2026-11-22
+The user authorized closure of the bounded macOS reliability work. Remaining sustained-use observations, actual tenant-triggered expiry and arbitrary live network failures are documented limitations, not unfinished implementation gates. Future concrete failures should open a focused spike with reproduction evidence. No recurring observation worker is scheduled. Windows/Linux remain parked, and manual stale-lock recovery and same-range coauthoring risks remain in the maintained setup/use guidance. Archival awaits review of the complete closing message.

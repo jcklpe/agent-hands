@@ -1,6 +1,6 @@
 ---
 attention: live
-reviewed: 2026-11-21
+reviewed: 2026-11-22
 tags: [microsoft, word, reliability]
 ---
 # Sustained Word runtime reliability tasks
@@ -9,7 +9,11 @@ Opened: 2026-11-16. Slug: `word-runtime-reliability`. [Scope and baseline](word-
 ## Current state
 The authorized macOS runtime repair and disposable read/edit/save verification passed. PowerShell uses isolated process caches while retaining existing authentication. Word setup recognizes an authenticated pane opened by upload even when its ribbon command has not appeared. Preparation reused the cloud startup setting; a fresh read, one text edit, independent cloud verification and another fresh read preserved all other paragraphs. No normal browser session was operated. Ongoing reliability and tenant-expiry observations remain open. Operational guidance remains in [Word Documents](../../use-word-documents/SKILL.md) and [Word browser setup](../../setup-microsoft-services/references/word-browser.md).
 
-## To do
+## Remaining archival step
+- Review the full closing message; closure itself was authorized on 2026-11-22.
+
+## Retained observation limits — closure disposition
+The user accepted closure with the following original items retained as limits and future issue triggers. They are not claimed as passed or scheduled. Concrete failures during ordinary use can open a focused successor spike.
 - [ ] Observe repeated authorized macOS invocations across ordinary working days. Record bounded startup/read/edit/save outcomes and whether the owned browser shuts down cleanly; preserve normal Chrome isolation.
 - [ ] Observe tenant-triggered session expiry and confirm that ordinary sign-in/MFA restores subsequent headless operation. The predecessor verified recovery after deliberately removing owned-profile cookies; actual expiry timing and tenant policy variations remain untested.
 - [ ] Validate sustained unattended use, tenant-triggered session expiry and additional failure timings. Post-save lost acknowledgment is checked; arbitrary network loss and automatic stale-lock recovery are not. Add certificate renewal only as a separately checked setup operation; expiry currently stops clearly and has regression coverage. Transferred unchanged from `live-word-editing`; the preceding items make the observation work concrete without marking this broader item complete.
