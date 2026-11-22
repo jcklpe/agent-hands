@@ -10,6 +10,7 @@ from urllib.parse import quote, urlsplit
 
 CAPABILITY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CAPABILITY_ROOT.parent / "setup-microsoft-services/scripts"))
+from runtime_state import location
 from bounded_client import Client, Store, digest, identifier
 
 SELECT = "id,subject,body,from,sender,replyTo,toRecipients,ccRecipients,bccRecipients,conversationId,internetMessageId,isDraft,changeKey,webLink,hasAttachments"
@@ -324,7 +325,7 @@ def main(argv=None):
     for command in ("draft-apply", "draft-status", "draft-verify"):
         p = subs.add_parser(command); p.add_argument("alias"); p.add_argument("--plan", required=True)
         if command == "draft-apply": p.add_argument("--hash", required=True); p.add_argument("--execute", action="store_true"); p.add_argument("--allow-draft", action="store_true")
-    args = parser.parse_args(argv); client = Client(args.alias, "mail"); store = Store(CAPABILITY_ROOT / ".draft-state", args.alias)
+    args = parser.parse_args(argv); client = Client(args.alias, "mail"); store = Store(location("mail") / ".draft-state", args.alias)
     if args.command == "reply-draft":
         data = json.loads(Path(args.signature_file).read_text()) if args.signature_file else None
         result = preview(client, store, args.message, Path(args.body_file).read_text(), args.to, args.cc, data, args.no_signature, args.reply_all)

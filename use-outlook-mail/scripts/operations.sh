@@ -6,7 +6,15 @@ source "$OUTLOOK_MAIL_DIR/../setup-microsoft-services/scripts/batch.sh"
 _m365_mail_python() { _m365_python "$OUTLOOK_MAIL_DIR" "$@"; }
 _m365_mail_render_helper() { _m365_mail_python "$OUTLOOK_MAIL_DIR/scripts/render.py" "$@"; }
 _m365_mail_warn() { printf 'WARN: %s\n' "$*" >&2; }
-_m365_mail_audit_path() { case "${M365_MAIL_AUDIT_LOG:-mail-writes.jsonl}" in /*) printf '%s\n' "$M365_MAIL_AUDIT_LOG" ;; *) printf '%s/%s\n' "$OUTLOOK_MAIL_DIR" "${M365_MAIL_AUDIT_LOG:-mail-writes.jsonl}" ;; esac; }
+_m365_mail_audit_path() {
+    if [ -z "${M365_MAIL_AUDIT_LOG:-}" ]; then
+        local dir
+        dir="$(_m365_state_dir mail)" || return 1
+        printf '%s/%s\n' "$dir" 'mail-writes.jsonl'
+    else
+        case "${M365_MAIL_AUDIT_LOG}" in /*) printf '%s\n' "${M365_MAIL_AUDIT_LOG}" ;; *) printf '%s/%s\n' "$OUTLOOK_MAIL_DIR" "${M365_MAIL_AUDIT_LOG}" ;; esac
+    fi
+}
 _m365_mail_audit_append() { _m365_mail_python "$M365_AUTH_DIR/scripts/audit.py" "$(_m365_mail_audit_path)"; }
 _m365_mail_days_ago() { _m365_mail_python -c 'from datetime import datetime, timedelta, timezone; import sys; print((datetime.now(timezone.utc) - timedelta(days=int(sys.argv[1]))).replace(microsecond=0).isoformat().replace("+00:00", "Z"))' "$1"; }
 _m365_mail_read_ids_file() {

@@ -12,6 +12,7 @@ from urllib.parse import quote, urlsplit, parse_qsl, unquote
 
 CAPABILITY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CAPABILITY_ROOT.parent / "setup-microsoft-services/scripts"))
+from runtime_state import location
 from bounded_client import Client, Store, canonical, digest, identifier
 
 META = "id,name,size,eTag,cTag,file,folder,package,remoteItem,root,deleted,parentReference,webUrl,createdBy,lastModifiedBy,lastModifiedDateTime"
@@ -238,7 +239,7 @@ def main(argv=None):
         result = sharing(client, args.drive, value["id"]) if args.command == "ownership" else page(client, args.drive, args.item, args.command, args.cursor, args.limit)
         if args.command == "permissions": result["visibility"] = "Caller-visible grants only; no share links/secrets. Full effective audience may be unavailable."
     else:
-        store = Store(CAPABILITY_ROOT / ".organization-state", args.alias)
+        store = Store(location("files") / ".organization-state", args.alias)
         if args.command == "organization-apply": result = apply(client, store, args.plan, args.hash, args.execute, args.allow_recycle)
         elif args.command == "organization-status": result = store.status(args.plan)
         elif args.command == "organization-verify":

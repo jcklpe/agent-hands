@@ -121,7 +121,15 @@ _m365_files_download() (
 # Graph's simple upload accepts up to 250 MB; larger files need an upload session, which this surface does not implement.
 _M365_FILES_MAX_BYTES=262144000
 _m365_files_warn() { printf 'WARN: %s\n' "$*" >&2; }
-_m365_files_audit_path() { case "${M365_FILES_AUDIT_LOG:-file-writes.jsonl}" in /*) printf '%s\n' "$M365_FILES_AUDIT_LOG" ;; *) printf '%s/%s\n' "$MICROSOFT_FILES_DIR" "${M365_FILES_AUDIT_LOG:-file-writes.jsonl}" ;; esac; }
+_m365_files_audit_path() {
+    if [ -z "${M365_FILES_AUDIT_LOG:-}" ]; then
+        local dir
+        dir="$(_m365_state_dir files)" || return 1
+        printf '%s/%s\n' "$dir" 'file-writes.jsonl'
+    else
+        case "${M365_FILES_AUDIT_LOG}" in /*) printf '%s\n' "${M365_FILES_AUDIT_LOG}" ;; *) printf '%s/%s\n' "$MICROSOFT_FILES_DIR" "${M365_FILES_AUDIT_LOG}" ;; esac
+    fi
+}
 _m365_files_audit_append() { _m365_python "$MICROSOFT_FILES_DIR" "$M365_AUTH_DIR/scripts/audit.py" "$(_m365_files_audit_path)"; }
 
 

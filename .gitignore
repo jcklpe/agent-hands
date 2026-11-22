@@ -7,3 +7,10 @@ __pycache__/
 .DS_Store
 /.github/project-collaboration/
 /docs/project-workflows.local.toml
+
+# Credential-free private runtime-routing tombstones, never portable configuration.
+/setup-microsoft-services/.runtime-state.json
+/use-planner/.runtime-state.json
+/use-microsoft-files/.runtime-state.json
+/use-outlook-mail/.runtime-state.json
+/use-excel-workbooks/.runtime-state.json

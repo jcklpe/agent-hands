@@ -74,6 +74,8 @@ bash scripts/planner comments example --task TASK_ID --legacy --json
 Legacy reads require the Graph PowerShell route and already-effective group-conversation read permissions; the tool never requests broader scopes. This route is explicitly labeled `legacy-group`, not Task chat, and has no write fallback. Old `planner-comments/` recovery files are retained separately.
 
 ## Private state and verification
-Audit defaults to ignored `task-writes.jsonl` here. `M365_PLANNER_AUDIT_LOG` may select another private path; relative values resolve here. Recovery records live beside that audit file and must remain private. Audit is best-effort; pending-write journaling must succeed before dispatch. Do not publish live configuration, task payloads or journals.
+Audit defaults to private `~/.agent-hands/microsoft/planner/task-writes.jsonl`. `M365_PLANNER_AUDIT_LOG` may select another private path; relative values resolve here. Recovery records live beside that audit file and must remain private. Audit is best-effort; pending-write journaling must succeed before dispatch. Do not publish live configuration, task payloads or journals.
 
 Synthetic checks cover exact Task chat association, link serialization, duplicate prevention, guarded in-place edits, ambiguous outcomes, legacy-read isolation, pagination and task URLs. `python3 -m unittest discover -s tests -p test_delete.py` covers deletion preview/execution, stale snapshots, identity/ETag/write gates, complete readback, private receipts and read-only recovery without replay. API readback does not prove browser rendering. Beta API availability, real permissions and fresh-platform behavior require separately authorized checks.
+
+Private Microsoft defaults use `AGENT_HANDS_STATE_DIR` when explicitly set. Preserve existing recovery when relocating; see [provider storage migration](../setup-microsoft-services/references/account-access.md#explicit-legacy-storage-migration).

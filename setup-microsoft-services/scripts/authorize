@@ -2,8 +2,17 @@
 set -eu
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/client.sh"
 case "${1:---help}" in
-    --help|-h|help) printf '%s\n' 'authorize check | accounts | scopes ALIAS | auth ALIAS [--no-browser] | profile ALIAS [--json]' 'check validates local configuration only; auth performs consent and caches private tokens.'; exit 0 ;;
+    --help|-h|help) printf '%s\n' 'authorize migrate-runtime [--execute] | cleanup-temp [--execute] | check | accounts | scopes ALIAS | auth ALIAS [--no-browser] | profile ALIAS [--json]' 'check validates local configuration only; auth performs consent and caches private tokens.'; exit 0 ;;
 esac
+if [ "${1:-}" = migrate-runtime ]; then
+    shift
+    exec python3 "$M365_AUTH_DIR/scripts/runtime_state.py" migrate "$@"
+fi
+if [ "${1:-}" = cleanup-temp ]; then
+    shift
+    root="$(_m365_temp_root)"
+    exec python3 "$M365_AUTH_DIR/scripts/temporary.py" cleanup --root "$root" "$@"
+fi
 _m365_load_env
 command="$1"; shift
 case "$command" in

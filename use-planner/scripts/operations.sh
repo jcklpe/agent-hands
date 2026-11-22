@@ -6,7 +6,15 @@ source "$PLANNER_DIR/../setup-microsoft-services/scripts/batch.sh"
 _m365_planner_python() { _m365_python "$PLANNER_DIR" "$@"; }
 _m365_planner_render_helper() { _m365_planner_python "$PLANNER_DIR/scripts/render.py" "$@"; }
 _m365_planner_warn() { printf 'WARN: %s\n' "$*" >&2; }
-_m365_planner_audit_path() { case "${M365_PLANNER_AUDIT_LOG:-task-writes.jsonl}" in /*) printf '%s\n' "$M365_PLANNER_AUDIT_LOG" ;; *) printf '%s/%s\n' "$PLANNER_DIR" "${M365_PLANNER_AUDIT_LOG:-task-writes.jsonl}" ;; esac; }
+_m365_planner_audit_path() {
+    if [ -z "${M365_PLANNER_AUDIT_LOG:-}" ]; then
+        local dir
+        dir="$(_m365_state_dir planner)" || return 1
+        printf '%s/%s\n' "$dir" 'task-writes.jsonl'
+    else
+        case "${M365_PLANNER_AUDIT_LOG}" in /*) printf '%s\n' "${M365_PLANNER_AUDIT_LOG}" ;; *) printf '%s/%s\n' "$PLANNER_DIR" "${M365_PLANNER_AUDIT_LOG}" ;; esac
+    fi
+}
 _m365_planner_audit_append() { _m365_planner_python "$M365_AUTH_DIR/scripts/audit.py" "$(_m365_planner_audit_path)"; }
 
 _m365_planner_max_tasks() {
@@ -576,7 +584,8 @@ _m365_planner_delete() (
     [ -n "$task_id" ] || { _m365_error 'delete-task requires --task ID'; return 1; }
     [ "$verify" -eq 0 ] || { [ "$execute" -eq 0 ] && [ -z "$expected" ]; } || { _m365_error '--verify is read-only and cannot be combined with execution options'; return 1; }
     _m365_require_enabled "$alias" planner || return 1
-    root="$(dirname "$(_m365_planner_audit_path)")/planner-task-delete"
+    root="$(_m365_planner_audit_path)" || return 1
+    root="$(dirname "$root")/planner-task-delete"
     if [ "$verify" -eq 1 ]; then
         prepared="$(_m365_planner_python "$PLANNER_DIR/scripts/task_delete.py" receipt --alias "$alias" --task "$task_id" --root "$root")" || return 1
         plan_id="$(printf '%s' "$prepared" | jq -er '.plan_id')" || return 1
@@ -739,7 +748,8 @@ _m365_planner_comments() (
     else target="$posts"; prior=""; fi
     matches="$(printf '%s' "$target" | _m365_planner_python "$PLANNER_DIR/scripts/comments.py" match "$file" "$format")" || return 1
     umask 077
-    recovery="$(dirname "$(_m365_planner_audit_path)")/planner-task-chat"
+    recovery="$(_m365_planner_audit_path)" || return 1
+    recovery="$(dirname "$recovery")/planner-task-chat"
     [ ! -L "$recovery" ] || { _m365_error "Task chat recovery directory cannot be a symlink"; return 1; }
     mkdir -p "$recovery" || return 1
     key="$(printf '%s' "$alias/$task_id" | _m365_planner_python -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"

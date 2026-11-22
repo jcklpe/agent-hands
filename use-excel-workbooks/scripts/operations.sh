@@ -5,7 +5,15 @@ unset _excel_source
 source "$EXCEL_WORKBOOKS_DIR/../setup-microsoft-services/scripts/drive-items.sh"
 _m365_excel_python() { _m365_python "$EXCEL_WORKBOOKS_DIR" "$@"; }
 _m365_excel_warn() { printf 'WARN: %s\n' "$*" >&2; }
-_m365_excel_audit_path() { case "${M365_EXCEL_AUDIT_LOG:-workbook-writes.jsonl}" in /*) printf '%s\n' "$M365_EXCEL_AUDIT_LOG" ;; *) printf '%s/%s\n' "$EXCEL_WORKBOOKS_DIR" "${M365_EXCEL_AUDIT_LOG:-workbook-writes.jsonl}" ;; esac; }
+_m365_excel_audit_path() {
+    if [ -z "${M365_EXCEL_AUDIT_LOG:-}" ]; then
+        local dir
+        dir="$(_m365_state_dir excel)" || return 1
+        printf '%s/%s\n' "$dir" 'workbook-writes.jsonl'
+    else
+        case "${M365_EXCEL_AUDIT_LOG}" in /*) printf '%s\n' "${M365_EXCEL_AUDIT_LOG}" ;; *) printf '%s/%s\n' "$EXCEL_WORKBOOKS_DIR" "${M365_EXCEL_AUDIT_LOG}" ;; esac
+    fi
+}
 _m365_excel_audit_append() { _m365_excel_python "$M365_AUTH_DIR/scripts/audit.py" "$(_m365_excel_audit_path)"; }
 ##- Bounded Graph workbook operations. Sessionless requests save each write; there is no transaction or automatic mutation retry.
 

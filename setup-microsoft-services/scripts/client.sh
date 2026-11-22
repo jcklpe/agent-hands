@@ -14,7 +14,7 @@ _m365_python() {
     else _m365_error 'Install uv or select a compatible M365_PYTHON'; return 1
     fi
 }
-_m365_temp_dir() {
+_m365_temp_root() {
     local root ancestor source_root
     root="${TMPDIR:-}"
     if [ -z "$root" ]; then
@@ -31,7 +31,12 @@ _m365_temp_dir() {
         [ ! -e "$ancestor/.git" ] || { _m365_error 'Temporary files cannot be stored inside a Git checkout'; return 1; }
         ancestor="${ancestor%/*}"; [ -n "$ancestor" ] || ancestor=/
     done
-    (umask 077; mktemp -d "$root/microsoft-work.XXXXXX")
+    printf '%s\n' "$root"
+}
+_m365_temp_dir() {
+    local root
+    root="$(_m365_temp_root)" || return 1
+    python3 "$M365_AUTH_DIR/scripts/temporary.py" create --root "$root" --pid "$$"
 }
 _m365_work_begin() {
     M365_WORK="$(_m365_temp_dir)" || return 1
@@ -46,7 +51,12 @@ _m365_expected_account() {
 }
 _m365_load_env() {
     local config line key value present
-    config="${M365_ENV_FILE:-$(_m365_config_dir)/.env}"
+    local selected
+    if [ -n "${M365_ENV_FILE:-}" ]; then config="$M365_ENV_FILE"
+    else
+        selected="$(_m365_config_dir)" || return 1
+        config="$selected/.env"
+    fi
     if [ ! -f "$config" ]; then
         [ -z "${M365_ENV_FILE:-}" ] && return 0
         _m365_error 'Selected M365_ENV_FILE does not exist'; return 1
@@ -73,7 +83,7 @@ _m365_path() {
     case "$1" in
         '') return 1 ;;
         /*) printf '%s\n' "$1" ;;
-        *) printf '%s/%s\n' "$(_m365_config_dir)" "$1" ;;
+        *) local selected; selected="$(_m365_config_dir)" || return 1; printf '%s/%s\n' "$selected" "$1" ;;
     esac
 }
 
@@ -512,4 +522,9 @@ _m365_profile_email() {
 }
 
 
-_m365_config_dir() { printf '%s\n' "${M365_CONFIG_DIR:-$M365_AUTH_DIR}"; }
+_m365_state_dir() { python3 "$M365_AUTH_DIR/scripts/runtime_state.py" path "$1"; }
+_m365_config_dir() {
+    if [ -n "${M365_CONFIG_DIR:-}" ]; then printf '%s\n' "$M365_CONFIG_DIR"
+    else _m365_state_dir config
+    fi
+}
