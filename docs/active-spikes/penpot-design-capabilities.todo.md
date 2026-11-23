@@ -4,8 +4,9 @@ attention: live
 # Penpot design capabilities tasks
 ## To Do
 - Reorder pages through `mov-page`, so setting up a file's page order needs no dragging.
+  - 2026-11-23: built as `penpot_pages.py order` with preview, a digest bound to the file's revision, one transactional write, a lagged-change count and a complete page-list readback; unlisted pages keep their positions and only listed pages move. 25 synthetic tests pass on Python 3.14 and macOS's Python 3.9, including every arrangement of a five-page file. A live read-only preview against the user's wireframe file planned one move and wrote nothing. Remaining: one hosted write test on a file the user chooses, then the restoring order, with the readback compared both times. Not done until that runs.
 - Decide how promotion replaces an existing board: a guarded replace option in the copier, or the user deleting the old board after the copy.
-- Have `use-penpot` read a project's `design-files.json` to find its file and page roles, as defined in the Wireframe Workflows README.
+  - 2026-11-23: concrete design in [the concept doc](penpot-design-capabilities.md#promotion-replacement-proposed-awaiting-decisions), recommending that the existing board keep its ID while its contents are replaced, with a private preimage journal, a locked named version first and blocked replay after an unknown outcome. Four decisions are with the user; nothing destructive is built or run until they are settled.
 
 ## Next implementation handoff - 2026-11-23
 This is the first selected coding workstream after runtime-state and Morris closure. Continue the existing copier and capability map; do not rebuild the connector or start another aggregate tool. Read `use-penpot/SKILL.md`, `use-penpot/references/quirks.md` and the copier/tests before editing. Refresh dated API assumptions against the actual supported endpoint before relying on them.
@@ -27,6 +28,8 @@ Claude Code built this spike's work and is handing it to Codex. Where things sta
 - **Working agreements.** Commit by pathspec with this spike's trailer, without co-author trailers. The user approved pushing Agent Hands on 2026-10-29; ask again before later pushes.
 
 ## Done
+- Have `use-penpot` read a project's `design-files.json` to find its file and page roles, as defined in the Wireframe Workflows README.
+  - 2026-11-23: `penpot_pages.py discover` reads `./design-files.json` or `--manifest` only, checks the contract without extending it, lists other tools' files untouched and, with `--resolve`, matches page names exactly against the actual file, reporting IDs, positions, missing and ambiguous names and unmapped pages. A manifest on a different instance from `--base-url` is refused so the token goes only where the caller points it. Synthetic tests cover the contract and its refusals; a live read-only run against the user's wireframe file, with a scratch manifest kept outside the repository, resolved the four existing role pages and reported the two missing roles and the leftover test page. The shared token and `curl` transport moved from the copier into `scripts/penpot_backend.py`; the copier's 18 tests still pass on both Pythons.
 - Checked with a connected editor that backend writes appear without a reload, and that a copied board's image export matches its source (2026-10-29).
 - Mapped Wireframe Workflows' design-tool capabilities in `use-penpot` and tested them on the hosted server (2026-10-29): boards cannot be moved between pages through the Plugin API, links stay within a page, and locking and file metadata work. Test material was removed.
 - Confirmed that the configured access token reads a board's full subtree through `get-page`, using `curl` with the token passed on standard input.

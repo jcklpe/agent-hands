@@ -7,93 +7,18 @@ import argparse
 import copy
 import hashlib
 import json
-import os
-import subprocess
 import sys
-import tempfile
 import uuid
 from pathlib import Path
 
-ZERO = "00000000-0000-0000-0000-000000000000"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from penpot_backend import DEFAULT_BASE, ZERO, BackendError as CopyError, access_token, curl_rpc, page_names  # noqa: E402
+
 ID_NAMESPACE = uuid.UUID("6f1d2c4e-8a5b-4f3e-9c7d-2b1a0e9f8c6d")
-DEFAULT_BASE = "https://design.penpot.app"
-RESERVED_KEYS = {"PENPOT_ENV_FILE", "PENPOT_CONFIG_DIR", "PENPOT_SETUP_DIR", "PENPOT_PYTHON"}
-
-
-class CopyError(Exception):
-    pass
-
-
-def env_path():
-    setup_dir = Path(os.environ.get("PENPOT_SETUP_DIR") or Path(__file__).resolve().parents[2] / "setup-penpot")
-    config_dir = Path(os.environ.get("PENPOT_CONFIG_DIR") or setup_dir)
-    selected = os.environ.get("PENPOT_ENV_FILE")
-    if selected:
-        path = Path(selected) if os.path.isabs(selected) else config_dir / selected
-        if not path.is_file():
-            raise CopyError("The selected PENPOT_ENV_FILE does not exist")
-        return path
-    path = config_dir / ".env"
-    return path if path.is_file() else None
-
-
-def access_token():
-    # Exported values take precedence, as in setup-penpot's loader; the file is parsed as data, never executed.
-    token = os.environ.get("PENPOT_ACCESS_TOKEN", "").strip()
-    path = None if token else env_path()
-    if path:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("export "):
-                line = line[7:]
-            if "=" not in line:
-                raise CopyError("Invalid Penpot env assignment")
-            key, value = (part.strip() for part in line.split("=", 1))
-            if key in RESERVED_KEYS or not key.startswith("PENPOT_") or not key.replace("_", "").isalnum():
-                raise CopyError("Invalid Penpot env key")
-            if value and value[0] in "\"'":
-                if len(value) < 2 or value[-1] != value[0]:
-                    raise CopyError("Unclosed quote in Penpot env file")
-                value = value[1:-1]
-            if key == "PENPOT_ACCESS_TOKEN":
-                token = value
-    if not token or any(c.isspace() or c == '"' for c in token):
-        raise CopyError("PENPOT_ACCESS_TOKEN is not configured; see the setup-penpot skill")
-    return token
-
-
-def curl_rpc(base, token):
-    def call(method, params):
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as body:
-            json.dump(params, body)
-        try:
-            config = f'header = "Authorization: Token {token}"\nheader = "Content-Type: application/json"\nheader = "Accept: application/json"\n'
-            result = subprocess.run(["curl", "-sS", "--max-time", "120", "-K", "-", "-X", "POST", "--data-binary", f"@{body.name}", "-w", "\n%{http_code}", f"{base}/api/main/methods/{method}"], input=config, capture_output=True, text=True)
-        finally:
-            os.unlink(body.name)
-        if result.returncode != 0:
-            raise CopyError(f"{method}: curl failed ({result.returncode})")
-        text, _, status = result.stdout.rpartition("\n")
-        if status != "200":
-            try:
-                detail = json.loads(text)
-                detail = {k: detail[k] for k in ("type", "code", "hint") if k in detail}
-            except ValueError:
-                detail = text[:200]
-            raise CopyError(f"{method}: HTTP {status} {detail}")
-        return json.loads(text) if text.strip() else None
-    return call
 
 
 def copy_id(file_id, page_id, revn, source_id):
     return str(uuid.uuid5(ID_NAMESPACE, f"{file_id}:{page_id}:{revn}:{source_id}"))
-
-
-def page_names(file_data):
-    index = (file_data.get("data") or {}).get("pagesIndex") or {}
-    return {pid: (page or {}).get("name") for pid, page in index.items()}
 
 
 def build_plan(rpc, file_id, from_page, to_page, board_ids):

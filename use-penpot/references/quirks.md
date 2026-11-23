@@ -1,5 +1,5 @@
 # Penpot quirks
-Behavior observed on design.penpot.app between 2026-10-25 and 2026-10-29 that the documentation does not make obvious. Each item says what happens and what to do instead. Recheck an item before relying on it after a Penpot release.
+Behavior observed on design.penpot.app between 2026-10-25 and 2026-11-23 that the documentation does not make obvious. Each item says what happens and what to do instead. Recheck an item before relying on it after a Penpot release.
 
 ## MCP connection
 - **The file must be connected and awake.** MCP calls run inside the browser tab where the user chose **MCP → Connect**. When that tab sleeps or closes, every call fails with "No Penpot instance connected for user token"; ask the user to reconnect. In Chrome, adding the Penpot site under **Settings → Performance → Always keep these sites active** keeps the tab awake.
@@ -25,10 +25,15 @@ Behavior observed on design.penpot.app between 2026-10-25 and 2026-10-29 that th
 ## Backend API
 - **Python's HTTP client is refused.** Penpot's Cloudflare front end answers Python's `urllib` with error 1010 because of its client signature; plain `curl` is accepted. Do not disguise requests as a browser. Pass the access token in a `curl` configuration read from standard input, never as an argument.
 - **Authentication is `Authorization: Token <access token>`.** The token is a personal access token from Penpot's account settings, kept in setup-penpot's configuration; the MCP key is a different credential.
-- **Writes need the file's current state.** `update-file` takes the file's `revn`, `vern` and `features` from `get-file`, plus a fresh random `sessionId`. Each successful write raises `revn` by one, so a plan built against an older revision has to be rebuilt.
+- **Writes need the file's current state.** `update-file` takes the file's `revn`, `vern` and `features` from `get-file`, plus a fresh random `sessionId`. Each successful write raises `revn` by one, so a plan built against an older revision has to be rebuilt. The file's feature list grows between releases, so pass the one `get-file` returns rather than a fixed list.
+- **An older revision is not refused.** `update-file` refuses a `revn` newer than the stored one and a `vern` that differs after a version restore, but it applies changes sent against an older revision on top of whatever has landed since. Its response lists those later changes under `lagged`, including the write's own; entries with another `sessionId` show that someone else's change came in between. A check of the revision before writing is therefore not concurrency protection; read the result back. Confirmed in Penpot 2.19's backend source and API description on 2026-11-23.
+- **Each `update-file` call is one transaction.** All its changes apply or none do, so a structured Penpot error means nothing was written. A timeout or a gateway error page leaves the outcome unknown until the file is read again.
+- **`mov-page` takes an index into the list before the move.** The page list is split at `index`, the page is removed from both halves and inserted between them, so moving the first of four pages to index 2 leaves it second. Moving a page to an earlier position reads the same either way.
 - **`get-page` with an `objectId` returns a whole subtree.** That is the way to read one board with all its children.
 - **Backend type names differ from the Plugin API's.** A board is `frame`, a rectangle `rect` and an ellipse `circle`. A page's root is a frame with the all-zero ID, which is also the parent and frame of every top-level board.
 - **Child order follows insertion.** The first ID in a parent's `shapes` list is drawn at the bottom. Adding children in source order with empty `shapes` lists on their parents reproduces the source order exactly.
 - **An open editor shows backend writes live.** A page and board added through the API appeared in the connected tab without a reload.
+- **Named versions are file snapshots.** `create-file-snapshot` with a `label` saves one, `get-file-snapshots` lists them, `lock-file-snapshot` stops others deleting a version its creator made, and `restore-file-snapshot` restores the whole file, every page, which also discards later changes by collaborators.
+- **`del-obj` deletes a whole subtree.** Deleting a board removes all its children in the same change.
 - **`export-binfile` streams.** It returns server-sent events ending in a temporary download address that expires after about an hour.
 - **Webhooks cannot carry custom headers.** A receiver has to authenticate requests some other way.

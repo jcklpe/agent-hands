@@ -197,7 +197,7 @@ class TokenTests(unittest.TestCase):
             seen["args"], seen["input"] = args, input
             return type("Result", (), {"returncode": 0, "stdout": '{"ok": true}\n200'})()
 
-        with patch.object(CB.subprocess, "run", fake_run):
+        with patch("subprocess.run", fake_run):
             CB.curl_rpc("https://example.invalid", "synthetic-secret")("get-file", {"id": FILE_ID})
         self.assertNotIn("synthetic-secret", " ".join(seen["args"]))
         self.assertIn("Authorization: Token synthetic-secret", seen["input"])
