@@ -1,8 +1,9 @@
 ---
-attention: live
-status: implementing
+attention: historical
+status: closed
 ---
 # Persistent runtime-state migration
+Historical record. Closed 2026-11-23 under D23. Stable slug: `persistent-runtime-state-migration`. Current storage locations and lifecycle boundaries belong to the [runtime-file inventory](../runtime-files.md) and the provider references linked there.
 Implement migration of remaining legacy persistent stores outside checkouts, preserving ownership markers, all write journals and a single shared writer location. Office and Microsoft defaults use the common private root; GitHub collaboration journals select an external repository namespace after explicit legacy migration when needed. Sign-ins and unresolved operations are preserved. No silent relocation or scheduled persistent-record expiration is implemented.
 
 The [runtime-file inventory](../runtime-files.md) owns the actual locations and removal boundaries. A migration must coordinate all writers, preserve unresolved operations and account identity, verify recovery after the move, and avoid selecting an empty journal or creating independently writable copies. The user authorized implementation on 2026-11-22, including an intentional file inventory, explicit storage selection and lifecycle handling. This is a separate implementation boundary from the completed disposable-temp and retained-file review.
@@ -36,3 +37,6 @@ Microsoft/GitHub remote-write receipts remain persistent no-replay state; there 
 
 ## Closure preparation - 2026-11-23
 The user authorized closure and reviewed publication, with the full plain-language archival message still to be approved. The optional independent review is not a new acceptance gate. Required source/privacy checks and existing verification remain part of publication. Subsequent coding work is Penpot, then Workday; Bitwarden follows as a discussion before implementation. No cleanup deletion, sign-in reset or wider-platform test is authorized by archival.
+
+## Closure — 2026-11-23
+The user approved D23 and the complete archival message. The selected macOS implementation, verification and maintained guidance are complete. Additional encryption and fresh Windows/Linux testing remain deferred; independent review is optional. Sign-ins and unresolved records remain intact.

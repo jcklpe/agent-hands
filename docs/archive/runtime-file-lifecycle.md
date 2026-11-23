@@ -2,7 +2,7 @@
 attention: historical
 ---
 # Runtime file lifecycle
-Historical record. Closed 2026-11-20. Slug: `runtime-file-lifecycle`. Current locations and removal boundaries belong to the [runtime-file inventory](../runtime-files.md). Disposable-temp handling and retained-file classification are complete; [persistent-state migration](../active-spikes/persistent-runtime-state-migration.md) remains separate captured work.
+Historical record. Closed 2026-11-20. Slug: `runtime-file-lifecycle`. Current locations and removal boundaries belong to the [runtime-file inventory](../runtime-files.md). Disposable-temp handling and retained-file classification are complete; [persistent-state migration](persistent-runtime-state-migration.md) remains separate captured work.
 
 The retained development entries describe their dated checkpoints; later pending or local-only statements are historical.
 
@@ -12,4 +12,4 @@ Move verification downloads to private system temporary directories, preserve au
 
 Scope is local file handling and review, not new service writes, credential resets or bulk cleanup. Retiring retained files needs the applicable explicit deletion approval. Broader storage migration remains a separately reviewed implementation boundary.
 
-Continues in: docs/active-spikes/persistent-runtime-state-migration.md
+Continues in: docs/archive/persistent-runtime-state-migration.md
