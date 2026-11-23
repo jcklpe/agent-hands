@@ -7,6 +7,15 @@ reviewed: 2026-11-21
 # Workday capabilities — investigation and implementation handoff
 [Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry remains outside this implementation scope; the separately authorized read-only browser probe is recorded below.
 
+## Next implementation handoff - 2026-11-23
+Workday follows the Penpot scope. The immediate deliverable is a transport decision supported by an exact read-only proof, not more fake executor features. Read `setup-workday/SKILL.md`, `use-workday/SKILL.md` and `setup-workday/references/transport.md` first; the existing thirty-test offline implementation remains useful and is not a production adapter.
+
+1. Check whether the selected account has an approved API/MCP client. Otherwise prove the documented existing-session route against an explicitly selected Workday tab/profile, preserving normal tabs and native connection consent. Prior bounded probe approval is not a permanent browser-wide grant. Do not copy cookies, adopt another provider's profile or bypass MFA.
+2. Bind tenant and worker, then retrieve a complete authorized week with timezone, statuses, classifications and totals. A heading read or an attached Chrome session alone is insufficient. Keep private target data and screenshots out of public fixtures and commits.
+3. Only after access works, prove the required draft-only conditional-save semantics and a supported settled-outcome reconciliation route. Preserve uncertain writes; do not add retries or weaken the existing revision guard to make a demonstration pass. New tool-owned state must follow the maintained common private-root contract, with all callers sharing one journal/lock and existing explicit selections preserved.
+4. Implement only the supported bounded adapter, with synthetic interruption/conflict/session tests first. Live payroll writes require separately approved actual work; no disposable time entries or submission tests. Submission remains a separate reviewed scope.
+5. If access or save guarantees cannot be established, report the exact blocker and a proposed bounded disposition for human review. Do not call the end-to-end tool working or close the spike merely because the offline tests pass. If the selected scope does pass, prepare a plain-language closure summary and identify the remaining platform limits.
+
 ## Current implementation checkpoint — 2026-11-16
 - Added `setup-workday` and `use-workday`, the offline read/preview CLI, guarded draft executor, durable private Unix journal and 30 synthetic tests. No production transport, live read/write, reconciliation command, submission command, installation or browser access is implemented or claimed.
 - The existing scope below remains the broader acceptance backlog; partial implementation does not mark whole live-runtime items done.
