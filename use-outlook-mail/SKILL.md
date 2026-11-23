@@ -1,6 +1,6 @@
 ---
 name: use-outlook-mail
-description: "Read, search and export Outlook mail; create reply drafts, edit saved draft text or signature styling, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
+description: "Read, search and export Outlook mail; create reply drafts, replace selected draft passages, edit plain draft bodies or signature styling, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
 ---
 
 # Use Outlook Mail
@@ -55,11 +55,24 @@ bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 
 bash scripts/mail draft-status example --plan OPERATION_ID
 bash scripts/mail draft-verify example --plan OPERATION_ID
 ```
-This replaces the entire body with supplied UTF-8 plain text, using the existing draft ID. Include every signature line and quotation to retain; this operation does not append or recover omitted text. Blank lines become paragraphs, single newlines become line breaks, and HTML characters are escaped. It refuses existing links, images, tables, blockquotes or inline attachments that need a formatting-preserving editor. Other styling is not preserved. Subject, To/CC/BCC, sender, reply metadata and attachments are not editable through this command.
+This replaces the entire body with supplied UTF-8 plain text, using the existing draft ID. Include every signature line and quotation to retain; this operation does not append or recover omitted text. Blank lines become paragraphs, single newlines become line breaks, and HTML characters are escaped. It refuses existing links, images, tables, blockquotes or inline attachments; use [selected-passage replacement](#replace-a-selected-draft-passage) when those must be retained. Other styling is not preserved. Subject, To/CC/BCC, sender, reply metadata and attachments are not editable through this command.
 
 Preview records the current body, metadata, attachment identities/sizes, verified mailbox and proposed body privately. Review that full replacement before applying the hash. Execution requires existing mail-write opt-in, `--execute`, `--allow-draft`, a still-unsent draft, unchanged preview state and a fresh ETag. It patches only the body with If-Match, then independently checks the body, preserved metadata and attachment inventory. New drafts with absent From/Sender fields are supported through the verified `/me` mailbox; an explicit alternate sender is refused. Incomplete attachment metadata stops execution. Attachment bytes and visual rendering are not certified.
 
 The private `~/.agent-hands/microsoft/mail/.draft-state/ALIAS/` receipts also cover edits. A dispatched edit is never automatically replayed, including when its response or readback fails. Use `draft-status` and read-only `draft-verify` to reconcile it; retain intervening user changes. Do not create a new plan to bypass an uncertain outcome. Nine stateful edit tests and the bounded attachment-read transport test pass alongside the reply-draft tests. An authorized macOS live test edited a recipient-free disposable draft, passed independent readback and agent visual QA in Outlook web, and retained unsent state, metadata, paragraphs, Unicode and a synthetic signature. The fixture had no attachments; live preservation of nonempty attachments and rich-style fidelity remain unverified. [Microsoft's update-message API](https://learn.microsoft.com/en-us/graph/api/message-update?view=graph-rest-1.0) permits body updates only on drafts.
+
+## Replace a selected draft passage
+```sh
+bash scripts/mail read-draft example --message DRAFT_ID
+bash scripts/mail replace-draft-fragment example --message DRAFT_ID --match-html-file /private/current-passage.html --body-html-file /private/revised-passage.html
+bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute --allow-draft
+bash scripts/mail draft-verify example --plan OPERATION_ID
+```
+Use this to revise reply wording while keeping an existing signature and quoted thread. Read the current draft, then select an exact, unique, balanced fragment containing only the passage to replace. The match must start at a real opening element and end at a closing element, without extra whitespace. Both fragments are limited to 30,000 characters. `--body-file` accepts escaped plain text instead of `--body-html-file`; HTML replacements support the same simple paragraphs, lists, emphasis, HTTPS/mailto links and bounded inline styles as [signatures](references/reply-drafts.md#inputs-and-signature). Images, tables and scripts cannot be authored or selected through this operation. Provider attributes are accepted on the matched fragment; authored attributes must satisfy the allowlist. Existing rich content outside the selected fragment is retained verbatim in the update payload, including inline resources, signature styling and quote formatting. Review the complete before/after body in the preview; the tool does not infer where a reply or signature ends.
+
+Execution uses the existing preview hash, mailbox/write opt-ins, conditional revision check and single-dispatch recovery. It changes only the existing draft's body; no draft is created or sent. Readback verifies full HTML structure, text, attributes and resources against the preview, in addition to unsent state, metadata and attachment identities/sizes. Tag case, attribute order and inter-tag newlines may normalize; other server transformations leave the operation unverified even if they might look equivalent. Inspect through `draft-status`, `read-draft` and read-only `draft-verify`; never replay automatically. Stored HTML checks do not certify attachment bytes or visual rendering.
+
+Forty stateful draft tests and five shared transport-boundary tests pass, including changed-recipient/attachment refusal, ambiguous matches, invalid replacement HTML, stripped formatting and uncertain-dispatch recovery. An authorized macOS operation on November 23, 2026 replaced reply paragraphs and added a link in an existing draft through Graph PowerShell. Independent readback verified the complete stored HTML, preserved styled signature and quotation, unchanged audience/metadata and unsent state. This live case had no attachments or browser visual review; nonempty and inline-attachment preservation remain synthetic checks.
 
 ## Restyle a saved signature
 ```sh

@@ -375,4 +375,73 @@ class StyleDraftSignature(unittest.TestCase):
     test_write_optin_identity_hash_and_execution_flags_are_required = EditDrafts.test_write_optin_identity_hash_and_execution_flags_are_required
 
 
+class ReplaceDraftFragment(unittest.TestCase):
+    def setUp(self):
+        EditDrafts.setUp(self)
+        self.match = '<p class="reply">Old reply.</p><p>Thanks,</p>'
+        self.replacement = '<p>Updated reply. See the <a href="https://example.com/project">project board</a>.</p><p>Thanks,</p>'
+        self.prefix = '<html><body><div>'
+        self.suffix = '<p style="color:rgb(0,0,255)"><strong>______</strong></p><p>Example Person</p></div><blockquote><table><tr><td style="font-size:11pt">Quoted history</td></tr></table><img src="cid:original"></blockquote></body></html>'
+        self.client.draft['body']['content'] = self.prefix + self.match + self.suffix
+        self.client.attachments[0]['isInline'] = True
+
+    def plan(self): return mod.preview_fragment_edit(self.client, self.store, 'draft', self.match, self.replacement)
+    apply = EditDrafts.apply
+
+    def test_replaces_selected_reply_and_retains_rich_signature_quote_and_attachment(self):
+        before = copy.deepcopy(self.client.draft); attachments = copy.deepcopy(self.client.attachments)
+        p = self.plan(); self.assertEqual(self.client.writes, [])
+        self.assertEqual(self.apply(p)['status'], 'draft_edit_verified')
+        self.assertEqual(self.client.draft['body']['content'], self.prefix + self.replacement + self.suffix)
+        self.assertEqual(self.client.attachments, attachments)
+        for key in mod.EDIT_PRESERVED: self.assertEqual(self.client.draft.get(key), before.get(key))
+        self.assertEqual(len(self.client.writes), 1)
+        self.assertEqual(set(self.client.writes[0][2]), {'body'})
+        with self.assertRaisesRegex(ValueError, 'Already dispatched'): self.apply(p)
+
+    def test_missing_ambiguous_unbalanced_and_non_element_matches_fail_before_plan(self):
+        originals = [self.prefix + self.suffix, self.prefix + self.match * 2 + self.suffix, '<div title="' + self.match + '">Hello</div>', '<!--' + self.match + '-->']
+        for original in originals:
+            self.client.draft['body']['content'] = original
+            with self.assertRaisesRegex(ValueError, 'exactly once'): self.plan()
+        for match in ('</div><p>Old reply.</p>', '<p>Old reply.', '<table><tr><td>Old reply.</td></tr></table>'):
+            self.match = match
+            with self.assertRaises(ValueError): self.plan()
+        self.assertEqual(self.client.writes, [])
+        self.assertEqual(list(Path(self.tmp.name).rglob('*.json')), [])
+
+    def test_unsafe_replacement_refused_and_plain_text_is_escaped(self):
+        for content in ('<p onclick="run()">New</p>', '<img src="https://example.com/pixel">', '<p><a href="javascript:run()">New</a></p>', '<p style="position:fixed">New</p>', '<p>New</p></div>', '<p><strong>New</p></strong>', '<script>run()</script>'):
+            self.replacement = content
+            with self.assertRaises(ValueError): self.plan()
+        self.assertEqual(self.client.writes, [])
+        self.replacement = mod.paragraphs('New <text> & more\n\nSecond paragraph.')
+        self.assertIn('&lt;text&gt; &amp;', self.plan()['replacementHTML'])
+        self.assertEqual(self.apply(self.plan())['status'], 'draft_edit_verified')
+
+    def test_structural_readback_rejects_style_quote_link_and_image_changes(self):
+        changes = [('color:rgb(0,0,255)', 'color:red'), ('font-size:11pt', 'font-size:18pt'), ('https://example.com/project', 'https://elsewhere.example'), ('cid:original', 'cid:other'), ('<strong>______</strong>', '______')]
+        for old, new in changes:
+            with self.subTest(old=old):
+                self.setUp(); p = self.plan(); self.apply(p)
+                self.client.draft['body']['content'] = self.client.draft['body']['content'].replace(old, new)
+                with self.assertRaisesRegex(ValueError, 'HTML structure'): mod.verify_edit(self.client, p)
+
+    def test_harmless_attribute_order_and_tag_spacing_readback(self):
+        expected = '<html><body><p class="x" style="color:blue">Hello &amp; world</p><br></body></html>'
+        actual = '<HTML>\r\n<BODY><p style="color:blue" class="x">Hello &#38; world</p>\n<br /></BODY></HTML>'
+        self.assertEqual(mod.HTMLStructure(expected).tokens, mod.HTMLStructure(actual).tokens)
+
+    test_received_sent_alternate_sender_missing_etag_and_partial_attachments_refused = EditDrafts.test_received_sent_alternate_sender_missing_etag_and_partial_attachments_refused
+    def test_changed_body_recipients_subject_or_attachment_stops_before_write(self):
+        changes = [lambda: self.client.draft['body'].update(content='User edit'), lambda: self.client.draft.update(subject='Other subject'), lambda: self.client.draft['toRecipients'].append(recipient('new@example.com')), lambda: self.client.attachments[0].update(size=999)]
+        for change in changes:
+            self.setUp(); p = self.plan(); change()
+            with self.assertRaisesRegex(ValueError, 'changed since preview'): self.apply(p)
+            self.assertEqual(self.client.writes, [])
+
+    test_stale_preview_race_and_lost_response_preserve_edits_and_block_replay = StyleDraftSignature.test_stale_preview_race_and_lost_response_preserve_edits_and_block_replay
+    test_write_optin_identity_hash_and_execution_flags_are_required = EditDrafts.test_write_optin_identity_hash_and_execution_flags_are_required
+
+
 if __name__ == "__main__": unittest.main()

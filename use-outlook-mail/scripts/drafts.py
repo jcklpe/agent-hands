@@ -19,6 +19,7 @@ PREFER = {'Prefer': 'IdType="ImmutableId", outlook.body-content-type="html"'}
 ATTACHMENT_SELECT = "id,name,contentType,size,isInline"
 EDIT_KIND = "outlook-draft-body-edit-v1"
 SIGNATURE_EDIT_KIND = "outlook-draft-signature-style-v1"
+FRAGMENT_EDIT_KIND = "outlook-draft-fragment-edit-v1"
 EDIT_PRESERVED = ("id", "subject", "from", "sender", "replyTo", "toRecipients", "ccRecipients", "bccRecipients", "conversationId", "internetMessageId", "hasAttachments")
 
 
@@ -210,6 +211,43 @@ class ElementStarts(HTMLParser):
     handle_startendtag = handle_starttag
 
 
+def body_fragment(content, existing=False):
+    if not isinstance(content, str) or not content.startswith("<") or not content.endswith(">") or len(content) > 30000 or re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", content):
+        raise ValueError("Select a nonempty balanced body fragment up to 30,000 characters, beginning and ending at element boundaries")
+    try:
+        validator = SignatureHTML(existing=existing); validator.feed(content); validator.close()
+        if validator.stack or not lines(content): raise ValueError("Body fragment must be balanced and contain visible text")
+    except ValueError as exc:
+        raise ValueError(str(exc).replace("Signature", "Body fragment").replace("signature", "body fragment")) from exc
+    return content
+
+
+class HTMLStructure(HTMLParser):
+    """Compare stored HTML without depending on attribute order or inter-tag newlines."""
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+
+    def __init__(self, content):
+        super().__init__(convert_charrefs=True); self.tokens = []
+        self.feed(content); self.close()
+
+    def handle_starttag(self, tag, attrs):
+        self.tokens.append(("start", tag, sorted(attrs, key=lambda pair: pair[0])))
+
+    def handle_endtag(self, tag):
+        if tag not in self.VOID: self.tokens.append(("end", tag))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs); self.handle_endtag(tag)
+
+    def handle_data(self, data):
+        if data.strip(): self.tokens.append(("text", re.sub(r"\s+", " ", data)))
+
+    def handle_comment(self, data): self.tokens.append(("comment", data))
+    def handle_decl(self, data): self.tokens.append(("declaration", data))
+    def unknown_decl(self, data): self.tokens.append(("declaration", data))
+    def handle_pi(self, data): self.tokens.append(("instruction", data))
+
+
 def message_path(message):
     return "/me/messages/" + quote(identifier(message), safe="")
 
@@ -373,6 +411,19 @@ def preview_signature_edit(client, store, message, match_html, signature_data):
     return {"status": "preview", **plan, "manualSendOnly": True, "replacement": "Only the exact selected signature fragment is restyled. Its text/links and all other body HTML, recipients, subject and attachments are retained."}
 
 
+def preview_fragment_edit(client, store, message, match_html, replacement_html):
+    body_fragment(match_html, existing=True); proposed = body_fragment(replacement_html)
+    identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+    current = edit_snapshot(client, message, account)
+    original = current["message"]["body"]["content"]
+    start = original.find(match_html)
+    if original.count(match_html) != 1 or start not in ElementStarts(original).starts:
+        raise ValueError("Body fragment must match exactly once at an HTML element boundary; inspect read-draft and select a unique fragment")
+    updated = original[:start] + proposed + original[start + len(match_html):]
+    plan = store.plan({"kind": FRAGMENT_EDIT_KIND, "alias": client.alias, "identity": identity, "account": account, "current": current, "currentHash": digest(current), "bodyHTML": updated, "matchedHTML": match_html, "replacementHTML": proposed})
+    return {"status": "preview", **plan, "manualSendOnly": True, "replacement": "Only the exact selected fragment is replaced. All HTML outside it, including signatures and quotations, is retained in the body payload. Subject, recipients and attachments are unchanged."}
+
+
 def verify_edit(client, plan):
     if client.identity() != plan["identity"]: raise ValueError("Mailbox identity changed")
     saved = edit_snapshot(client, plan["current"]["message"]["id"], plan["account"])
@@ -384,6 +435,9 @@ def verify_edit(client, plan):
         raise ValueError("Draft attachment metadata changed")
     if lines(saved["message"]["body"]["content"]) != lines(plan["bodyHTML"]):
         raise ValueError("Saved draft text or paragraph boundaries differ from the preview")
+    if plan["kind"] == FRAGMENT_EDIT_KIND:
+        if HTMLStructure(saved["message"]["body"]["content"]).tokens != HTMLStructure(plan["bodyHTML"]).tokens:
+            raise ValueError("Saved draft HTML structure, attributes or resources differ from the preview; inspect without replaying")
     if plan["kind"] == SIGNATURE_EDIT_KIND:
         content = saved["message"]["body"]["content"]
         if resource_links(content) != resource_links(before["body"]["content"]):
@@ -417,7 +471,7 @@ def apply_edit(client, store, operation, plan):
 def apply(client, store, operation, expected_hash, execute, allow_draft):
     if not execute or not allow_draft: raise ValueError("Require --execute and --allow-draft for this authorized manual-send draft")
     plan = store.load(operation, expected_hash)
-    if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND) and plan.get("alias") == client.alias:
+    if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND, FRAGMENT_EDIT_KIND) and plan.get("alias") == client.alias:
         return apply_edit(client, store, operation, plan)
     if plan.get("kind") != "outlook-reply-draft-v1" or plan.get("alias") != client.alias: raise ValueError("Wrong operation/account")
     if store.dispatched(operation): raise ValueError("Already dispatched; inspect draft-status/draft-verify and Outlook Drafts. Never recreate automatically.")
@@ -466,6 +520,8 @@ def main(argv=None):
     p = subs.add_parser("edit-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
     p = subs.add_parser("read-draft"); p.add_argument("alias"); p.add_argument("--message", required=True)
     p = subs.add_parser("style-draft-signature"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--match-html-file", required=True); p.add_argument("--signature-file", required=True)
+    p = subs.add_parser("replace-draft-fragment"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--match-html-file", required=True)
+    replacement = p.add_mutually_exclusive_group(required=True); replacement.add_argument("--body-file"); replacement.add_argument("--body-html-file")
     for command in ("draft-apply", "draft-status", "draft-verify"):
         p = subs.add_parser(command); p.add_argument("alias"); p.add_argument("--plan", required=True)
         if command == "draft-apply": p.add_argument("--hash", required=True); p.add_argument("--execute", action="store_true"); p.add_argument("--allow-draft", action="store_true")
@@ -479,12 +535,15 @@ def main(argv=None):
         result = {"status": "draft_read", "account": account, **edit_snapshot(client, args.message, account)}
     elif args.command == "style-draft-signature":
         result = preview_signature_edit(client, store, args.message, Path(args.match_html_file).read_text(encoding="utf-8"), json.loads(Path(args.signature_file).read_text(encoding="utf-8")))
+    elif args.command == "replace-draft-fragment":
+        replacement = paragraphs(Path(args.body_file).read_text(encoding="utf-8")) if args.body_file else Path(args.body_html_file).read_text(encoding="utf-8")
+        result = preview_fragment_edit(client, store, args.message, Path(args.match_html_file).read_text(encoding="utf-8"), replacement)
     elif args.command == "draft-apply": result = apply(client, store, args.plan, args.hash, args.execute, args.allow_draft)
     elif args.command == "draft-status": result = store.status(args.plan)
     else:
         plan = store.load(args.plan)
         if plan.get("alias") != args.alias or client.identity() != plan["identity"]: raise ValueError("Mailbox mismatch")
-        if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND):
+        if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND, FRAGMENT_EDIT_KIND):
             result = verify_edit(client, plan)
         else:
             created = store.read(store.path(args.plan, ".quote.json"))
