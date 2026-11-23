@@ -8,6 +8,11 @@ reviewed: 2026-10-31
 # Bitwarden capabilities — native decision and coding handoff
 [Selected decision and scope](bitwarden-capabilities.md#selected-decision-and-finalized-scope). **User selected Secrets Manager Free plus the official `bws` CLI on 2026-10-31.** Native desktop interaction with no human terminal use is required. This is the finalized scratch-spike decision and coding handoff; implementation is not started or authorized by this documentation update.
 
+## Sequencing decision - 2026-11-23
+Revisit this scope after Penpot and Workday, beginning with a discussion of the remaining bootstrap, access and credential-lifecycle choices. The existing Secrets Manager/official `bws` selection remains the starting point. This sequencing update does not start implementation, installation, provisioning, login, billing changes or credential migration. Preserve working provider settings and sign-ins.
+
+The provider-storage continuation has already established `~/.agent-hands/` defaults and corrected Odoo transport so bearer values and JSON bodies are not curl arguments. Inspect the maintained implementation before repeating those prerequisite repairs. Bitwarden credential delivery is still unimplemented; moving configuration files did not centralize secrets or encrypt retained document content.
+
 ## Current state
 Selected scope: Secrets Manager Free plus the official `bws` CLI, with a thin optional Agent Hands integration for runtime service credentials. Use native/browser setup, OS-protected bootstrap, scoped injection into trusted named provider operations and sanitized results. An Agent Hands MCP interface is optional future work over the same backend; Password Manager `bw`, its vault MCP and `aac` are not runtime dependencies.
 
