@@ -1,5 +1,6 @@
 """Native Outlook reply drafts and guarded saved-draft body edits; never sends."""
 import argparse
+from decimal import Decimal
 import html
 from html.parser import HTMLParser
 import json
@@ -17,6 +18,7 @@ SELECT = "id,subject,body,from,sender,replyTo,toRecipients,ccRecipients,bccRecip
 PREFER = {'Prefer': 'IdType="ImmutableId", outlook.body-content-type="html"'}
 ATTACHMENT_SELECT = "id,name,contentType,size,isInline"
 EDIT_KIND = "outlook-draft-body-edit-v1"
+SIGNATURE_EDIT_KIND = "outlook-draft-signature-style-v1"
 EDIT_PRESERVED = ("id", "subject", "from", "sender", "replyTo", "toRecipients", "ccRecipients", "bccRecipients", "conversationId", "internetMessageId", "hasAttachments")
 
 
@@ -60,15 +62,73 @@ def paragraphs(text):
     return "".join("<p>" + "<br>".join(html.escape(line) for line in block.split("\n")) + "</p>" for block in text.replace("\r\n", "\n").replace("\r", "\n").split("\n\n") if block.strip())
 
 
+COLORS = dict(zip("black silver gray white maroon red purple fuchsia green lime olive yellow navy blue teal aqua".split(), "000000 c0c0c0 808080 ffffff 800000 ff0000 800080 ff00ff 008000 00ff00 808000 ffff00 000080 0000ff 008080 00ffff".split()))
+
+
+def css_color(value):
+    value = value.strip().lower()
+    if value in COLORS: return "#" + COLORS[value]
+    if re.fullmatch(r"#[0-9a-f]{3}", value): return "#" + "".join(c * 2 for c in value[1:])
+    if re.fullmatch(r"#[0-9a-f]{6}", value): return value
+    rgb = re.fullmatch(r"rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)", value)
+    if rgb and all(int(c) <= 255 for c in rgb.groups()): return "#" + "".join(f"{int(c):02x}" for c in rgb.groups())
+    raise ValueError("Signature colors must use a basic color name, hex or integer rgb()")
+
+
+def css_length(value, maximum):
+    match = re.fullmatch(r"(\d{1,2}(?:\.\d{1,3})?)(px|pt)?", value.strip().lower())
+    if match:
+        number = Decimal(match[1]) * 4 / 3 if match[2] == "pt" else Decimal(match[1])
+        if 0 <= number <= maximum and (match[2] or number == 0): return str(number.normalize())
+    raise ValueError("Signature spacing must be 0–48px and border widths 0–4px (or equivalent pt)")
+
+
+def signature_styles(value, strict=True):
+    """Validate a small CSS vocabulary; project equivalent provider CSS for readback."""
+    result = {}; seen = set()
+    if not isinstance(value, str) or re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", value):
+        if strict: raise ValueError("Invalid signature style")
+        return result
+    for declaration in value.split(";"):
+        if not declaration.strip(): continue
+        key, separator, val = declaration.partition(":"); key = key.strip().lower(); val = val.strip().lower()
+        try:
+            if not separator or key in seen: raise ValueError("Malformed or duplicate signature style")
+            seen.add(key)
+            if key == "color": result[key] = css_color(val)
+            elif key in ("margin-top", "margin-bottom", "padding-top", "padding-bottom"):
+                result[key] = css_length(val, 48)
+            elif key in ("border-top", "border-bottom"):
+                border = re.fullmatch(r"(\S+)\s+solid\s+(.+)", val)
+                if not border: raise ValueError("Signature borders must be a width, solid, and a color")
+                result.update({key + "-width": css_length(border[1], 4), key + "-style": "solid", key + "-color": css_color(border[2])})
+            elif not strict and re.fullmatch(r"border-(?:top|bottom)-(?:width|style|color)", key):
+                if key.endswith("-width"): result[key] = css_length(val, 4)
+                elif key.endswith("-color"): result[key] = css_color(val)
+                elif val == "solid": result[key] = val
+                else: raise ValueError("Unsupported border style")
+            else: raise ValueError("Signature styles support color, top/bottom borders, and top/bottom margin/padding only")
+        except ValueError:
+            if strict: raise
+            if key in seen and (key == "color" or key.startswith(("border-", "margin-", "padding-"))): return {}
+    return result
+
+
 class SignatureHTML(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True); self.stack = []
+    def __init__(self, existing=False):
+        super().__init__(convert_charrefs=True); self.stack = []; self.existing = existing
 
     def handle_starttag(self, tag, attrs):
         if tag not in ("p", "div", "br", "b", "strong", "i", "em", "span", "a", "ul", "ol", "li"):
             raise ValueError("Signature HTML supports simple text, paragraphs, emphasis, lists and links only; no images, scripts or remote resources")
+        if self.existing:
+            if tag != "br": self.stack.append(tag)
+            return
+        if len({key for key, _ in attrs}) != len(attrs): raise ValueError("Duplicate signature HTML attribute")
         for key, value in attrs:
-            if tag != "a" or key != "href" or urlsplit(value or "").scheme not in ("https", "mailto") or any(c in (value or "") for c in "\r\n"):
+            if key == "style":
+                signature_styles(value)
+            elif tag != "a" or key != "href" or urlsplit(value or "").scheme not in ("https", "mailto") or any(c in (value or "") for c in "\r\n"):
                 raise ValueError("Unsupported signature HTML attribute")
         if tag != "br": self.stack.append(tag)
 
@@ -94,6 +154,60 @@ def signature(value, account):
     if validator.stack: raise ValueError("Signature tags must be closed before the quotation")
     if not lines(content): raise ValueError("Signature has no visible content")
     return content
+
+
+class StyledContent(HTMLParser):
+    """Anchor styles to visible character ranges, so quoted styles cannot satisfy new ones."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True); self.stack = []; self.position = 0; self.records = []; self.hidden = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "head"): self.hidden += 1
+        styles = signature_styles(dict(attrs).get("style", ""), strict=False)
+        if tag in ("br", "hr", "img", "meta", "link", "input", "area", "base", "col", "embed", "param", "source", "track", "wbr"):
+            if styles: self.records.append((self.position, self.position, styles))
+        else: self.stack.append((tag, self.position, styles))
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "head"): self.hidden = max(0, self.hidden - 1)
+        if self.stack and self.stack[-1][0] == tag:
+            _, start, styles = self.stack.pop()
+            if styles: self.records.append((start, self.position, styles))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs); self.handle_endtag(tag)
+
+    def handle_data(self, value):
+        if not self.hidden: self.position += len(re.sub(r"\s+", "", value))
+
+
+def verify_styles(saved, expected, offset=0):
+    wanted = StyledContent(); wanted.feed(expected); wanted.close()
+    if not wanted.records: return
+    actual = StyledContent(); actual.feed(saved); actual.close()
+    for start, end, styles in wanted.records:
+        start += offset; end += offset
+        retained = {}
+        for a, b, values in actual.records:
+            if (a, b) == (start, end): retained.update(values)
+        if any(retained.get(key) != value for key, value in styles.items()):
+            raise ValueError("Saved signature styles differ from the preview; inspect the draft without replaying")
+
+
+def resource_links(content):
+    return sorted(re.findall(r'\b(?:href|src)\s*=\s*["\']([^"\']*)["\']', content, re.I))
+
+
+class ElementStarts(HTMLParser):
+    def __init__(self, content):
+        super().__init__(convert_charrefs=True); self.starts = set(); self.offsets = [0]
+        self.offsets.extend(match.end() for match in re.finditer("\n", content))
+        self.feed(content); self.close()
+
+    def handle_starttag(self, tag, attrs):
+        line, column = self.getpos(); self.starts.add(self.offsets[line - 1] + column)
+
+    handle_startendtag = handle_starttag
 
 
 def message_path(message):
@@ -170,10 +284,10 @@ def verify_saved(saved, plan, created):
     if lines(saved["body"]["content"]) != expected:
         raise ValueError("New paragraphs, signature or quoted history differs from the saved draft")
     # Confirm quoted links/media references survived server normalization as a multiset; their remote content is never fetched.
-    links = lambda text: sorted(re.findall(r'\b(?:href|src)\s*=\s*["\']([^"\']*)["\']', text, re.I))
-    if links(saved["body"]["content"]) != links(created["originalHTML"] + plan["signatureHTML"]):
+    if resource_links(saved["body"]["content"]) != resource_links(created["originalHTML"] + plan["signatureHTML"]):
         raise ValueError("Quoted/signature resource references changed")
-    return {"status": "draft_verified", "draft": saved["id"], "manualSendOnly": True, "webLink": safe_link(saved.get("webLink")), "limits": "Stored paragraphs, recipients, account, conversation and quote content checked; visual rendering and recipient-side threading remain unverified."}
+    verify_styles(saved["body"]["content"], plan["replyHTML"] + plan["signatureHTML"])
+    return {"status": "draft_verified", "draft": saved["id"], "manualSendOnly": True, "webLink": safe_link(saved.get("webLink")), "limits": "Stored paragraphs, supplied signature styles, recipients, account, conversation and quote content checked; visual rendering and recipient-side threading remain unverified."}
 
 
 def safe_link(value):
@@ -239,6 +353,26 @@ def preview_edit(client, store, message, text):
     return {"status": "preview", **plan, "manualSendOnly": True, "replacement": "Entire body, including any signature and quoted text; supply all text to retain. Subject, recipients and attachments are unchanged."}
 
 
+def preview_signature_edit(client, store, message, match_html, signature_data):
+    identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+    proposed = signature(signature_data, account)
+    if not isinstance(match_html, str) or not match_html.startswith("<") or len(match_html) > 10000:
+        raise ValueError("Select an exact balanced signature HTML fragment from read-draft, beginning at its opening tag")
+    existing = SignatureHTML(existing=True); existing.feed(match_html); existing.close()
+    if existing.stack or not match_html.endswith(">") or lines(match_html) != lines(proposed) or resource_links(match_html) != resource_links(proposed):
+        raise ValueError("Signature restyling must preserve its text, paragraph boundaries and links; select a complete balanced fragment")
+    current = edit_snapshot(client, message, account)
+    original = current["message"]["body"]["content"]
+    start = original.find(match_html)
+    if original.count(match_html) != 1 or start not in ElementStarts(original).starts:
+        raise ValueError("Signature fragment must match exactly once at an HTML element boundary; inspect read-draft and select a unique fragment")
+    updated = original[:start] + proposed + original[start + len(match_html):]
+    if lines(updated) != lines(original) or resource_links(updated) != resource_links(original):
+        raise ValueError("Signature replacement changes message content; no edit prepared")
+    plan = store.plan({"kind": SIGNATURE_EDIT_KIND, "alias": client.alias, "identity": identity, "account": account, "current": current, "currentHash": digest(current), "bodyHTML": updated, "signatureHTML": proposed, "signaturePrefix": original[:start], "matchedSignatureHTML": match_html})
+    return {"status": "preview", **plan, "manualSendOnly": True, "replacement": "Only the exact selected signature fragment is restyled. Its text/links and all other body HTML, recipients, subject and attachments are retained."}
+
+
 def verify_edit(client, plan):
     if client.identity() != plan["identity"]: raise ValueError("Mailbox identity changed")
     saved = edit_snapshot(client, plan["current"]["message"]["id"], plan["account"])
@@ -250,6 +384,14 @@ def verify_edit(client, plan):
         raise ValueError("Draft attachment metadata changed")
     if lines(saved["message"]["body"]["content"]) != lines(plan["bodyHTML"]):
         raise ValueError("Saved draft text or paragraph boundaries differ from the preview")
+    if plan["kind"] == SIGNATURE_EDIT_KIND:
+        content = saved["message"]["body"]["content"]
+        if resource_links(content) != resource_links(before["body"]["content"]):
+            raise ValueError("Saved draft resource references changed")
+        # Include the unmodified prefix only to locate the new signature in the full document; its existing styles are not part of this edit's acceptance.
+        expected = StyledContent(); expected.feed(plan["signaturePrefix"])
+        prefix_length = expected.position
+        verify_styles(content, plan["signatureHTML"], offset=prefix_length)
     return {"status": "draft_edit_verified", "draft": before["id"], "manualSendOnly": True, "webLink": safe_link(saved["message"].get("webLink")), "limits": "Stored text, unsent state, mailbox, metadata and attachment identities/sizes checked; attachment bytes and visual rendering are not certified."}
 
 
@@ -275,7 +417,7 @@ def apply_edit(client, store, operation, plan):
 def apply(client, store, operation, expected_hash, execute, allow_draft):
     if not execute or not allow_draft: raise ValueError("Require --execute and --allow-draft for this authorized manual-send draft")
     plan = store.load(operation, expected_hash)
-    if plan.get("kind") == EDIT_KIND and plan.get("alias") == client.alias:
+    if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND) and plan.get("alias") == client.alias:
         return apply_edit(client, store, operation, plan)
     if plan.get("kind") != "outlook-reply-draft-v1" or plan.get("alias") != client.alias: raise ValueError("Wrong operation/account")
     if store.dispatched(operation): raise ValueError("Already dispatched; inspect draft-status/draft-verify and Outlook Drafts. Never recreate automatically.")
@@ -322,6 +464,8 @@ def main(argv=None):
     p.add_argument("--to", action="append", required=True); p.add_argument("--cc", action="append", default=[]); p.add_argument("--reply-all", action="store_true")
     signatures = p.add_mutually_exclusive_group(required=True); signatures.add_argument("--signature-file"); signatures.add_argument("--no-signature", action="store_true")
     p = subs.add_parser("edit-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
+    p = subs.add_parser("read-draft"); p.add_argument("alias"); p.add_argument("--message", required=True)
+    p = subs.add_parser("style-draft-signature"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--match-html-file", required=True); p.add_argument("--signature-file", required=True)
     for command in ("draft-apply", "draft-status", "draft-verify"):
         p = subs.add_parser(command); p.add_argument("alias"); p.add_argument("--plan", required=True)
         if command == "draft-apply": p.add_argument("--hash", required=True); p.add_argument("--execute", action="store_true"); p.add_argument("--allow-draft", action="store_true")
@@ -330,12 +474,17 @@ def main(argv=None):
         data = json.loads(Path(args.signature_file).read_text()) if args.signature_file else None
         result = preview(client, store, args.message, Path(args.body_file).read_text(), args.to, args.cc, data, args.no_signature, args.reply_all)
     elif args.command == "edit-draft": result = preview_edit(client, store, args.message, Path(args.body_file).read_text(encoding="utf-8"))
+    elif args.command == "read-draft":
+        identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+        result = {"status": "draft_read", "account": account, **edit_snapshot(client, args.message, account)}
+    elif args.command == "style-draft-signature":
+        result = preview_signature_edit(client, store, args.message, Path(args.match_html_file).read_text(encoding="utf-8"), json.loads(Path(args.signature_file).read_text(encoding="utf-8")))
     elif args.command == "draft-apply": result = apply(client, store, args.plan, args.hash, args.execute, args.allow_draft)
     elif args.command == "draft-status": result = store.status(args.plan)
     else:
         plan = store.load(args.plan)
         if plan.get("alias") != args.alias or client.identity() != plan["identity"]: raise ValueError("Mailbox mismatch")
-        if plan.get("kind") == EDIT_KIND:
+        if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND):
             result = verify_edit(client, plan)
         else:
             created = store.read(store.path(args.plan, ".quote.json"))

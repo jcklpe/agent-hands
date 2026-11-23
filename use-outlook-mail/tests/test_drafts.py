@@ -100,6 +100,53 @@ class Drafts(unittest.TestCase):
             with self.assertRaises(ValueError): mod.signature({**self.sig, "format": "html", "content": text}, "me@example.com")
         self.assertEqual(mod.signature({**self.sig, "format": "html", "content": '<p>Signature<br><a href="https://example.com">Profile</a></p>'}, "me@example.com"), '<p>Signature<br><a href="https://example.com">Profile</a></p>')
 
+    def test_styled_signature_round_trip_preserves_blue_divider_and_quote(self):
+        self.sig = {**self.sig, "format": "html", "content": '<div style="border-top: 2px solid #0070c0; padding-top: 8px; margin-top: 12px"><p style="color:navy">Sample Person<br><a href="https://example.com">Profile</a></p></div>'}
+        p = self.plan()
+        self.assertIn('border-top: 2px solid #0070c0', p["signatureHTML"])
+        self.assertEqual(self.client.writes, [])
+        self.assertEqual(self.apply(p)["status"], "draft_verified")
+        self.assertIn(self.sig["content"], self.client.draft["body"]["content"])
+        self.assertTrue(self.client.draft["isDraft"])
+        self.assertIn('Original message', self.client.draft["body"]["content"])
+
+    def test_style_injection_and_unsupported_layout_fail_before_write(self):
+        invalid = [
+            'background:url(https://example.com/track)', 'color:expression(alert(1))',
+            'color:var(--remote)', 'color:blue!important', 'color:blue;position:fixed',
+            'color:blue;color:red', r'c\6flor:blue', 'color:blue/*comment*/',
+            'border-top:1px solid url(https://example.com)', 'border-top:99px solid blue',
+            'padding-top:-1px', 'margin-top:100vh', 'color:rgb(256,0,0)', 'color:blue;@import:evil',
+        ]
+        for style in invalid:
+            with self.subTest(style=style), self.assertRaises(ValueError):
+                mod.preview(self.client, self.store, "source", "Reply", ["sender@example.com"], [], {**self.sig, "format": "html", "content": f'<p style="{style}">Sample Person</p>'})
+        with self.assertRaises(ValueError):
+            mod.signature({**self.sig, "format": "html", "content": '<p style="color:blue" style="color:red">Sample Person</p>'}, 'me@example.com')
+        self.assertEqual(self.client.writes, [])
+
+    def test_style_readback_accepts_equivalent_css_but_not_quote_only_or_changed_color(self):
+        expected = '<p>Reply</p><p style="color:blue;border-top:2px solid #abc;padding-top:8px">Name</p>'
+        normalized = '<html><head><title>Mail</title></head><body><p>Reply</p><p style="border-top-color:rgb(170,187,204);border-top-style:solid;border-top-width:1.5pt;padding-top:6pt"><span style="COLOR: #0000FF">Name</span></p></body></html>'
+        mod.verify_styles(normalized, expected)
+        for saved in (normalized.replace('#0000FF', '#ff0000'), '<p>Reply</p><p>Name</p>' + expected, normalized.replace('border-top-width:1.5pt;', '')):
+            with self.subTest(saved=saved), self.assertRaisesRegex(ValueError, 'styles differ'):
+                mod.verify_styles(saved, expected)
+
+    def test_stripped_style_is_uncertain_and_never_replayed(self):
+        self.sig = {**self.sig, "format": "html", "content": '<p style="color:blue">______</p><p>Sample Person</p>'}
+        request = self.client.request
+        def strip(method, path, body=None, headers=None, output=None):
+            result = request(method, path, body, headers, output)
+            if method == 'PATCH': self.client.draft['body']['content'] = self.client.draft['body']['content'].replace(' style="color:blue"', '')
+            return result
+        self.client.request = strip
+        p = self.plan()
+        self.assertEqual(self.apply(p)['status'], 'uncertain_after_dispatch')
+        with self.assertRaisesRegex(ValueError, 'Already dispatched'): self.apply(p)
+        self.assertEqual(len(self.client.writes), 2)
+        self.assertTrue(self.client.draft['isDraft'])
+
     def test_explicit_no_signature_and_quote_signature_do_not_forge_a_new_signature(self):
         self.client.source["body"]["content"] += "<p>Old Signature</p>"
         p = mod.preview(self.client, self.store, "source", "Reply", ["sender@example.com"], [], no_signature=True)
@@ -269,6 +316,63 @@ class EditDrafts(unittest.TestCase):
         self.client.allow = True; self.client.identity = lambda: {"id": "other", "mail": "other@example.com"}
         with self.assertRaisesRegex(ValueError, "Mailbox identity changed"): self.apply(p)
         self.assertEqual(self.client.writes, [])
+
+
+class StyleDraftSignature(unittest.TestCase):
+    def setUp(self):
+        EditDrafts.setUp(self)
+        self.match = '<p class="signature">______</p><p>Example Person<br><a href="https://example.com">Website</a></p>'
+        self.sig = {"account": "me@example.com", "format": "html", "content": '<p style="color:#0070c0">______</p><p>Example Person<br><a href="https://example.com">Website</a></p>'}
+        self.prefix = '<html><body><p>Keep my latest reply.</p>'
+        self.suffix = '<blockquote><p>Quoted content</p><img src="cid:original"></blockquote></body></html>'
+        self.client.draft['body']['content'] = self.prefix + self.match + self.suffix
+        self.client.attachments[0]['isInline'] = True
+
+    def plan(self): return mod.preview_signature_edit(self.client, self.store, 'draft', self.match, self.sig)
+    apply = EditDrafts.apply
+
+    def test_restyles_same_draft_without_rewriting_reply_quote_or_inline_content(self):
+        before = copy.deepcopy(self.client.draft)
+        p = self.plan(); self.assertEqual(self.client.writes, [])
+        self.assertEqual(self.apply(p)['status'], 'draft_edit_verified')
+        self.assertEqual(self.client.draft['body']['content'], self.prefix + self.sig['content'] + self.suffix)
+        for key in mod.EDIT_PRESERVED: self.assertEqual(self.client.draft.get(key), before.get(key))
+        self.assertEqual(len(self.client.writes), 1)
+
+    def test_ambiguous_changed_text_links_or_unbalanced_fragment_refused(self):
+        changes = [lambda: self.client.draft['body'].update(content=self.match + self.match), lambda: self.sig.update(content=self.sig['content'].replace('Example Person', 'Someone else')), lambda: self.sig.update(content=self.sig['content'].replace('https://example.com', 'https://elsewhere.example')), lambda: setattr(self, 'match', '</body><p>Example Person</p>')]
+        for change in changes:
+            self.setUp(); change()
+            with self.assertRaises(ValueError): self.plan()
+            self.assertEqual(self.client.writes, [])
+
+    def test_fragment_inside_attribute_is_not_an_element(self):
+        self.match = '<p>Example Person</p>'
+        self.sig['content'] = '<p style="color:blue">Example Person</p>'
+        self.client.draft['body']['content'] = '<div title="' + self.match + '">Hello</div>'
+        with self.assertRaisesRegex(ValueError, 'element boundary'): self.plan()
+        self.assertEqual(self.client.writes, [])
+
+    def test_style_loss_or_changed_resource_is_unverified(self):
+        for replace in [('color:#0070c0', 'color:red'), ('cid:original', 'cid:changed')]:
+            self.setUp(); p = self.plan(); self.apply(p)
+            self.client.draft['body']['content'] = self.client.draft['body']['content'].replace(*replace)
+            with self.assertRaises(ValueError): mod.verify_edit(self.client, p)
+
+    def test_stale_preview_race_and_lost_response_preserve_edits_and_block_replay(self):
+        p = self.plan(); self.client.draft['body']['content'] += '<p>User edit</p>'
+        with self.assertRaisesRegex(ValueError, 'changed since preview'): self.apply(p)
+        self.assertEqual(self.client.writes, [])
+        for flag in ('race', 'lose_patch', 'fail_read'):
+            self.setUp(); p = self.plan(); setattr(self.client, flag, True)
+            self.assertEqual(self.apply(p)['status'], 'uncertain_after_dispatch')
+            with self.assertRaisesRegex(ValueError, 'Already dispatched'): self.apply(p)
+            setattr(self.client, flag, False)
+            if flag == 'race': self.assertIn("User's latest edit", self.client.draft['body']['content'])
+            else: self.assertEqual(mod.verify_edit(self.client, p)['status'], 'draft_edit_verified')
+            self.assertEqual(len(self.client.writes), 1)
+
+    test_write_optin_identity_hash_and_execution_flags_are_required = EditDrafts.test_write_optin_identity_hash_and_execution_flags_are_required
 
 
 if __name__ == "__main__": unittest.main()
