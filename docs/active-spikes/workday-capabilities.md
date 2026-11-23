@@ -20,6 +20,8 @@ Proposed dispositions, for the user's decision:
 3. **Save-guarantee decision, before any write route.** Keep the revision precondition, which leaves writes blocked on every documented route, or explicitly redefine the guarantee for in/out blocks as the service's slot-conflict refusal plus authoritative readback and local single-writer locking. The second changes the current guard and would need live proof on real, separately authorized work.
 4. **Keep the spike active and transport-blocked** until one of these changes the evidence. Offline tests do not justify closing it.
 
+**User direction, 2026-11-23:** API or MCP access is unlikely to be granted soon, so the browser route is the practical path. The save-guarantee choice in option 3 is still open.
+
 ## Goal and scope
 Give an agent a small set of predictable operations for reading a timesheet, previewing exact entries, saving drafts, and submitting an explicitly approved plan. The agent handles intent, missing information, approvals and exceptions; deterministic code handles the known form sequence, calculations and readback. Avoid making the model inspect a full page and choose another field after every input.
 
