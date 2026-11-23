@@ -7,6 +7,14 @@ attention: live
 - Decide how promotion replaces an existing board: a guarded replace option in the copier, or the user deleting the old board after the copy.
 - Have `use-penpot` read a project's `design-files.json` to find its file and page roles, as defined in the Wireframe Workflows README.
 
+## Next implementation handoff - 2026-11-23
+This is the first selected coding workstream after runtime-state and Morris closure. Continue the existing copier and capability map; do not rebuild the connector or start another aggregate tool. Read `use-penpot/SKILL.md`, `use-penpot/references/quirks.md` and the copier/tests before editing. Refresh dated API assumptions against the actual supported endpoint before relying on them.
+
+- Start with project `design-files.json` discovery and guarded page ordering. Resolve configured files/page roles without embedding private project identifiers or guessing another project's defaults. Preview order changes, bind execution to the current revision, preserve unrelated pages and verify complete readback.
+- Review promotion replacement separately: prepare a concrete copy/replace preview, preservation checks and recovery behavior. Do not silently delete an existing board, temporary page or retained test artifact; live deletion needs isolated itemized consent. Copying a replacement does not itself authorize removing its predecessor.
+- Use synthetic files/IDs for offline coverage. Any real hosted write needs the exact authorized target and action; use disposable test content, preserve source boards and avoid changing the user's active editor view without warning. Keep credentials, exports and diagnostics in the documented private/system-temp stores.
+- Update the original three To Do entries individually with actual implementation and verification. Report supported-platform and live-access limits, and prepare complete plain-language archival wording when the selected scope is ready. No push or unrelated commit is implied by the coding handoff.
+
 ## Handoff notes (2026-10-29)
 Claude Code built this spike's work and is handing it to Codex. Where things stand:
 
