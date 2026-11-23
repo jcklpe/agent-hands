@@ -10,7 +10,7 @@ _odoo_trim() { printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 _odoo_resolve_path() {
     case "$1" in
         /*) printf '%s\n' "$1" ;;
-        *) printf '%s/%s\n' "$(_odoo_config_dir)" "$1" ;;
+        *) local selected; selected="$(_odoo_config_dir)" || return 1; printf '%s/%s\n' "$selected" "$1" ;;
     esac
 }
 
@@ -21,7 +21,8 @@ _odoo_load_env() {
         config="$(_odoo_resolve_path "$ODOO_ENV_FILE")"
         [ -f "$config" ] || { _odoo_error 'The selected ODOO_ENV_FILE does not exist'; return 1; }
     else
-        config="$(_odoo_config_dir)/.env"
+        config="$(_odoo_config_dir)" || return 1
+        config="$config/.env"
         [ -f "$config" ] || return 0
     fi
     while IFS= read -r line || [ -n "$line" ]; do
@@ -46,7 +47,7 @@ _odoo_accounts_path() {
 
 _odoo_accounts_ready() {
     local config
-    config="$(_odoo_accounts_path)"
+    config="$(_odoo_accounts_path)" || return 1
     _odoo_check_command jq >/dev/null || { _odoo_error "jq is required"; return 1; }
     _odoo_check_command curl >/dev/null || { _odoo_error "curl is required"; return 1; }
     if [ ! -f "$config" ]; then
@@ -119,17 +120,42 @@ _odoo_wait_for_request_slot() {
     date +%s > "$state"
 }
 
-_odoo_http() {
-    local alias="$1" path="$2" body="$3" base key database response http_code message
+_odoo_temp_root() {
+    local root ancestor
+    root="${TMPDIR:-}"
+    if [ -z "$root" ]; then
+        if [ "$(uname -s)" = Darwin ]; then root="$(getconf DARWIN_USER_TEMP_DIR)" || return 1
+        else root=/tmp
+        fi
+    fi
+    case "$root" in /*) ;; *) _odoo_error 'Temporary root must be absolute'; return 1 ;; esac
+    root="$(cd "$root" && pwd -P)" || return 1
+    ancestor="$root"
+    while [ "$ancestor" != / ]; do
+        [ ! -e "$ancestor/.git" ] || { _odoo_error 'Temporary root cannot be inside a checkout'; return 1; }
+        ancestor="${ancestor%/*}"; [ -n "$ancestor" ] || ancestor=/
+    done
+    printf '%s\n' "$root"
+}
+_odoo_http() (
+    set +x
+    set +a
+    local alias="$1" path="$2" body="$3" base key database response http_code message work root
+    umask 077
+    root="$(_odoo_temp_root)" || return 1
+    work="$(python3 "$ODOO_AUTH_DIR/scripts/temporary.py" create --root "$root" --pid "$$")" || return 1
+    trap 'rm -rf "$work"' EXIT
+    trap 'exit 130' HUP INT TERM
     _odoo_account_exists "$alias" || { _odoo_error "Unknown Odoo account alias: $alias"; return 1; }
     base="$(_odoo_base_url "$alias")" || return 1
     key="$(_odoo_api_key "$alias")" || return 1
     database="$(_odoo_account_value "$alias" '.database')" || database=""
-    response="$(mktemp "${TMPDIR:-/tmp}/odoo-response.XXXXXX")" || return 1
+    response="$work/response.json"
+    printf '%s' "$body" > "$work/request.json" || return 1
     if [ -n "$database" ]; then
-        http_code="$(curl -sS -o "$response" -w '%{http_code}' -X POST "${base}${path}" -H "Authorization: bearer ${key}" -H 'Content-Type: application/json; charset=utf-8' -H "X-Odoo-Database: ${database}" -H 'User-Agent: bounded-odoo-cli/1.0' --data-binary "$body")" || { rm -f "$response"; _odoo_error "Odoo request failed before receiving a response"; return 1; }
+        http_code="$(printf 'Authorization: bearer %s\n' "$key" | curl -q -sS -o "$response" -w '%{http_code}' -X POST "${base}${path}" --header @- -H 'Content-Type: application/json; charset=utf-8' -H "X-Odoo-Database: ${database}" -H 'User-Agent: bounded-odoo-cli/1.0' --data-binary "@$work/request.json")" || { rm -f "$response"; _odoo_error "Odoo request failed before receiving a response"; return 1; }
     else
-        http_code="$(curl -sS -o "$response" -w '%{http_code}' -X POST "${base}${path}" -H "Authorization: bearer ${key}" -H 'Content-Type: application/json; charset=utf-8' -H 'User-Agent: bounded-odoo-cli/1.0' --data-binary "$body")" || { rm -f "$response"; _odoo_error "Odoo request failed before receiving a response"; return 1; }
+        http_code="$(printf 'Authorization: bearer %s\n' "$key" | curl -q -sS -o "$response" -w '%{http_code}' -X POST "${base}${path}" --header @- -H 'Content-Type: application/json; charset=utf-8' -H 'User-Agent: bounded-odoo-cli/1.0' --data-binary "@$work/request.json")" || { rm -f "$response"; _odoo_error "Odoo request failed before receiving a response"; return 1; }
     fi
     case "$http_code" in
         2??) cat "$response"; rm -f "$response" ;;
@@ -141,7 +167,7 @@ _odoo_http() {
             return 1
             ;;
     esac
-}
+)
 
 _odoo_call() {
     local alias="$1" model="$2" method="$3" body="$4"
@@ -149,4 +175,8 @@ _odoo_call() {
     _odoo_http "$alias" "/json/2/${model}/${method}" "$body"
 }
 
-_odoo_config_dir() { printf '%s\n' "${ODOO_CONFIG_DIR:-$ODOO_AUTH_DIR}"; }
+_odoo_config_dir() {
+    if [ -n "${ODOO_CONFIG_DIR:-}" ]; then printf '%s\n' "$ODOO_CONFIG_DIR"
+    else python3 "$ODOO_AUTH_DIR/scripts/runtime_state.py" path
+    fi
+}

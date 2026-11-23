@@ -41,7 +41,12 @@ def config_dir():
     selected = os.environ.get("SLACK_ENV_FILE")
     if selected:
         return Path(selected).expanduser().resolve().parent
-    return Path(__file__).resolve().parents[1]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("agent_hands_slack_settings", Path(__file__).resolve().with_name("runtime_state.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try: return module.settings.selection()
+    except ValueError: raise SlackError("Private settings selection requires migration or recovery inspection")
 
 
 def load_env():

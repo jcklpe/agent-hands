@@ -1,8 +1,8 @@
 # Account access and provider support
-The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration defaults to `~/.agent-hands/odoo/config/`; synthetic examples remain beside this skill and explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 ## Scope and dependencies
-Own account selection, credential lookup, JSON-2 transport, and request pacing. [use-odoo-projects](../../use-odoo-projects/SKILL.md) owns supported project/task operations; [setup-odoo](../SKILL.md) owns first-time onboarding. Runtime: Bash 3.2+, jq, curl, sed/date/mktemp and ordinary Unix file utilities. No Python, other provider, or workspace skill is required.
+Own account selection, credential lookup, JSON-2 transport, and request pacing. [use-odoo-projects](../../use-odoo-projects/SKILL.md) owns supported project/task operations; [setup-odoo](../SKILL.md) owns first-time onboarding. Runtime: Bash 3.2+, jq, curl, sed/date/mktemp and ordinary Unix file utilities. Private storage and disposable-run registration additionally require Python 3.9+ with the standard library; no unrelated provider or workspace skill is required.
 
 ## Configuration contract
 Use the selected configuration directory described above. Its `.env` contains literal `ODOO_*` assignments; `odoo-accounts.json` holds an accounts array with `alias`, HTTPS `base_url`, optional `database`, and `api_key_env`. Use the adjacent [.env.example](../.env.example) and [account example](../odoo-accounts.example.json). These files are distinct because multiple account profiles need structured routing.
@@ -18,3 +18,11 @@ Check the actual server response for permission, expiration, or plan restriction
 
 ## Provider support boundary
 `scripts/client.sh` exposes internal account/transport functions to declared Odoo consumers. It reads no configuration and contacts no server merely when sourced. Supported user-facing operations are bounded by the use skill's dispatcher. The default request interval is five seconds, configurable from 0 through 300; calls are not retried automatically. Timestamp pacing is not an interprocess mutex, so do not claim strict concurrent rate limiting.
+
+## Private settings location
+The default is `~/.agent-hands/odoo/config/`. Real files remain untracked; examples stay beside this skill. [Private settings selection and migration](../../setup-agent-hands/references/private-settings.md) defines the common root override, explicit preview/execution, stopped-caller requirement, Canvas renewal locking and interruption recovery. Authentication is preserved; do not move an existing store by copying selected token files or discarding pending records.
+
+## Disposable request files
+Each request creates a mode-0700 registered `odoo-work.*` directory under the OS temporary root (`TMPDIR`, the macOS user temp directory, or `/tmp` on Unix). Checkout destinations are refused, including through aliases. The request JSON and response stay in that directory; normal completion and handled termination remove this run's directory. Curl receives its credential header on stdin and reads the JSON body from a private file, without putting either value in arguments. This does not promise that the caller's original credential environment is encrypted or absent from its process.
+
+Hard termination can leave plaintext. `bash scripts/authorize cleanup-temp` previews eligible registered runs older than 24 hours; execution with `--execute` requires separate deletion approval. There is no automatic historical cleanup. Eligibility requires owner-only registration, matching directory identity and a confirmed-absent controller; live/reused PIDs, denied liveness, symlinks and unregistered old response files are preserved. These files never contain required authentication or write-recovery state. OS purging is only a backstop.

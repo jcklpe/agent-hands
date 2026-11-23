@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 ODOO_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "${ODOO_AUTH_DIR}/scripts/client.sh"
+if [ "${1:-}" = cleanup-temp ]; then
+    shift
+    root="$(_odoo_temp_root)" || exit 1
+    exec python3 "$ODOO_AUTH_DIR/scripts/temporary.py" cleanup --root "$root" "$@"
+fi
 case "${1:-help}" in
-    help|--help|-h) printf '%s\n' 'authorize check ALIAS: check local routing/key presence only; no network request or key output'; exit 0 ;;
+    help|--help|-h) printf '%s\n' 'authorize check ALIAS | cleanup-temp [--execute]: offline configuration or registered-temp inspection; execution needs separate deletion approval'; exit 0 ;;
     check) [ "$#" -eq 2 ] || { _odoo_error 'check requires exactly one account alias'; exit 1; } ;;
     *) _odoo_error 'Unknown authorization command'; exit 1 ;;
 esac

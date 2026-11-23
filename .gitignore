@@ -14,3 +14,11 @@ __pycache__/
 /use-microsoft-files/.runtime-state.json
 /use-outlook-mail/.runtime-state.json
 /use-excel-workbooks/.runtime-state.json
+
+# Private provider settings migration pointers.
+/setup-google-services/.runtime-settings.json
+/setup-github/.runtime-settings.json
+/setup-canvas/.runtime-settings.json
+/setup-slack/.runtime-settings.json
+/setup-trello/.runtime-settings.json
+/setup-odoo/.runtime-settings.json

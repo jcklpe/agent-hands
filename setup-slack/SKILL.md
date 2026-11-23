@@ -29,3 +29,6 @@ Ask whether this selected capability should be available globally and which supp
 python3 setup-slack/scripts/link-skills.py --client codex --skill use-slack-messages
 ```
 This previews only; add `--execute` for the authorized selection. The optional linker requires Python 3.9+ without external packages and keeps provider runtimes separate. Correct links are unchanged; conflicting user files/links are preserved. An explicit previous checkout permits recoverable repair as described in the shared procedure. Verify filesystem targets and fresh client discovery separately; links do not grant account access or operation permission.
+
+## Private settings storage
+Defaults use `~/.agent-hands/slack/config/`, with real settings untracked and synthetic examples beside this skill. Follow [private settings selection and explicit migration](../setup-agent-hands/references/private-settings.md) before moving a working installation. Existing overrides and sign-ins are preserved; unresolved records must not be expired. Storage selection requires Python 3.9+ and the collection’s dependency-free shared helper, independently of the service transport runtime.

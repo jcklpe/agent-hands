@@ -19,10 +19,12 @@ _gmail_read_ids_file() {
     done < "$file"
 }
 _gmail_audit_log_path() {
-    case "${GOOGLE_GMAIL_AUDIT_LOG:-mail-writes.jsonl}" in
-        /*) printf '%s\n' "$GOOGLE_GMAIL_AUDIT_LOG" ;;
-        *) printf '%s/%s\n' "$GOOGLE_GMAIL_DIR" "${GOOGLE_GMAIL_AUDIT_LOG:-mail-writes.jsonl}" ;;
-    esac
+    if [ -z "${GOOGLE_GMAIL_AUDIT_LOG:-}" ]; then
+        local selected; selected="$(_google_config_dir)" || return 1
+        printf '%s/gmail-audit.jsonl\n' "$selected"
+    else
+        case "$GOOGLE_GMAIL_AUDIT_LOG" in /*) printf '%s\n' "$GOOGLE_GMAIL_AUDIT_LOG" ;; *) printf '%s/%s\n' "$GOOGLE_GMAIL_DIR" "$GOOGLE_GMAIL_AUDIT_LOG" ;; esac
+    fi
 }
 _gmail_audit_append() { _google_python "$GOOGLE_GMAIL_DIR" "$GOOGLE_GMAIL_DIR/scripts/audit.py" "$(_gmail_audit_log_path)"; }
 _gmail_export() {

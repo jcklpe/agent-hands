@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration defaults to `~/.agent-hands/slack/config/`; synthetic examples remain beside this skill and explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 Owns shared account configuration, HTTP transport, bounded paging, identity checks, and small Slack message helpers. Requires Python 3.11+; no third-party Python libraries, other provider, or personal workspace. [setup-slack](../SKILL.md) guides first-time installation. This skill accepts an existing user OAuth token; it does not implement interactive OAuth or automatic token refresh.
 
@@ -19,3 +19,6 @@ uv run --project setup-slack python setup-slack/scripts/slack_auth.py whoami exa
 Writes require a matching user identity. Missing scopes, inaccessible resources, and expired tokens must be reported; do not expand grants, disable token rotation, or acquire browser credentials automatically. The transport reports rate-limit delay and uncertain network outcomes without retrying writes. Inspect a possibly changed destination before any retry. Current scopes and app setup belong to the account owner; see [Slack token types](https://docs.slack.dev/authentication/tokens/) and [token rotation](https://docs.slack.dev/authentication/using-token-rotation/).
 
 Run `python3 tests/test_request_helpers.py` from the setup skill folder for synthetic message-URL and pagination-bound checks.
+
+## Private settings location
+The default is `~/.agent-hands/slack/config/`. Real files remain untracked; examples stay beside this skill. [Private settings selection and migration](../../setup-agent-hands/references/private-settings.md) defines the common root override, explicit preview/execution, stopped-caller requirement, Canvas renewal locking and interruption recovery. Authentication is preserved; do not move an existing store by copying selected token files or discarding pending records.

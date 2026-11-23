@@ -2,7 +2,7 @@
 Use this file as a short map; detailed reasoning and task state belong in the relevant spike pair.
 
 ## Active
-- Persistent runtime-state migration: Office/Microsoft defaults and GitHub collaboration journals use the common private root; guarded temp cleanup and Office retention are implemented. Remaining provider stores, Odoo temp handling and GitHub export recovery stay open. [Scope](docs/active-spikes/persistent-runtime-state-migration.md); [tasks](docs/active-spikes/persistent-runtime-state-migration.todo.md).
+- Persistent runtime-state migration: Selected provider stores, Office accounts and GitHub journals use the common private root. Odoo temp handling and durable GitHub export recovery are implemented and checked on macOS; closure review remains. [Scope](docs/active-spikes/persistent-runtime-state-migration.md); [tasks](docs/active-spikes/persistent-runtime-state-migration.todo.md).
 - Penpot Design Capabilities (slug `penpot-design-capabilities`, opened 2026-10-29): `use-penpot` maps the capabilities Wireframe Workflows needs, tested on the hosted server; the Plugin API cannot move boards between pages, so `copy_boards.py` copies them through the backend API with the access token, tested live on 2026-10-29. [Reasoning](docs/active-spikes/penpot-design-capabilities.md); [tasks](docs/active-spikes/penpot-design-capabilities.todo.md).
 
 ## Recently completed

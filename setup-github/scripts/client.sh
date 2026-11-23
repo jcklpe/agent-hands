@@ -7,7 +7,7 @@ _github_trim() { printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 _github_repos_config() {
     case "${GITHUB_REPOS_PATH:-github-repos.json}" in
         /*) printf '%s\n' "$GITHUB_REPOS_PATH" ;;
-        *) printf '%s/%s\n' "$(_github_config_dir)" "${GITHUB_REPOS_PATH:-github-repos.json}" ;;
+        *) local selected; selected="$(_github_config_dir)" || return 1; printf '%s/%s\n' "$selected" "${GITHUB_REPOS_PATH:-github-repos.json}" ;;
     esac
 }
 _github_ready() {
@@ -17,7 +17,7 @@ _github_ready() {
 }
 _github_config_ready() {
     local config
-    config="$(_github_repos_config)"
+    config="$(_github_repos_config)" || return 1
     [ -f "$config" ] || { _github_error 'Repository aliases require github-repos.json; use the adjacent example'; return 1; }
     jq -e '
         (.repos | type == "array") and
@@ -40,7 +40,9 @@ _github_render_items() { _github_render_file "${GITHUB_AUTH_DIR}/scripts/render_
 
 _github_load_env() {
     local config line key value present
-    config="${GITHUB_ENV_FILE:-$(_github_config_dir)/.env}"
+    if [ -n "${GITHUB_ENV_FILE:-}" ]; then config="$GITHUB_ENV_FILE"
+    else config="$(_github_config_dir)" || return 1; config="$config/.env"
+    fi
     if [ ! -f "$config" ]; then
         [ -z "${GITHUB_ENV_FILE:-}" ] && return 0
         _github_error 'Selected GITHUB_ENV_FILE does not exist'; return 1
@@ -87,48 +89,26 @@ _github_list_repos() {
 _github_export_begin() {
     local destination="$1"
     [ -n "$destination" ] || { _github_error 'export requires --output DIRECTORY'; return 1; }
-    mkdir -p "$destination" || return 1
+    if [ -n "${GITHUB_EXPORT_WORK:-}" ]; then _github_export_cleanup || return 1; fi
     GITHUB_EXPORT_DESTINATION="$destination"
-    GITHUB_EXPORT_PENDING=""
-    GITHUB_EXPORT_WORK="$(mktemp -d "${destination}/.github-export.XXXXXX")" || return 1
-    mkdir "$GITHUB_EXPORT_WORK/new" "$GITHUB_EXPORT_WORK/previous" || return 1
+    GITHUB_EXPORT_WORK="$(python3 "$GITHUB_AUTH_DIR/scripts/export_state.py" begin "$destination" --pid "$$")" || return 1
     trap '_github_export_cleanup' EXIT
     trap 'exit 130' HUP INT TERM
 }
-
-# Publish only this capability's named artifacts after all retrieval/rendering succeeds. Each replacement has a recovery copy; publication across several artifacts is not a transaction.
 _github_publish_export() {
-    local destination="$1" name
-    shift
-    for name in "$@"; do
-        [ ! -L "$destination/$name" ] || { _github_error "Refusing to replace symlink: $name"; return 1; }
-        GITHUB_EXPORT_PENDING="$name"
-        if [ -e "$destination/$name" ]; then mv "$destination/$name" "$GITHUB_EXPORT_WORK/previous/$name" || return 1; fi
-        if [ -e "$GITHUB_EXPORT_WORK/new/$name" ]; then
-            if ! mv "$GITHUB_EXPORT_WORK/new/$name" "$destination/$name"; then
-                if [ -e "$GITHUB_EXPORT_WORK/previous/$name" ]; then
-                    mv "$GITHUB_EXPORT_WORK/previous/$name" "$destination/$name" || { trap - EXIT; _github_error "Restore failed; recovery files retained at $GITHUB_EXPORT_WORK"; return 1; }
-                fi
-                _github_error 'Publication failed; inspect the destination before retrying'; return 1
-            fi
-        fi
-        GITHUB_EXPORT_PENDING=""
-    done
+    local destination="$1"; shift
+    python3 "$GITHUB_AUTH_DIR/scripts/export_state.py" publish "$GITHUB_EXPORT_WORK" "$@" || return 1
     _github_say "Updated $destination"
 }
-
-
 _github_export_cleanup() {
-    local name="${GITHUB_EXPORT_PENDING:-}"
-    if [ -n "$name" ] && [ -e "$GITHUB_EXPORT_WORK/previous/$name" ] && [ ! -e "$GITHUB_EXPORT_DESTINATION/$name" ]; then
-        if ! mv "$GITHUB_EXPORT_WORK/previous/$name" "$GITHUB_EXPORT_DESTINATION/$name"; then
-            _github_error "Restore failed; recovery files retained at $GITHUB_EXPORT_WORK"
-            return 1
-        fi
-    fi
-    rm -rf "$GITHUB_EXPORT_WORK"
+    [ -n "${GITHUB_EXPORT_WORK:-}" ] || return 0
+    python3 "$GITHUB_AUTH_DIR/scripts/export_state.py" finish "$GITHUB_EXPORT_WORK" >/dev/null || return 1
 }
 
-_github_config_dir() { printf '%s\n' "${GITHUB_CONFIG_DIR:-$GITHUB_AUTH_DIR}"; }
+_github_config_dir() {
+    if [ -n "${GITHUB_CONFIG_DIR:-}" ]; then printf '%s\n' "$GITHUB_CONFIG_DIR"
+    else python3 "$GITHUB_AUTH_DIR/scripts/runtime_state.py" path
+    fi
+}
 
 _github_collaboration() { _github_render_file "${GITHUB_USE_DIR}/scripts/collaborate.py" "$@"; }

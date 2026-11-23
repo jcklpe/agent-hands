@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration defaults to `~/.agent-hands/canvas/config/`; synthetic examples remain beside this skill and explicit configuration overrides keep their precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 ## Scope and dependencies
 `scripts/canvas_auth.py` owns configuration parsing, account routing, the API transport, pagination, read throttling back-off, error classification and the identity check. [setup-canvas](../SKILL.md) owns onboarding; [use-canvas](../../use-canvas/SKILL.md) owns reads, exports, downloads and operation history on top of it; supported Canvas writes use its reviewed preview/execute gate. Python 3.11 or later with only its standard library. No Bash, other provider or personal workspace is required.
@@ -11,7 +11,7 @@ Two private files in the selected configuration directory, both ignored, copied 
 
 `base_url` is the instance origin only: `https`, a host and an optional port, with no path, query, fragment or user information. The host is lower-cased and a trailing slash or port 443 dropped; institutions' own domains are fine. The token is sent only to that origin, in an `Authorization: Bearer` header, and never appears in a URL, command argument, log or error message. Account listings contain private routing metadata (instance, user ID) even though they omit tokens; do not publish them.
 
-An exported `CANVAS_ENV_FILE` selects an explicit env file, and its directory then holds the accounts file. Otherwise an exported `CANVAS_CONFIG_DIR` selects the directory, otherwise this setup folder is used. A missing selected file or directory fails rather than falling back.
+An exported `CANVAS_ENV_FILE` selects an explicit env file, and its directory then holds the accounts file. Otherwise an exported `CANVAS_CONFIG_DIR` selects the directory, otherwise `~/.agent-hands/canvas/config/` is used. A missing selected file or directory fails rather than falling back.
 
 ## Commands
 From the collection root:
@@ -51,3 +51,6 @@ Hidden navigation and disabled-feature responses vary by institution and role. A
 
 ## Errors and authority
 Report missing permissions, inaccessible resources and rejected tokens as they are; do not expand access, borrow another credential or fall back to browser cookies. The initial credential is established in the user's Canvas profile settings. The runtime has no OAuth command, generic token-management endpoint, in-place regeneration or deletion command. Explicitly authorized [successor-token renewal](token-renewal.md) creates only a replacement for the configured user's credential, preserving its access scopes. See Canvas's [API authentication documentation](https://developerdocs.instructure.com/services/canvas/oauth2/file.oauth), [pagination](https://canvas.instructure.com/doc/api/file.pagination.html) and [throttling](https://canvas.instructure.com/doc/api/file.throttling.html).
+
+## Private settings location
+The default is `~/.agent-hands/canvas/config/`. Real files remain untracked; examples stay beside this skill. [Private settings selection and migration](../../setup-agent-hands/references/private-settings.md) defines the common root override, explicit preview/execution, stopped-caller requirement, Canvas renewal locking and interruption recovery. Authentication is preserved; do not move an existing store by copying selected token files or discarding pending records.

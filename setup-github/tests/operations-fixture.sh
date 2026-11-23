@@ -5,7 +5,9 @@ GITHUB_AUTH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GITHUB_PYTHON="${GITHUB_TEST_PYTHON:-python3}"
 . "$GITHUB_AUTH_DIR/scripts/client.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/github-check.XXXXXX")"
+work="$(cd "$work" && pwd -P)"
 trap 'rm -rf "$work"' EXIT
+export AGENT_HANDS_STATE_DIR="$work/private-runtime"
 GITHUB_CONFIG_DIR="$work"
 cp "$GITHUB_AUTH_DIR/github-repos.example.json" "$work/github-repos.json"
 mode=success

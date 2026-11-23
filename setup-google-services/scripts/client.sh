@@ -26,7 +26,9 @@ _google_runtime_report() {
 }
 _google_load_env() {
     local config line key value present
-    config="${GOOGLE_ENV_FILE:-$(_google_config_dir)/.env}"
+    if [ -n "${GOOGLE_ENV_FILE:-}" ]; then config="$GOOGLE_ENV_FILE"
+    else config="$(_google_config_dir)" || return 1; config="$config/.env"
+    fi
     if [ ! -f "$config" ]; then
         [ -z "${GOOGLE_ENV_FILE:-}" ] && return 0
         _google_error 'Selected GOOGLE_ENV_FILE does not exist'; return 1
@@ -53,13 +55,13 @@ _google_config_path() {
     case "$1" in
         '') return 1 ;;
         /*) printf '%s\n' "$1" ;;
-        *) printf '%s/%s\n' "$(_google_config_dir)" "$1" ;;
+        *) local selected; selected="$(_google_config_dir)" || return 1; printf '%s/%s\n' "$selected" "$1" ;;
     esac
 }
 
 _google_accounts_ready() {
     local config
-    config="$(_google_accounts_path)"
+    config="$(_google_accounts_path)" || return 1
     command -v curl >/dev/null 2>&1 || { _google_error 'curl is required'; return 1; }
     command -v jq >/dev/null 2>&1 || { _google_error 'jq is required'; return 1; }
     [ -f "$config" ] || { _google_error 'Google account config is missing; see setup-google-services'; return 1; }
@@ -247,4 +249,8 @@ _google_get_url() {
 }
 
 
-_google_config_dir() { printf '%s\n' "${GOOGLE_CONFIG_DIR:-$GOOGLE_AUTH_DIR}"; }
+_google_config_dir() {
+    if [ -n "${GOOGLE_CONFIG_DIR:-}" ]; then printf '%s\n' "$GOOGLE_CONFIG_DIR"
+    else python3 "$GOOGLE_AUTH_DIR/scripts/runtime_state.py" path
+    fi
+}

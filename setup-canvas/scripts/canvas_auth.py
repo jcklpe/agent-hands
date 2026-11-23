@@ -90,7 +90,12 @@ def config_dir():
         if not path.is_dir():
             raise CanvasError("config_missing", "The selected CANVAS_CONFIG_DIR is not a directory")
         return path
-    return SETUP_DIR
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("agent_hands_canvas_settings", Path(__file__).resolve().with_name("runtime_state.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try: return module.settings.selection()
+    except ValueError: raise CanvasError("config_missing", "Private settings selection requires migration or recovery inspection")
 
 
 def env_path():

@@ -1,5 +1,5 @@
 # Account access and provider support
-The command examples below identify their working directory. Private configuration lives in this setup folder beside its examples; explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
+The command examples below identify their working directory. Private configuration defaults to `~/.agent-hands/trello/config/`; synthetic examples remain beside this skill and explicit configuration overrides keep their existing precedence. Preserve existing credentials; do not create a parallel profile or move tokens as part of routine setup.
 
 Owns literal provider configuration and HTTP access. Requires Bash 3.2+, curl, jq, and ordinary Unix tools. No Python, uv, other provider, or personal workspace is required. See [setup-trello](../SKILL.md) for first-time setup.
 
@@ -15,3 +15,6 @@ bash setup-trello/scripts/authorize check write
 These check local presence and required commands, without network requests or printing values. They do not verify token ownership, scopes, or live access. This client does not implement an OAuth browser callback, refresh, or automatic identity-matching gate. The use skill owns mutation previews and execution; this provider does not enforce Slack-style identity matching.
 
 Follow [Trello's authorization documentation](https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/) for acquiring/revoking tokens with explicitly selected scopes and duration. Keep tokens private; avoid debug tracing and command dumps. HTTP errors are failures; a write interrupted in transit may have landed, so inspect the destination before retrying. No automatic write retry is implemented.
+
+## Private settings location
+The default is `~/.agent-hands/trello/config/`. Real files remain untracked; examples stay beside this skill. [Private settings selection and migration](../../setup-agent-hands/references/private-settings.md) defines the common root override, explicit preview/execution, stopped-caller requirement, Canvas renewal locking and interruption recovery. Authentication is preserved; do not move an existing store by copying selected token files or discarding pending records.

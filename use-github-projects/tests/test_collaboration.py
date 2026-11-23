@@ -36,7 +36,7 @@ class ProjectsCollaborationTests(ProjectFixture, unittest.TestCase):
         result = self.call("link-repository")
         self.assertEqual(result["writes_sent"], 0)
         self.assert_no_writes()
-        self.assertFalse((self.checkout / ".github/project-collaboration").exists())
+        self.assertFalse(self.state_root.exists())
 
     def test_repository_link_is_independent_and_repeat_is_noop(self):
         self.project["repositories"] = [{"id": "REPO_OTHER", "nameWithOwner": "example-owner/other"}]
@@ -234,11 +234,11 @@ class ProjectsCollaborationTests(ProjectFixture, unittest.TestCase):
 
     def test_journal_must_be_ignored_and_never_contains_payload_text(self):
         (self.checkout / ".gitignore").write_text("")
-        self.apply("create-project", "--title", "Private payload text", selector=False, code=2)
+        self.apply("create-project", "--title", "Private payload text", "--state-dir", self.checkout / ".github/project-collaboration", selector=False, code=2)
         self.assert_no_writes()
         (self.checkout / ".gitignore").write_text("/.github/project-collaboration/\n")
         result = self.apply("create-project", "--title", "Private payload text", selector=False)
-        records = list((self.checkout / ".github/project-collaboration").rglob("*.json"))
+        records = list(self.state_root.rglob("*.json"))
         self.assertEqual(len(records), 1)
         value = records[0].read_text()
         self.assertNotIn("Private payload text", value)
@@ -269,7 +269,7 @@ class ProjectsCollaborationTests(ProjectFixture, unittest.TestCase):
         self.save()
         result = self.apply("link-repository", code=3)
         self.assertEqual(result["outcome"], "uncertain")
-        record_path = next((self.checkout / ".github/project-collaboration").rglob("*.json"))
+        record_path = next(self.state_root.rglob("*.json"))
         record = json.loads(record_path.read_text())
         self.assertEqual(record["steps"][0]["returned"], {"node_id": "REPO_1"})
         self.assertEqual(record["steps"][0]["status"], "uncertain")

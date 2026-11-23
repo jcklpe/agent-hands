@@ -91,7 +91,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 
 Use skills own normal operations, previews, execution controls and result verification. Automatic token refresh, where supported, remains in shared provider code. An established credential grants API access; it does not authorize a particular action. Existing user approval covering that action remains sufficient.
 
-Each setup skill keeps its provider's private configuration beside its examples; an explicit configuration override can select another location.
+Each setup skill keeps synthetic examples beside its implementation. Tool-owned private settings default beneath `~/.agent-hands/`; existing explicit overrides retain their documented selection. See [private provider settings and migration](setup-agent-hands/references/private-settings.md), with Microsoft and Office storage described in the [runtime inventory](docs/runtime-files.md).
 
 ```text
 agent-hands/
@@ -114,7 +114,7 @@ Python capabilities declare Python 3.11+ and use their own `pyproject.toml` and 
 Local checks have been exercised on macOS. Fresh Linux/WSL and native Windows onboarding remain unverified; shell entrypoints require Bash. A successful local check does not establish a client's skill discovery or a particular account's remote access.
 
 ### Configuration and write controls
-Start from each provider's tailored examples. Real `.env`, account configuration, token caches, and audit/recovery files remain local and ignored beside their owning skills. Verify ignore rules before adding real values, especially when copying skills into another repository. Parse `.env` as literal configuration; do not source it as shell code. Preserve existing profiles, grants, allowlists, and recovery records when moving an installation.
+Start from each provider's tailored examples. Real `.env`, account configuration, tool-owned token caches, and audit/recovery files remain in designated private stores outside checkouts by default. SDK-managed authentication stays with its SDK. Existing installations use explicit verified migration; configuration examples remain tracked and synthetic. Verify ignore rules before using an explicit inside-checkout override, especially when copying skills into another repository. Parse `.env` as literal configuration; do not source it as shell code. Preserve existing profiles, grants, allowlists, and recovery records when moving an installation.
 
 Read the chosen skill before running mutations. Bounded write routes, including all 15 Trello mutation commands, preview by default and require explicit execution. Penpot’s arbitrary `execute_code` is an immediate-write exception with no generic dry-run or `--execute` gate. Other controls vary by operation, including account identity checks, target allowlists, notification acknowledgments, conditional updates, and readback verification. These are not interchangeable, and preview commands may need credentials and perform live reads. Installing a skill does not authorize external changes.
 

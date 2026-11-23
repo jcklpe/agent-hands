@@ -28,17 +28,15 @@ unset GITHUB_REPOS_PATH
 GITHUB_ENV_FILE="$work/.env"
 printf '%s\n' 'GH_TOKEN="$(touch must-not-exist)"' 'GITHUB_REPOS_PATH=github-repos.json' > "$GITHUB_ENV_FILE"
 (cd "$work"; unset GH_TOKEN; _github_load_env; [ "$GH_TOKEN" = '$(touch must-not-exist)' ]; [ ! -e must-not-exist ])
-# If publication stops after moving an old artifact aside, the EXIT cleanup restores it.
+# Failed retrieval classifies its retained run and leaves existing output intact; durable rename interruption and guarded restore are covered in test_export_state.py.
 mkdir -p "$work/interrupted"
 printf 'keep-me' > "$work/interrupted/issues.md"
 if (
     _github_export_begin "$work/interrupted"
-    GITHUB_EXPORT_PENDING=issues.md
-    mv "$work/interrupted/issues.md" "$GITHUB_EXPORT_WORK/previous/issues.md"
     exit 1
 ); then echo 'FAIL: interrupted publication returned success'; exit 1; fi
 [ "$(cat "$work/interrupted/issues.md")" = keep-me ]
-printf 'ok: interrupted publication restores its pending artifact\n'
+printf 'ok: failed retrieval preserves its prior artifact\n'
 
 # Explicit false must survive the configuration summary; only missing/null defaults to true.
 unset GITHUB_ENV_FILE

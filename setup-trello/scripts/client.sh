@@ -13,7 +13,8 @@ _trello_load_env() {
         config="$TRELLO_ENV_FILE"
         [ -f "$config" ] || { _trello_error 'The selected TRELLO_ENV_FILE does not exist'; return 1; }
     else
-        config="$(_trello_config_dir)/.env"
+        config="$(_trello_config_dir)" || return 1
+        config="$config/.env"
         [ -f "$config" ] || return 0
     fi
     while IFS= read -r line || [ -n "$line" ]; do
@@ -68,7 +69,11 @@ _trello_write_http() {
 }
 
 
-_trello_config_dir() { printf '%s\n' "${TRELLO_CONFIG_DIR:-$TRELLO_AUTH_DIR}"; }
+_trello_config_dir() {
+    if [ -n "${TRELLO_CONFIG_DIR:-}" ]; then printf '%s\n' "$TRELLO_CONFIG_DIR"
+    else python3 "$TRELLO_AUTH_DIR/scripts/runtime_state.py" path
+    fi
+}
 
 # Direct operation builders cannot accidentally bypass the preview controller.
 _trello_get() { _trello_get_http "$@"; }

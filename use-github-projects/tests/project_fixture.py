@@ -26,6 +26,7 @@ class ProjectFixture:
         temp = tempfile.TemporaryDirectory(prefix="projects-collaboration-test-")
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
+        self.state_root = self.root / "private/github"
         self.checkout = self.root / "checkout"
         self.checkout.mkdir()
         subprocess.run(["git", "init", "-q", str(self.checkout)], check=True)
@@ -43,7 +44,7 @@ class ProjectFixture:
         self.config.mkdir()
         (self.config / "github-repos.json").write_text(json.dumps({"repos": [{"alias": "example", "owner": "example-owner", "repo": "example-project", "projects": [{"number": 1, "name": "example"}]}]}))
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("GH_", "GITHUB_"))}
-        self.env.update(PATH=str(self.bin) + os.pathsep + os.environ["PATH"], PROJECT_TEST_STATE=str(self.state_path), GITHUB_PYTHON=sys.executable, GITHUB_CONFIG_DIR=str(self.config), GH_CONFIG_DIR=str(self.config), PYTHONDONTWRITEBYTECODE="1")
+        self.env.update(AGENT_HANDS_STATE_DIR=str(self.root / "private"), PATH=str(self.bin) + os.pathsep + os.environ["PATH"], PROJECT_TEST_STATE=str(self.state_path), GITHUB_PYTHON=sys.executable, GITHUB_CONFIG_DIR=str(self.config), GH_CONFIG_DIR=str(self.config), PYTHONDONTWRITEBYTECODE="1")
 
     @property
     def project(self):
