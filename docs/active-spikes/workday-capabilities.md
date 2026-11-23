@@ -2,13 +2,23 @@
 attention: live
 status: transport-blocked
 implementation: offline-contract
-reviewed: 2026-11-21
+reviewed: 2026-11-23
 ---
 # Workday capabilities
 [Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is now authorized and the offline contract is implemented. No production transport is selected. A separately authorized existing-browser probe and an isolated synthetic attachment check are recorded in the handoff; no Workday timesheet read or write has been established. No installation, authentication, registration or credential creation occurred.
 
 ## Implemented boundary
 The [use-workday CLI](../../use-workday/SKILL.md) validates supplied normalized weeks and previews exact allocations locally. Its draft-save engine is exercised only through an in-memory fake service. Live commands fail with a specific transport blocker. Setup owns [transport discovery and remaining gates](../../setup-workday/references/transport.md). Atomic service revision protection and settled recovery must be proved before connecting the write engine; browser preflight alone is insufficient. Submission remains future scope, not part of this implementation.
+
+## Transport proof and dispositions — 2026-11-23
+The [transport reference](../../setup-workday/references/transport.md#interface-inventory-and-save-guarantees--2026-11-23) records the rechecked interfaces. In short: Time Tracking REST v7, Agent-Ready MCP and the new beta Sana from Workday connector all need a client or agent registered and granted by the tenant's administrators, and the selected account had no such grant and no self-service registration. The REST block read omits incomplete blocks, time off and overtime requests, so it is not a complete week on its own. No documented interface offers a revision precondition on time-block writes; the REST service refuses in/out times that overlap existing entries, which guards one slot, not the week. The browser route is unchanged since 2026-11-21: it needs the user's current profile and tab selection and native connection approval, and the UI has no save precondition either. No read proof was possible this session without those, and no Workday data was retrieved.
+
+Proposed dispositions, for the user's decision:
+
+1. **Request access (recommended).** The user asks the employer's Workday integration or security team whether the account can be granted a REST API client with the Time Block domain and Time Tracking scope, or the Workday MCP or Sana connector, for self-service time entry. No code changes until a grant exists.
+2. **Read-only browser proof (optional).** With the user's current selection of Chrome profile and Workday timesheet tab, Chrome's native remote-debugging setting enabled by the user, and the user's approval of the connection prompt, build and run a read-only probe from the standalone runtime that binds tenant, worker and one complete week. Browser writes stay blocked.
+3. **Save-guarantee decision, before any write route.** Keep the revision precondition, which leaves writes blocked on every documented route, or explicitly redefine the guarantee for in/out blocks as the service's slot-conflict refusal plus authoritative readback and local single-writer locking. The second changes the current guard and would need live proof on real, separately authorized work.
+4. **Keep the spike active and transport-blocked** until one of these changes the evidence. Offline tests do not justify closing it.
 
 ## Goal and scope
 Give an agent a small set of predictable operations for reading a timesheet, previewing exact entries, saving drafts, and submitting an explicitly approved plan. The agent handles intent, missing information, approvals and exceptions; deterministic code handles the known form sequence, calculations and readback. Avoid making the model inspect a full page and choose another field after every input.
