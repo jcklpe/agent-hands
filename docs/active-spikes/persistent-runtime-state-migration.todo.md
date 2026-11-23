@@ -6,7 +6,7 @@ reviewed: 2026-11-23
 [Scope and boundaries](persistent-runtime-state-migration.md). User-authorized implementation began 2026-11-22.
 
 ## To do
-- Prepare closure review and present the complete archival commit wording for separate approval. Preserve the explicit deletion-consent boundary; no pending cleanup is authorized by implementation acceptance. Fresh Linux/Windows testing remains deferred.
+- Prepare closure review and present the complete archival commit wording for separate approval. Closure and scoped publication were authorized on 2026-11-23; the final wording remains for review. An independent code review is optional, not an added closure gate. Preserve the separate deletion-consent boundary. Fresh Linux/Windows testing remains deferred.
 
 ## Done
 - Migrate remaining provider configuration with owner-specific recovery and explicit-override preservation; see the remaining writer inventory. Completed 2026-11-23 for Google, GitHub settings, Canvas, Slack, Trello and Odoo: twenty-one known configuration/authentication/recovery units moved with byte/mode verification, no observed active selected callers, no remote request and no sign-in reset. All six installed offline configuration checks passed. Canvas renewal lock and pending/last records, relative Google OAuth files, the default Gmail audit and Odoo pacing timestamp remain intact. Overrides and nonrelative configurations retain their existing route or require a separately targeted migration.
