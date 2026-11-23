@@ -23,15 +23,17 @@ def parser():
     commands = root.add_subparsers(dest="command", required=True)
     from canvas_sandbox import add_commands as sandbox_commands
     sandbox_commands(commands, canvas_id)
-    for name, description in (("courses", "list this user's courses"), ("verify", "report selected courses' access, navigation and permissions"), ("export", "publish a deterministic course export with coverage"), ("download-file", "stream one explicitly selected course file to disk"), ("history", "query monthly private operation records without Canvas access"), ("history-prune", "preview or execute removal of whole history months"), ("history-resolve", "record the inspected outcome of an uncertain write")):
+    for name, description in (("courses", "list this user's courses"), ("verify", "report selected courses' access, navigation and permissions"), ("export", "publish a deterministic course export with coverage"), ("feedback", "read this user's submission comments and rubric feedback for one assignment"), ("download-file", "stream one explicitly selected course file to disk"), ("history", "query monthly private operation records without Canvas access"), ("history-prune", "preview or execute removal of whole history months"), ("history-resolve", "record the inspected outcome of an uncertain write")):
         command = commands.add_parser(name, help=description)
         command.add_argument("alias")
         command.add_argument("--history-dir", type=Path)
         command.add_argument("--json", action="store_true")
         if name in {"export", "verify"}:
             command.add_argument("--course", type=canvas_id, action="append")
-        elif name in {"download-file", "history"}:
-            command.add_argument("--course", type=canvas_id, required=name == "download-file")
+        elif name in {"download-file", "history", "feedback"}:
+            command.add_argument("--course", type=canvas_id, required=name != "history")
+        if name == "feedback":
+            command.add_argument("--assignment", type=canvas_id, required=True)
         if name == "courses":
             command.add_argument("--all-states", action="store_true")
         if name == "export":
@@ -165,6 +167,10 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
         elif args.command == "verify":
             value = [reader.verify(cid) for cid in ids]
             code = int(any(c["status"] in {"denied", "failed", "partial"} for r in value for c in r["coverage"].values()))
+        elif args.command == "feedback":
+            from canvas_feedback import feedback
+            ids = [args.course]
+            value = feedback(reader, args.course, args.assignment)
         elif args.command == "download-file":
             ids = [args.course]
             meta = reader.object(f"/api/v1/courses/{args.course}/files/{args.file}")
@@ -187,7 +193,12 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             fields["coverage"] = [{"course_id": row["course_id"], "coverage": row["coverage"]} for row in value]
         elif args.command == "download-file":
             fields.update(target_ids=[args.file], counts={"bytes": value["bytes"]})
+        elif args.command == "feedback":
+            fields.update(target_ids=[args.assignment], counts={"comments": len(value["comments"]), "rubric_criteria": len(value["rubric"])}, coverage=value["coverage"])
         log_read(history, **fields)
+        if args.command == "feedback" and not args.json:
+            from canvas_feedback import render
+            value = render(value)
         emit(value, args.json)
         return code
     except (auth.CanvasError, OSError, ValueError) as error:
