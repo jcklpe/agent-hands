@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline Workday read/preview CLI; setup-workday's browser commands read and save live weeks."""
+"""Offline Workday read/preview CLI; setup-workday's browser commands read, save and submit live weeks."""
 import argparse
 import json
 import sys
@@ -24,21 +24,21 @@ def load(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    sub.add_parser('doctor', help='Report the transport blocker; performs no network or browser access')
+    sub.add_parser('doctor', help='Point to the browser commands; performs no network or browser access')
     read = sub.add_parser('read-timesheet', help='Validate an offline snapshot for an exact target')
     read.add_argument('--target', required=True, help='Target JSON file')
-    read.add_argument('--snapshot', help='Normalized offline snapshot JSON; no live read without an adapter')
+    read.add_argument('--snapshot', help='Normalized snapshot JSON, such as setup-workday\'s read --out writes')
     pre = sub.add_parser('preview', help='Preview a complete desired week without writes')
     pre.add_argument('--snapshot', required=True)
     pre.add_argument('--allocation', required=True)
-    save = sub.add_parser('save-draft', help='Inspect a plan; execution is blocked until a live adapter is verified')
+    save = sub.add_parser('save-draft', help='Inspect a plan; setup-workday\'s save command executes it')
     save.add_argument('--plan', required=True)
     save.add_argument('--execute', action='store_true')
     save.add_argument('--approved-fingerprint')
     args = parser.parse_args()
     try:
         if args.command == 'doctor' or (args.command == 'read-timesheet' and not args.snapshot):
-            raise Refusal('TRANSPORT_UNAVAILABLE', 'This CLI does not contact Workday. Read a live week with setup-workday/scripts/workday_browser.py read --target ... --out ..., then pass that snapshot here. Saving to Workday is not implemented.')
+            raise Refusal('TRANSPORT_UNAVAILABLE', 'This CLI does not contact Workday. Read a live week with setup-workday/scripts/workday_browser.py read --target ... --out ..., then pass that snapshot here. Save an approved plan with its save command, and submit a finished week with submit-preview and submit.')
         if args.command == 'read-timesheet':
             result = read_timesheet(load(args.snapshot), load(args.target))
         elif args.command == 'preview':

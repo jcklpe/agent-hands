@@ -1,5 +1,5 @@
 # Workday transport status
-Reviewed 2026-11-24. The existing-session browser reader below reads complete weeks, and saving through Quick Add under the user's re-read safeguard has run live: a week of the user's actual work saved block by block, each read back as a Not Submitted draft. `use-workday`'s own CLI never contacts Workday. Submission is not part of the tool.
+Reviewed 2026-11-24. The existing-session browser reader below reads complete weeks, and saving through Quick Add under the user's re-read safeguard has run live: three complete weeks and one partial week of the user's actual work saved block by block, each block read back as a Not Submitted draft. Submission is a separate preview-and-approve command; its preview has run live, and no week has yet been submitted through it. `use-workday`'s own CLI never contacts Workday.
 
 ## Discovery evidence and limits
 A bounded repository/configs filename search and PATH check found the existing Workday planning pair, no `workday` executable, and no prior setup/use implementation. The existing Word browser adapter owns an Office.js-specific session and is not a Workday or ordinary-browser attachment interface. No existing implementation was imported or duplicated.
@@ -62,7 +62,7 @@ Use one shared private journal directory, `~/.agent-hands/workday/journal/` or b
 
 ## Remaining acceptance gates
 - Verify a supported authorized transport from the actual CLI runtime and record exact source/version, scopes, session ownership and platform.
-- Proved 2026-11-23 for the browser reader: complete read-only retrieval of an authorized week with identity, time zone, classification, periods, totals and the approved status. Statuses other than approved have not been observed yet.
-- Verified 2026-11-24 on approved real work: draft-only persistence through Quick Add and authoritative readback, with the Not Submitted label and Workday's reading of the entered times. Still unexercised live: an uncertain save and its reconciliation, Workday's overlap refusal and session expiry. Do not create disposable payroll data to test them.
+- Proved 2026-11-23 for the browser reader: complete read-only retrieval of an authorized week with identity, time zone, classification, periods, totals and the approved status. The Not Submitted and Submitted statuses were observed on 2026-11-24; a denied or sent-back week has not been.
+- Verified 2026-11-24 on approved real work: draft-only persistence through Quick Add and authoritative readback, with the Not Submitted label and Workday's reading of the entered times. Still unexercised live: a submission through the tool, an uncertain save or submission and its reconciliation, Workday's overlap refusal and session expiry. Do not create disposable payroll data to test them.
 - Verify client installation/discovery separately. Current commands are repository-relative only; no global links or PATH installation were performed.
 - Human QA and Linux/WSL/native Windows remain outstanding. The current executor journal uses Unix `fcntl`; Windows requires a separately tested lock implementation. No token/cost reduction is measured.
