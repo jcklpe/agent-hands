@@ -16,6 +16,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "use-workday" / "scripts"))
@@ -624,6 +625,92 @@ def check_quick_add_ready(state, entry, day):
         refuse("LAYOUT_CHANGED", "Quick Add does not have exactly the planned day ticked.")
 
 
+SUBMIT_PANEL_JS = """() => {
+  const has = (e) => { const t = e.textContent || ''; return t.includes('certify time for approval') && t.includes('Timesheet Total') && [...e.querySelectorAll('button')].some(b => (b.textContent || '').trim() === 'Submit'); };
+  const boxes = [...document.querySelectorAll('body *')].filter(has);
+  if (!boxes.length) return null;
+  const box = boxes.reduce((a, b) => (a.querySelectorAll('*').length <= b.querySelectorAll('*').length ? a : b));
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const lines = [];
+  while (walker.nextNode()) { const v = walker.currentNode.textContent.trim(); if (v) lines.push(v); }
+  return {lines, comments: [...box.querySelectorAll('textarea, input[type=text]')].map(x => x.value), buttons: [...box.querySelectorAll('button')].map(b => (b.textContent || '').trim()).filter(Boolean)};
+}"""
+
+SUBMIT_CLICK_JS = "(label) => { " + FIRE_JS + """ const has = (e) => { const t = e.textContent || ''; return t.includes('certify time for approval') && t.includes('Timesheet Total') && [...e.querySelectorAll('button')].some(b => (b.textContent || '').trim() === 'Submit'); };
+  const boxes = [...document.querySelectorAll('body *')].filter(has);
+  if (!boxes.length) return false;
+  const box = boxes.reduce((a, b) => (a.querySelectorAll('*').length <= b.querySelectorAll('*').length ? a : b));
+  const button = [...box.querySelectorAll('button')].find(b => (b.textContent || '').trim() === label);
+  return button ? fire(button) : false; }"""
+
+REVIEW_BUTTON_JS = "() => { " + FIRE_JS + " const b = [...document.querySelectorAll('button')].filter(x => (x.textContent || '').trim() === 'Review'); return b.length === 1 ? fire(b[0]) : false; }"
+SUBMIT_OPEN_JS = "() => !!(" + SUBMIT_PANEL_JS + ")()"
+
+
+def parse_long_range(text):
+    match = re.fullmatch(r"([A-Z][a-z]+) (\d{1,2})(?:, (\d{4}))? – (?:([A-Z][a-z]+) )?(\d{1,2}), (\d{4})", text)
+    if not match:
+        refuse("LAYOUT_CHANGED", f"Unrecognized submission range {text!r}.")
+    m1, d1, y1, m2, d2, y2 = match.groups()
+    try:
+        first = datetime.strptime(m1, "%B").month
+        last = datetime.strptime(m2 or m1, "%B").month
+    except ValueError:
+        refuse("LAYOUT_CHANGED", f"Unrecognized submission range {text!r}.")
+    year_end = int(y2)
+    year_start = int(y1) if y1 else (year_end - 1 if first > last else year_end)
+    return date(year_start, first, int(d1)), date(year_end, last, int(d2))
+
+
+def parse_submit_panel(panel):
+    """The range, hours, total and certification Workday's Submit Time panel shows, from its text in document order."""
+    if not panel:
+        refuse("LAYOUT_CHANGED", "The Submit Time panel did not open.")
+    text = re.sub(r"\s+", " ", " ".join(panel["lines"]))
+    certification = re.search(r"(I certify .*?) Following date range will be submitted for approval\.", text)
+    ranged = re.search(r"([A-Z][a-z]+ \d{1,2}(?:, \d{4})? – (?:[A-Z][a-z]+ )?\d{1,2}, \d{4}) : ([\d.]+) Hours", text)
+    total = re.search(r"Timesheet Total ([\d.]+)", text)
+    if not certification or not ranged or not total:
+        refuse("LAYOUT_CHANGED", "The Submit Time panel does not show its certification, range and total as expected.")
+    start, end = parse_long_range(ranged.group(1))
+    return {"certification": certification.group(1), "range": [start.isoformat(), end.isoformat()], "range_minutes": hours(ranged.group(2)), "timesheet_total_minutes": hours(total.group(1)), "comments": panel.get("comments", [])}
+
+
+def submit_plan(target, snapshot, result, observations, panel):
+    week = date.fromisoformat(target["week_start"])
+    entries = snapshot["entries"]
+    if not entries or snapshot["status"] != "draft" or any(r["status"] != "draft" for r in entries):
+        refuse("NOT_SUBMITTABLE", "Only a week whose blocks are all unsubmitted drafts can be submitted.")
+    if not observations.get("timesheet_shown") or observations.get("rounded_blocks"):
+        refuse("NOT_SUBMITTABLE", "This week has no timesheet or rounded blocks the tool cannot verify; submit it in Workday yourself if it is right.")
+    if panel["range"] != [week.isoformat(), (week + timedelta(days=6)).isoformat()]:
+        refuse("PANEL_MISMATCH", "The Submit Time panel names a different week.")
+    if panel["range_minutes"] != snapshot["service_total_minutes"] or panel["timesheet_total_minutes"] != snapshot["service_total_minutes"]:
+        refuse("PANEL_MISMATCH", "The Submit Time panel's hours differ from the week's blocks.")
+    if any(c.strip() for c in panel["comments"]):
+        refuse("PANEL_MISMATCH", "The Submit Time panel already has a comment; clear it in Workday first.")
+    plan = {"schema_version": 1, "operation": "submit-week", "target": target, "snapshot_fingerprint": result["fingerprint"],
+            "entries": entries, "total_minutes": snapshot["service_total_minutes"], "range": panel["range"],
+            "certification": panel["certification"], "submittable_from": (week + timedelta(days=6)).isoformat()}
+    plan["plan_fingerprint"] = fingerprint(plan)
+    return plan
+
+
+def check_submit_plan(plan, approved):
+    if not isinstance(plan, dict) or plan.get("operation") != "submit-week":
+        refuse("INVALID_INPUT", "Pass the plan from submit-preview.")
+    body = {k: v for k, v in plan.items() if k != "plan_fingerprint"}
+    if fingerprint(body) != plan.get("plan_fingerprint"):
+        refuse("PLAN_CHANGED", "The submission plan was edited; run submit-preview again.")
+    if approved != plan["plan_fingerprint"]:
+        refuse("APPROVAL_MISMATCH", "Approve the exact plan_fingerprint shown by submit-preview.")
+
+
+def week_over(account, plan, today=None):
+    today = today or datetime.now(ZoneInfo(account["timezone"])).date()
+    return today >= date.fromisoformat(plan["submittable_from"])
+
+
 class Session:
     """One approved connection and one background tab of the user's Chrome, for reads and, when the account allows it, saves.
 
@@ -699,6 +786,61 @@ class Session:
                 self.tab.wait_for("() => !(" + QA_OPEN_JS + ")()", timeout=10)
         except BrowserError:
             pass
+
+    def open_submit_panel(self, week):
+        self.show_week(week)
+        if not self.tab.evaluate(REVIEW_BUTTON_JS):
+            refuse("LAYOUT_CHANGED", "Enter Time shows no single Review button for this week.")
+        self.tab.wait_for(SUBMIT_OPEN_JS, timeout=STEP_S)
+        return parse_submit_panel(stable(self.tab, SUBMIT_PANEL_JS))
+
+    def close_submit_panel(self):
+        """Cancel the panel without submitting, confirming Workday's Discard Changes prompt if it asks."""
+        try:
+            if self.tab.evaluate(SUBMIT_OPEN_JS):
+                self.tab.evaluate(SUBMIT_CLICK_JS, "Cancel")
+                time.sleep(1)
+                self.tab.evaluate(DISCARD_JS)
+                self.tab.wait_for("() => !(" + SUBMIT_OPEN_JS + ")()", timeout=10)
+        except BrowserError:
+            pass
+
+    def preview_submission(self, binding):
+        snapshot = self.read(binding)
+        result, observations = self.result, self.observations
+        week = date.fromisoformat(binding["week_start"])
+        try:
+            panel = self.open_submit_panel(week)
+        except BrowserError as error:
+            self.close_submit_panel()
+            refuse("BROWSER_STEP_FAILED", f"Opening Submit Time failed ({error}); nothing was submitted.")
+        except Refusal:
+            self.close_submit_panel()
+            raise
+        self.close_submit_panel()
+        return submit_plan(snapshot["target"], snapshot, result, observations, panel)
+
+    def submit_week(self, plan):
+        """Submit after a fresh read and panel match the approved plan; only the Submit click and after are uncertain."""
+        target = plan["target"]
+        week = date.fromisoformat(target["week_start"])
+        snapshot = self.read(target)
+        if self.result["fingerprint"] != plan["snapshot_fingerprint"]:
+            refuse("STALE_PLAN", "The week changed since the preview; run submit-preview again.")
+        try:
+            panel = self.open_submit_panel(week)
+            if submit_plan(snapshot["target"], snapshot, self.result, self.observations, panel) != plan:
+                self.close_submit_panel()
+                refuse("PANEL_CHANGED", "The Submit Time panel or its certification differs from the approved preview; nothing was submitted.")
+        except BrowserError as error:
+            self.close_submit_panel()
+            refuse("BROWSER_STEP_FAILED", f"Opening Submit Time failed ({error}); nothing was submitted.")
+        return True
+
+    def press_submit(self):
+        if not self.tab.evaluate(SUBMIT_CLICK_JS, "Submit"):
+            raise BrowserError("The Submit button is missing")
+        self.tab.wait_for("() => !(" + SUBMIT_OPEN_JS + ")()", timeout=STEP_S)
 
     def create_draft(self, binding, entry, expected_revision):
         week = date.fromisoformat(binding["week_start"])
@@ -780,6 +922,49 @@ def save(account, plan, approved, session=None):
             session.close()
 
 
+def submit(account, plan, approved, session=None):
+    check_submit_plan(plan, approved)
+    target = check_target(plan["target"])
+    check_binding(account, target)
+    if not week_over(account, plan):
+        refuse("WEEK_NOT_OVER", f"This week can be submitted from {plan['submittable_from']}, once its hours have been worked.")
+    journal = Journal(journal_dir())
+    own = session is None
+    session = session or Session(account)
+    try:
+        with journal.guard(target):
+            if journal.pending():
+                refuse("RECONCILE_REQUIRED", "Reconcile the outstanding operation for this week first.")
+            session.submit_week(plan)
+            journal.intent({"kind": "submit", "target": target, "plan_fingerprint": plan["plan_fingerprint"], "entries": plan["entries"], "recorded_at": datetime.now(timezone.utc).isoformat()})
+            try:
+                session.press_submit()
+                after = session.read(target)
+            except (Refusal, BrowserError):
+                return {"status": "uncertain", "target": target, "next_action": "Run reconcile for this week; do not submit again until it settles."}
+            ids = {r["id"] for r in plan["entries"]}
+            got = {r["id"]: r for r in after["entries"]}
+            if set(got) != ids or any(got[r["id"]]["entry"] != r["entry"] or got[r["id"]]["status"] != "submitted" for r in plan["entries"]):
+                return {"status": "uncertain", "target": target, "next_action": "The week did not read back as submitted exactly; run reconcile and inspect it in Workday."}
+            journal.clear()
+            return {"status": "submitted", "target": target, "range": plan["range"], "total_minutes": plan["total_minutes"], "entries": len(plan["entries"])}
+    finally:
+        if own:
+            session.close()
+
+
+def settle_submission(intent, snapshot, now):
+    planned = {r["id"]: r["entry"] for r in intent["entries"]}
+    got = {r["id"]: r for r in snapshot["entries"] if r["id"] in planned}
+    if set(got) == set(planned) and all(got[i]["entry"] == planned[i] for i in planned):
+        statuses = {got[i]["status"] for i in planned}
+        if statuses <= {"submitted", "sent_for_approval", "approved"}:
+            return "landed"
+        if statuses == {"draft"}:
+            return "not-applied" if now - datetime.fromisoformat(intent["recorded_at"]) >= SETTLE else "wait"
+    return "present-not-draft"
+
+
 def settle_outcome(intent, snapshot, now):
     """What a fresh read says about an uncertain save: landed, not applied after the settling time, or still unresolved."""
     drafts = [r["entry"] for r in snapshot["entries"] if r["status"] == "draft"]
@@ -804,14 +989,14 @@ def reconcile(account, target, session=None):
         finally:
             if own:
                 session.close()
-        outcome = settle_outcome(intent, snapshot, datetime.now(timezone.utc))
+        outcome = (settle_submission if intent.get("kind") == "submit" else settle_outcome)(intent, snapshot, datetime.now(timezone.utc))
         if outcome in ("landed", "not-applied"):
             journal.clear()
-        result = {"status": outcome, "target": target, "entry": intent["entry"]}
+        result = {"status": outcome, "target": target} | ({"entries": len(intent["entries"])} if intent.get("kind") == "submit" else {"entry": intent["entry"]})
         if outcome == "wait":
             result["retry_after"] = (datetime.fromisoformat(intent["recorded_at"]) + SETTLE).isoformat()
         if outcome == "present-not-draft":
-            result["next_action"] = "The entry exists but is not a draft; inspect it in Workday before deciding."
+            result["next_action"] = "The week matches neither the planned outcome nor its starting state; inspect it in Workday before deciding."
         return result
 
 
@@ -840,13 +1025,25 @@ def perform(account, request, session=None):
     if command == "save":
         result = save(account, request["plan"], request["approved_fingerprint"], session)
         return result, {"saved-draft": 0, "unchanged": 0, "stopped": 2}.get(result.get("status"), 3)
-    if command not in ("read", "reconcile"):
+    if command == "submit":
+        result = submit(account, request["plan"], request["approved_fingerprint"], session)
+        return result, 0 if result["status"] == "submitted" else 3
+    if command not in ("read", "reconcile", "submit-preview"):
         refuse("INVALID_INPUT", "Unknown command.")
     target = check_target(request["target"])
     check_binding(account, target)
     if command == "reconcile":
         result = reconcile(account, target, session)
         return result, 0 if result["status"] in ("nothing-pending", "landed", "not-applied") else 2
+    if command == "submit-preview":
+        own = session is None
+        session = session or Session(account)
+        try:
+            plan = session.preview_submission(target)
+        finally:
+            if own:
+                session.close()
+        return {"plan": plan, "ready_to_submit": week_over(account, plan)}, 0
     snapshot, result, observations = read_week(account, target, session)
     return {"status": "ok", "source": "workday-browser", "read": result, "observations": observations, "snapshot": snapshot}, 0
 
@@ -1005,6 +1202,14 @@ def main(argv=None):
     settle = sub.add_parser("reconcile", help="Settle an uncertain save from a fresh read")
     settle.add_argument("--target", required=True)
     settle.add_argument("--account")
+    look = sub.add_parser("submit-preview", help="Read a week and its Submit Time panel, then cancel without submitting")
+    look.add_argument("--target", required=True)
+    look.add_argument("--out", help="Write the submission plan here, owner-only and outside Git checkouts")
+    look.add_argument("--account")
+    send = sub.add_parser("submit", help="Submit a week exactly as an approved submit-preview showed it")
+    send.add_argument("--plan", required=True)
+    send.add_argument("--approved-fingerprint", required=True)
+    send.add_argument("--account")
     hold = sub.add_parser("session", help="Hold one approved Chrome connection for several commands")
     hold.add_argument("action", choices=["start", "status", "stop"])
     hold.add_argument("--idle-minutes", type=int, default=SESSION_IDLE_MINUTES)
@@ -1029,8 +1234,8 @@ def main(argv=None):
             reply = through_session({"command": args.action, "account": account_file})
             print(json.dumps(reply["result"] if reply and reply.get("ok") else {"status": "not-running"} if reply is None else reply, indent=2))
             return 0 if reply is None or reply.get("ok") else 2
-        if args.command == "save":
-            request = {"command": "save", "plan": load_json(args.plan), "approved_fingerprint": args.approved_fingerprint}
+        if args.command in ("save", "submit"):
+            request = {"command": args.command, "plan": load_json(args.plan), "approved_fingerprint": args.approved_fingerprint}
         else:
             request = {"command": args.command, "target": load_json(args.target)}
         reply = through_session(dict(request, account=account_file))
@@ -1044,6 +1249,8 @@ def main(argv=None):
             snapshot = result.pop("snapshot")
             if args.out:
                 write_private(args.out, snapshot)
+        if args.command == "submit-preview" and args.out:
+            write_private(args.out, result["plan"])
         print(json.dumps(result, sort_keys=True, indent=2))
         return code
     except Refusal as error:
