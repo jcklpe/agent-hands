@@ -259,6 +259,54 @@ class WeekNavigationTests(unittest.TestCase):
             WB.go_to_week(tab, date(2030, 1, 7))
 
 
+class OverviewTests(unittest.TestCase):
+    WEEK = date(2026, 10, 26)
+
+    def test_statuses_hours_and_labels(self):
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, calendar()), {"week_start": "2026-10-26", "status": "approved", "minutes": 720, "labels": {"Approved": 3}})
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, calendar(style="saved", label="Not Submitted"))["status"], "draft")
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, calendar(style="odd", label="Sent Back"))["status"], "unknown")
+        mixed = calendar()
+        mixed["events"][-1]["label"] = "Not Submitted"
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, mixed)["status"], "mixed")
+        empty = calendar(blocks=[], hours=("0",) * 7, total="0")
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, empty), {"week_start": "2026-10-26", "status": "empty", "minutes": 0, "labels": {}})
+        empty["summary"] = []
+        self.assertEqual(WB.summarize_week(ACCOUNT, self.WEEK, empty)["status"], "no-timesheet")
+
+    def test_a_week_that_does_not_add_up_is_unreadable_not_guessed(self):
+        all_day = calendar()
+        all_day["events"][-1]["allday"] = "true"
+        no_summary = calendar()
+        no_summary["summary"] = []
+        half_loaded = calendar(blocks=[])
+        for shown, code in ((calendar(total="13"), "TOTAL_MISMATCH"), (all_day, "UNSUPPORTED_ENTRY"), (no_summary, "VIEWS_DISAGREE"), (half_loaded, "VIEWS_DISAGREE")):
+            week = WB.summarize_week(ACCOUNT, self.WEEK, shown)
+            self.assertEqual((week["status"], week["code"]), ("unreadable", code))
+            self.assertNotIn("minutes", week)
+
+    def test_another_week_or_worker_stops_the_overview(self):
+        for shown, week, code in ((calendar(), date(2026, 11, 2), "WEEK_MISMATCH"), (calendar() | {"workers": ["selectedItem_000$000002"]}, self.WEEK, "WORKER_MISMATCH")):
+            with self.assertRaises(WB.Refusal) as caught:
+                WB.summarize_week(ACCOUNT, week, shown)
+            self.assertEqual(caught.exception.code, code)
+
+    def test_weeks_cover_the_dates_given(self):
+        self.assertEqual(WB.overview_weeks("2026-10-28", "2026-11-09"), [date(2026, 10, 26), date(2026, 11, 2), date(2026, 11, 9)])
+        self.assertEqual(WB.overview_weeks("2026-10-28", "2026-10-26"), [date(2026, 10, 26)])
+        for first, last in (("2026-11-09", "2026-10-28"), ("2026-01-01", "2026-12-31"), ("soon", "2026-10-28"), (None, "2026-10-28")):
+            with self.assertRaises(WB.Refusal):
+                WB.overview_weeks(first, last)
+
+    def test_a_week_still_loading_is_read_again_until_it_holds(self):
+        session = WB.Session.__new__(WB.Session)
+        session.account, session.tab = ACCOUNT, None
+        loading, loaded = calendar(blocks=[], hours=("0",) * 7, total="0"), calendar()
+        reads = iter([loading, loaded, loaded])
+        with patch.object(WB.Session, "show_week"), patch.object(WB, "go_to_week"), patch.object(WB, "stable", lambda tab, script, arg=None: next(reads)), patch.object(WB.time, "sleep", lambda s: None):
+            self.assertEqual(session.overview([self.WEEK])[0]["status"], "approved")
+
+
 class StorageTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -277,7 +325,7 @@ class StorageTests(unittest.TestCase):
 
     def test_account_rules(self):
         self.assertEqual(WB.load_account(self.write_account(ACCOUNT))["tenant"], "exampletenant")
-        for value, mode, code in ((ACCOUNT, 0o644, "PRIVATE_STORAGE_REQUIRED"), (ACCOUNT | {"extra": 1}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"save_safeguard": "none"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"enter_time_path": "/elsewhere/x"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"origin": "http://x"}, 0o600, "INVALID_ACCOUNT")):
+        for value, mode, code in ((ACCOUNT, 0o644, "PRIVATE_STORAGE_REQUIRED"), (ACCOUNT | {"extra": 1}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"save_safeguard": "none"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"browser": "word"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"enter_time_path": "/elsewhere/x"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"origin": "http://x"}, 0o600, "INVALID_ACCOUNT")):
             with self.assertRaises(WB.Refusal) as caught:
                 WB.load_account(self.write_account(value, mode))
             self.assertEqual(caught.exception.code, code)
@@ -292,6 +340,21 @@ class StorageTests(unittest.TestCase):
         (self.root / "repo" / ".git").mkdir(parents=True)
         with self.assertRaises(WB.Refusal):
             WB.write_private(self.root / "repo" / "week.json", {})
+
+    def test_a_week_can_be_named_instead_of_a_target_file(self):
+        account = self.write_account(ACCOUNT)
+        seen = []
+
+        def perform(account_, request, session=None):
+            seen.append(request)
+            return {"status": "ok"}, 0
+
+        with patch.object(WB, "perform", perform), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(WB.main(["reconcile", "--week", "2026-10-26", "--account", str(account)]), 0)
+            self.assertEqual(WB.main(["overview", "--from", "2026-10-26", "--to", "2026-11-09", "--account", str(account)]), 0)
+            with self.assertRaises(SystemExit):
+                WB.main(["read", "--account", str(account)])
+        self.assertEqual(seen, [{"command": "reconcile", "target": TARGET}, {"command": "overview", "from": "2026-10-26", "to": "2026-11-09"}])
 
     def test_cli_reports_refusals_without_stdout_payload(self):
         account = self.write_account(ACCOUNT)

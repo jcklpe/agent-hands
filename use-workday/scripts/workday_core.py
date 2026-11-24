@@ -182,6 +182,19 @@ def preview(value, allocation):
     return plan
 
 
+def propose(value, week_start):
+    """An allocation for another week made from an earlier week's blocks, moved to the same weekdays. It is a starting point for the user to confirm or change, never evidence of hours worked."""
+    require(isinstance(value, dict))
+    state = snapshot(value, value.get('target'))
+    binding = target(dict(state['target'], week_start=week_start))
+    require(state['entries'], 'NOTHING_TO_COPY', 'Choose an earlier week that has time blocks.')
+    shift = iso(week_start) - iso(state['target']['week_start'])
+    require(shift.days != 0, 'SAME_WEEK', 'Choose a week other than the one the snapshot holds.')
+    moved = [dict(r['entry'], date=(iso(r['entry']['date']) + shift).isoformat()) for r in state['entries']]
+    wanted, totals = entries(moved, binding, state['allowed_time_types'])
+    return {'schema_version': 1, 'target': binding, 'entries': wanted, 'expected_total_minutes': sum(totals.values())}
+
+
 def uncertain(transport, binding, completed, proposed, pending):
     # Do not expose raw transport errors: they can contain tokens or full pages.
     observed_saved = []

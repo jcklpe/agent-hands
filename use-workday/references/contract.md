@@ -18,6 +18,8 @@ All objects reject missing/extra fields. Input files must be JSON under 1 MB, wi
 ```
 This is the complete desired week, including any existing blocks that should remain. Breaks are explicit unpaid intervals with exactly `start` and `end` fields. Worktags are explicit string key/value pairs, including `{}` when none apply. Time types must be in the snapshot's allowed set. Worktag semantics and required tags must also be checked against tenant data by a future adapter; offline validation checks their shape only. Totals use integer minutes and subtract explicit breaks without service-specific rounding. Calculated service totals must agree exactly; otherwise the operation refuses.
 
+`propose` builds an allocation for another Monday-start week from an earlier snapshot of any status, moving every block to the same weekday and keeping its times, breaks, type and worktags. It refuses a snapshot without blocks, the snapshot's own week and moved times the contract cannot hold, such as a daylight-saving change.
+
 ## Snapshot
 ```json
 {

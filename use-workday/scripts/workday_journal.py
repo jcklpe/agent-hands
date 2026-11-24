@@ -1,10 +1,26 @@
-"""Private crash journal and per-target process lock for Unix adapters."""
+"""Private file writer, crash journal and per-target process lock for Unix adapters."""
 import json
 import os
 import stat
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from workday_core import Refusal, digest, require
+
+
+def write_private(path, value):
+    """Write JSON owner-only and atomically, outside Git checkouts."""
+    path = Path(path).resolve()
+    for part in (path.parent, *path.parent.parents):
+        if (part / '.git').exists():
+            raise Refusal('PRIVATE_STORAGE_REQUIRED', 'Write private Workday files outside Git checkouts.')
+    pending = path.with_name(f'.{path.name}.{uuid.uuid4().hex}')
+    fd = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
+        json.dump(value, out, sort_keys=True, indent=2)
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(pending, path)
 
 
 class Journal:

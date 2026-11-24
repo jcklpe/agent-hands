@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import socket
 import struct
@@ -149,6 +150,76 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(sent[2]["params"], {"targetId": "T", "flatten": True})
         self.assertEqual(sent[3]["params"], {"targetId": "T"})
         chrome.close()
+
+
+STAND_IN = """#!{python}
+import json, os, sys
+open(sys.argv[0] + ".args", "w").write(json.dumps(sys.argv[1:]))
+if "{mode}" == "busy":
+    sys.exit(21)
+buffer = b""
+while True:
+    chunk = os.read(3, 65536)
+    if not chunk:
+        open(sys.argv[0] + ".quit", "w").write("quit")
+        sys.exit(0)
+    buffer += chunk
+    while b"\\0" in buffer:
+        raw, _, buffer = buffer.partition(b"\\0")
+        message = json.loads(raw)
+        if message["method"] == "Silent.call":
+            continue
+        event = json.dumps({{"method": "Target.targetCreated"}}).encode() + b"\\0"
+        reply = json.dumps({{"id": message["id"], "result": {{"method": message["method"], "params": message["params"], "blob": "x" * 70000}}}}).encode() + b"\\0"
+        for part in (event, reply[:10], reply[10:]):
+            while part:
+                part = part[os.write(4, part):]
+"""
+
+
+class PipeTests(unittest.TestCase):
+    """A stand-in program speaking Chrome's pipe protocol on descriptors 3 and 4."""
+
+    def program(self, mode="normal"):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        path = Path(folder.name, "chrome")
+        path.write_text(STAND_IN.format(python=sys.executable, mode=mode), encoding="utf-8")
+        path.chmod(0o700)
+        return path
+
+    def test_chrome_runs_on_its_own_data_directory_and_quits_when_the_pipe_closes(self):
+        path = self.program()
+        before = len(os.listdir("/dev/fd"))
+        chrome = CS.Chrome.launch("/private/example/profile", executable=str(path))
+        self.assertEqual(chrome.call("Target.getTargets", {"a": 1})["params"], {"a": 1})
+        self.assertEqual(len(chrome.call("Big.reply")["blob"]), 70000)
+        with self.assertRaisesRegex(CS.BrowserError, "no reply"):
+            chrome.call("Silent.call", timeout=0.3)
+        process = chrome.ws.process
+        chrome.close()
+        chrome.close()
+        self.assertEqual(process.returncode, 0)
+        self.assertTrue(Path(str(path) + ".quit").exists())
+        self.assertLessEqual(len(os.listdir("/dev/fd")), before)
+        args = json.loads(Path(str(path) + ".args").read_text())
+        self.assertIn("--user-data-dir=/private/example/profile", args)
+        self.assertIn("--remote-debugging-pipe", args)
+        self.assertIn("--headless=new", args)
+        self.assertFalse([a for a in args if "remote-debugging-port" in a or "no-sandbox" in a or "password-store" in a or "keychain" in a or "user-agent" in a])
+
+    def test_a_visible_chrome_opens_the_given_page(self):
+        path = self.program()
+        CS.Chrome.launch("/private/example/profile", headless=False, url="https://example.invalid/", executable=str(path)).close()
+        args = json.loads(Path(str(path) + ".args").read_text())
+        self.assertEqual(args[-1], "https://example.invalid/")
+        self.assertNotIn("--headless=new", args)
+
+    def test_a_profile_already_in_use_and_a_missing_program_are_reported(self):
+        with self.assertRaisesRegex(CS.BrowserError, "another Chrome"):
+            CS.Chrome.launch("/private/example/profile", executable=str(self.program("busy")))
+        with self.assertRaisesRegex(CS.BrowserError, "could not be started"):
+            CS.Chrome.launch("/private/example/profile", executable="/nonexistent/chrome")
 
 
 if __name__ == "__main__":

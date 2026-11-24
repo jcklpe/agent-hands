@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from workday_core import NotDispatched, Refusal, preview, read_timesheet, save_draft
+from workday_core import NotDispatched, Refusal, preview, propose, read_timesheet, save_draft
 from workday_journal import Journal
 
 BINDING = {'tenant': 'example.invalid', 'worker': 'synthetic-worker', 'week_start': '2026-02-02', 'timezone': 'America/Chicago'}
@@ -341,6 +341,43 @@ class WorkdayTests(unittest.TestCase):
             self.assertEqual(result.stdout, '')
             self.assertIn('TRANSPORT_UNAVAILABLE', result.stderr)
             self.assertIn('workday_browser.py read', result.stderr)
+
+    def earlier(self):
+        source = empty()
+        source['entries'] = [{'id': str(i), 'status': 'approved', 'entry': b} for i, b in enumerate([block(), block('2026-02-08', '14:00', '17:00')])]
+        source['status'], source['service_total_minutes'] = 'approved', 360
+        return source
+
+    def test_propose_moves_an_earlier_weeks_blocks_to_the_same_weekdays(self):
+        proposed = propose(self.earlier(), '2026-02-16')
+        self.assertEqual(proposed, {'schema_version': 1, 'target': dict(BINDING, week_start='2026-02-16'), 'entries': [block('2026-02-16'), block('2026-02-22', '14:00', '17:00')], 'expected_total_minutes': 360})
+        fresh = empty()
+        fresh['target'] = proposed['target']
+        fresh['pay_periods'] = {f'2026-02-{i}': 'period-b' for i in range(16, 23)}
+        self.assertEqual(len(preview(fresh, proposed)['additions']), 2)
+        self.assertEqual([e['date'] for e in propose(self.earlier(), '2026-01-26')['entries']], ['2026-01-26', '2026-02-01'])
+
+    def test_propose_refuses_what_it_cannot_carry_over(self):
+        self.refused(lambda: propose(empty(), '2026-02-16'), 'NOTHING_TO_COPY')
+        self.refused(lambda: propose(self.earlier(), '2026-02-02'), 'SAME_WEEK')
+        self.refused(lambda: propose(self.earlier(), '2026-02-17'), 'INVALID_WEEK')
+        self.refused(lambda: propose([], '2026-02-16'), 'INVALID_INPUT')
+        early = self.earlier()
+        early['entries'][1]['entry'].update(start='01:00', end='04:00')
+        # Sunday 8 March 2026 changes to daylight time at 2 AM.
+        self.refused(lambda: propose(early, '2026-03-02'), 'DST_UNSUPPORTED')
+
+    def test_cli_propose_writes_a_private_allocation(self):
+        cli = Path(__file__).resolve().parents[1] / 'scripts/workday'
+        root = Path(os.path.realpath(self.tmp.name))
+        (root / 'earlier.json').write_text(json.dumps(self.earlier()))
+        out = root / 'allocation.json'
+        result = subprocess.run([sys.executable, str(cli), 'propose', '--snapshot', str(root / 'earlier.json'), '--week', '2026-02-16', '--out', str(out)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        shown = json.loads(result.stdout)
+        self.assertEqual((shown['status'], shown['source_week'], shown['allocation']), ('proposal', '2026-02-02', json.loads(out.read_text())))
+        self.assertIn('not evidence of hours worked', shown['next_action'])
+        self.assertEqual(out.stat().st_mode & 0o777, 0o600)
 
     def test_cli_preview_and_no_execute(self):
         cli = Path(__file__).resolve().parents[1] / 'scripts/workday'

@@ -70,12 +70,15 @@ class SessionTests(unittest.TestCase):
         self.root.rmdir()
 
     def start(self, idle=5):
-        ready = threading.Event()
-        self.ended = io.StringIO()
+        # The server runs beside commands whose output is captured for the whole process, so it reports through a list instead of stdout.
+        ready, self.announced = threading.Event(), []
+
+        def announce(value):
+            self.announced.append(value)
+            ready.set()
 
         def run():
-            with redirect_stdout(self.ended):
-                WB.serve(dict(ACCOUNT), str(self.account.resolve()), idle, make_session=FakeSession, ready=ready.set)
+            WB.serve(dict(ACCOUNT), str(self.account.resolve()), idle, make_session=FakeSession, announce=announce)
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
@@ -106,7 +109,7 @@ class SessionTests(unittest.TestCase):
         thread.join(5)
         self.assertFalse(sock.exists())
         self.assertTrue(FakeSession.instances[0].closed)
-        self.assertIn('"reason": "stopped"', self.ended.getvalue())
+        self.assertEqual(self.announced[-1], {"status": "ended", "reason": "stopped"})
 
     def test_without_a_session_status_says_so(self):
         code, out, _ = self.cli("session", "status")
@@ -130,20 +133,19 @@ class SessionTests(unittest.TestCase):
         thread.join(10)
         self.assertFalse(thread.is_alive())
         self.assertFalse(WB.session_path().exists())
-        self.assertIn('"reason": "idle"', self.ended.getvalue())
+        self.assertEqual(self.announced[-1], {"status": "ended", "reason": "idle"})
 
     def test_a_closed_chrome_ends_the_session(self):
         thread = self.start()
         FakeSession.instances[0].chrome.up = False
         self.cli("session", "status")
         thread.join(5)
-        self.assertIn('"reason": "chrome-disconnected"', self.ended.getvalue())
+        self.assertEqual(self.announced[-1], {"status": "ended", "reason": "chrome-disconnected"})
 
     def test_one_session_at_a_time_and_stale_sockets_are_replaced(self):
         thread = self.start()
         with self.assertRaises(WB.Refusal) as caught:
-            with redirect_stdout(io.StringIO()):
-                WB.serve(dict(ACCOUNT), str(self.account.resolve()), 5, make_session=FakeSession)
+            WB.serve(dict(ACCOUNT), str(self.account.resolve()), 5, make_session=FakeSession)
         self.assertEqual(caught.exception.code, "SESSION_RUNNING")
         self.cli("session", "stop")
         thread.join(5)

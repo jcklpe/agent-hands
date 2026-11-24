@@ -1,12 +1,18 @@
-"""A minimal Chrome DevTools client for one tab of the user's running Chrome, using only the Python standard library.
+"""A minimal Chrome DevTools client using only the Python standard library, for one tab of the user's running Chrome or of a Chrome this tool starts with its own profile.
+
+The tool's own Chrome uses a separate data directory and is driven over a private pipe that only this process holds: no network port opens, Chrome asks for no approval, and Chrome quits when the pipe closes. The user signs in to it themself.
 
 Chrome 144+ lets a local program connect to the browser the user is already running once the user turns on remote debugging at chrome://inspect/#remote-debugging; Chrome then asks the user to Allow each connection and shows an automation banner while connected. This client reads the port from Chrome's DevToolsActivePort file, as Playwright's documented channel discovery does, waits for that approval, and then works only in a tab it creates itself and closes afterwards. It never attaches to the user's other tabs.
 """
 import base64
+import fcntl
 import json
 import os
+import select
+import shutil
 import socket
 import struct
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -117,9 +123,101 @@ class WebSocket:
         self.sock.close()
 
 
+def chrome_executable():
+    if sys.platform == "darwin":
+        for base in (Path("/Applications"), Path.home() / "Applications"):
+            path = base / "Google Chrome.app" / "Contents" / "MacOS" / "Google Chrome"
+            if path.is_file():
+                return str(path)
+    elif sys.platform.startswith("linux"):
+        for name in ("google-chrome", "google-chrome-stable"):
+            if shutil.which(name):
+                return shutil.which(name)
+    raise BrowserError("Google Chrome was not found")
+
+
+class Pipe:
+    """A Chrome started with its own data directory and driven over --remote-debugging-pipe: NUL-terminated messages on descriptors 3 and 4."""
+
+    def __init__(self, data_dir, headless, url="about:blank", executable=None):
+        command = [executable or chrome_executable(), f"--user-data-dir={data_dir}", "--remote-debugging-pipe", "--no-first-run", "--no-default-browser-check", "--window-size=1400,1000"]
+        command += (["--headless=new"] if headless else []) + [url]
+        child_in, self.out = os.pipe()
+        self.into, child_out = os.pipe()
+        # Python's own child-error pipe must not land on 3 or 4, so both are kept open here while Chrome starts; the copies passed on sit well above them.
+        held = [os.open(os.devnull, os.O_RDONLY)]
+        while held[-1] < 5:
+            held.append(os.open(os.devnull, os.O_RDONLY))
+        reader, writer = (fcntl.fcntl(fd, fcntl.F_DUPFD, 16) for fd in (child_in, child_out))
+
+        def place():
+            os.dup2(reader, 3)
+            os.dup2(writer, 4)
+
+        try:
+            self.process = subprocess.Popen(command, pass_fds=(3, 4), preexec_fn=place, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            os.close(self.out)
+            os.close(self.into)
+            raise BrowserError("Chrome could not be started")
+        finally:
+            for fd in [child_in, child_out, reader, writer, *held]:
+                os.close(fd)
+        self.buffer, self.closed = b"", False
+
+    def send(self, text):
+        data = text.encode() + b"\0"
+        try:
+            while data:
+                data = data[os.write(self.out, data):]
+        except OSError:
+            raise BrowserError("Chrome closed the DevTools connection")
+
+    def receive(self, timeout):
+        deadline = time.monotonic() + timeout
+        while b"\0" not in self.buffer:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([self.into], [], [], remaining)[0]:
+                raise socket.timeout()
+            chunk = os.read(self.into, 1 << 20)
+            if not chunk:
+                raise BrowserError("Chrome closed the DevTools connection")
+            self.buffer += chunk
+        message, _, self.buffer = self.buffer.partition(b"\0")
+        return message.decode()
+
+    def close(self):
+        """Close the pipe, which makes Chrome quit and write its profile; only a Chrome that does not quit is ended."""
+        if self.closed:
+            return
+        self.closed = True
+        os.close(self.out)
+        os.close(self.into)
+        try:
+            self.process.wait(20)
+        except subprocess.TimeoutExpired:
+            self.process.terminate()
+            try:
+                self.process.wait(10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+
+
 class Chrome:
     def __init__(self, socket_):
         self.ws, self.next_id = socket_, 1
+
+    @classmethod
+    def launch(cls, data_dir, headless=True, url="about:blank", executable=None):
+        """Start Chrome with the tool's own data directory. A Chrome already using that directory makes the new one exit at once."""
+        browser = cls(Pipe(data_dir, headless, url, executable))
+        try:
+            browser.call("Browser.getVersion")
+        except BrowserError:
+            browser.ws.close()
+            raise BrowserError("Chrome did not start with Workday's own profile; another Chrome may be using it")
+        return browser
 
     @classmethod
     def connect(cls, approval_timeout, port=None):
@@ -157,8 +255,9 @@ class Chrome:
     def pages(self):
         return [t for t in self.call("Target.getTargets").get("targetInfos", []) if t.get("type") == "page"]
 
-    def open_tab(self, url, context_id):
-        target = self.call("Target.createTarget", {"url": url, "browserContextId": context_id, "background": True})["targetId"]
+    def open_tab(self, url, context_id=None):
+        profile = {"browserContextId": context_id} if context_id else {}
+        target = self.call("Target.createTarget", {"url": url, "background": True, **profile})["targetId"]
         session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
         return Tab(self, target, session)
 

@@ -3,16 +3,17 @@ name: use-workday
 description: "Read, preview, save and submit Workday time entry one exact week at a time. Validates week snapshots and previews complete weekly allocations offline; setup-workday's browser commands read live weeks, save approved unsubmitted blocks and submit approved weeks."
 ---
 # Use Workday
-Use [setup-workday](../setup-workday/SKILL.md) for transport status, dependencies and private storage. Run from the checkout root or use an absolute path to `scripts/workday`. Python 3.9+ and IANA timezone data are sufficient for offline reads/previews. Live weeks come from setup-workday's browser reader, which writes a snapshot this CLI validates; approved plans are saved by setup-workday's `save` command and finished weeks submitted by its separate `submit-preview` and `submit` commands. This CLI itself never contacts Workday.
+Use [setup-workday](../setup-workday/SKILL.md) for transport status, dependencies and private storage. Run from the checkout root or use an absolute path to `scripts/workday`. Python 3.9+ and IANA timezone data are sufficient for offline reads/previews. Live weeks come from setup-workday's browser reader, which writes a snapshot this CLI validates; its `overview` lists several weeks' hours and statuses, approved plans are saved by its `save` command and finished weeks submitted by its separate `submit-preview` and `submit` commands. This CLI itself never contacts Workday.
 
 ```sh
 python3 use-workday/scripts/workday --help
 python3 use-workday/scripts/workday read-timesheet --target /private/path/target.json --snapshot /private/path/week.json
+python3 use-workday/scripts/workday propose --snapshot /private/path/earlier-week.json --week 2026-02-16 --out /private/path/allocation.json
 python3 use-workday/scripts/workday preview --snapshot /private/path/week.json --allocation /private/path/allocation.json
 python3 use-workday/scripts/workday save-draft --plan /private/path/plan.json
 ```
 
-The [v1 JSON contract](references/contract.md) defines inputs and outputs. `preview` returns a `plan` object; save that object, not its enclosing output envelope, for `save-draft`. Default save behavior only displays the plan. `save-draft --execute` here makes no changes and points to setup-workday's `save` command, which runs the same engine through the browser. Omitting `--snapshot` from `read-timesheet` points to the browser reader. CLI errors go to stderr with exit 2 and no write payload on stdout; success returns JSON with exit 0.
+The [v1 JSON contract](references/contract.md) defines inputs and outputs. `propose` copies an earlier week's blocks to the same weekdays of another week as an allocation; it is only a starting point, so confirm or change every date and time with the user, and add any block the new week already holds, before previewing. `preview` returns a `plan` object; save that object, not its enclosing output envelope, for `save-draft`. Default save behavior only displays the plan. `save-draft --execute` here makes no changes and points to setup-workday's `save` command, which runs the same engine through the browser. Omitting `--snapshot` from `read-timesheet` points to the browser reader. CLI errors go to stderr with exit 2 and no write payload on stdout; success returns JSON with exit 0.
 
 Each call handles one exact Monday–Sunday week. Prior and current weeks use the same contract. Read snapshots may expose protected states; previews require empty/draft state and a verified save operation with no certification or submission side effect. The complete desired allocation must include existing exact entries; differences stop as conflicts. No automatic overwrite, delete, rounding, hour distribution or generic script/API command exists, and this CLI never submits. Explicit empty `breaks: []` means the caller confirmed no unpaid breaks. Ask the caller to resolve ambiguous work times; a requested total alone cannot generate clock blocks.
 

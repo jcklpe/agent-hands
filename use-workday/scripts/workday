@@ -3,7 +3,8 @@
 import argparse
 import json
 import sys
-from workday_core import Refusal, read_timesheet, preview, verify_plan
+from workday_core import Refusal, read_timesheet, preview, propose, verify_plan
+from workday_journal import write_private
 
 
 def load(path):
@@ -28,6 +29,10 @@ def main():
     read = sub.add_parser('read-timesheet', help='Validate an offline snapshot for an exact target')
     read.add_argument('--target', required=True, help='Target JSON file')
     read.add_argument('--snapshot', help='Normalized snapshot JSON, such as setup-workday\'s read --out writes')
+    start = sub.add_parser('propose', help='Copy an earlier week\'s blocks to the same weekdays of another week, for the user to confirm or change')
+    start.add_argument('--snapshot', required=True, help='The earlier week\'s snapshot')
+    start.add_argument('--week', required=True, help='Monday of the week to propose, YYYY-MM-DD')
+    start.add_argument('--out', help='Write the allocation here, owner-only and outside Git checkouts')
     pre = sub.add_parser('preview', help='Preview a complete desired week without writes')
     pre.add_argument('--snapshot', required=True)
     pre.add_argument('--allocation', required=True)
@@ -41,6 +46,13 @@ def main():
             raise Refusal('TRANSPORT_UNAVAILABLE', 'This CLI does not contact Workday. Read a live week with setup-workday/scripts/workday_browser.py read --target ... --out ..., then pass that snapshot here. Save an approved plan with its save command, and submit a finished week with submit-preview and submit.')
         if args.command == 'read-timesheet':
             result = read_timesheet(load(args.snapshot), load(args.target))
+        elif args.command == 'propose':
+            source = load(args.snapshot)
+            allocation = propose(source, args.week)
+            if args.out:
+                write_private(args.out, allocation)
+            result = {'status': 'proposal', 'source_week': source['target']['week_start'], 'allocation': allocation,
+                      'next_action': 'Confirm or change every date and time with the user, then preview against a fresh read of the proposed week. An earlier week is not evidence of hours worked.'}
         elif args.command == 'preview':
             result = {'source': 'offline-snapshot', 'plan': preview(load(args.snapshot), load(args.allocation))}
         else:

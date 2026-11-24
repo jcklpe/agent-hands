@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Read one complete Workday week from the user's signed-in Chrome into use-workday's v1 snapshot.
+"""Read, save and submit one Workday week at a time through Chrome, and list several weeks, producing use-workday's v1 snapshots.
 
-The command connects to the user's running Chrome through Chrome's own consent flow: the user turns on remote debugging at chrome://inspect/#remote-debugging and clicks Allow when Chrome asks. It finds the Chrome profile that has the configured Workday tenant open and reads in a background tab that it opens and closes itself; it never attaches to, navigates or closes the user's own tabs. It needs only the Python standard library. It reads the Enter Time week calendar, Review Time by Week and each block's read-only details, cross-checks them, and refuses anything it cannot verify. It only moves between weeks and opens read-only views; it never uses entry, check-in or check-out, calculation or submission controls, and it writes nothing to Workday.
+Depending on the account's choice, commands connect to the user's running Chrome through Chrome's own consent flow (the user turns on remote debugging at chrome://inspect/#remote-debugging and clicks Allow when Chrome asks), or start a separate Chrome with a profile kept for Workday alone, which the user signs in to themself. With the running Chrome it finds the profile that has the configured Workday tenant open. Either way it works in a background tab that it opens and closes itself, and it never attaches to, navigates or closes the user's own tabs. It needs only the Python standard library.
+
+Reading moves between weeks and opens read-only views: the Enter Time week calendar, Review Time by Week and each block's details, cross-checked, with a refusal for anything it cannot verify. Only save, submit-preview and submit use entry or submission controls; check-in, check-out and calculation controls are never used.
 """
 import argparse
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -21,7 +25,7 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "use-workday" / "scripts"))
 from workday_core import NotDispatched, Refusal, read_timesheet, save_draft, target as check_target, verify_plan  # noqa: E402
-from workday_journal import Journal  # noqa: E402
+from workday_journal import Journal, write_private  # noqa: E402
 sys.path.insert(0, str(HERE))
 from chrome_session import BrowserError, Chrome, devtools_port  # noqa: E402
 
@@ -40,10 +44,17 @@ REVIEW_HEADERS = ["Date", "Status", "Type", "In", "Out", "Out Reason", "Quantity
 REPORTED_LABELS = ["Reported Quantity", "Time Entry Code", "In", "Out", "Out Reason", "Source", "Time Block Comment"]
 CALCULATED_LABELS = ["Calculated Date", "Calculated Time In", "Calculated Time Out", "Calculated Quantity", "Time Calculation Tag"]
 ACCOUNT_REQUIRED = {"schema_version", "origin", "tenant", "worker", "timezone", "timezone_label", "enter_time_path"}
-ACCOUNT_OPTIONAL = {"time_types", "save_safeguard"}
+ACCOUNT_OPTIONAL = {"time_types", "save_safeguard", "browser"}
+# "everyday" connects to the user's running Chrome with an Allow click per connection; "own" starts a separate Chrome with a profile kept for Workday alone, which the user signs in to.
+BROWSERS = {"everyday", "own"}
+SIGN_IN_MINUTES = 10
+SIGN_IN_POLL_S = 1
+SIGN_IN_STEADY_S = 5
 CONNECT_S = 120
 STEP_S = 30
 MAX_WEEK_STEPS = 104
+MAX_OVERVIEW_WEEKS = 26
+OVERVIEW_PAUSE_S = 2
 
 
 def refuse(code, remedy):
@@ -53,13 +64,15 @@ def refuse(code, remedy):
 # Account configuration
 
 
-def account_path(explicit=None):
-    if explicit:
-        return Path(explicit)
+def state_base():
     base = Path(os.environ.get(STATE_ENV) or str(Path.home() / ".agent-hands"))
     if not base.is_absolute():
         refuse("PRIVATE_STORAGE_REQUIRED", f"Set {STATE_ENV} to an absolute private directory.")
-    return base / "workday" / "config" / "account.json"
+    return base / "workday"
+
+
+def account_path(explicit=None):
+    return Path(explicit) if explicit else state_base() / "config" / "account.json"
 
 
 def load_account(path):
@@ -73,7 +86,7 @@ def load_account(path):
     except ValueError:
         refuse("INVALID_ACCOUNT", "The account file is not valid JSON.")
     if not isinstance(data, dict) or not ACCOUNT_REQUIRED <= set(data) or set(data) - ACCOUNT_REQUIRED - ACCOUNT_OPTIONAL or data["schema_version"] != 1:
-        refuse("INVALID_ACCOUNT", "The account file needs exactly schema_version 1, origin, tenant, worker, timezone, timezone_label, enter_time_path and optionally time_types.")
+        refuse("INVALID_ACCOUNT", "The account file needs exactly schema_version 1, origin, tenant, worker, timezone, timezone_label, enter_time_path and optionally time_types, save_safeguard and browser.")
     if not re.fullmatch(r"https://[A-Za-z0-9.-]+", str(data["origin"])):
         refuse("INVALID_ACCOUNT", "origin must be the Workday site's https origin, without a path.")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", str(data["tenant"])):
@@ -87,6 +100,8 @@ def load_account(path):
         refuse("INVALID_ACCOUNT", "time_types must be a list of confirmed Workday time-entry codes.")
     if "save_safeguard" in data and data["save_safeguard"] not in SAVE_SAFEGUARDS:
         refuse("INVALID_ACCOUNT", "save_safeguard may only be \"reread\", and only when the user chose it.")
+    if data.get("browser", "everyday") not in BROWSERS:
+        refuse("INVALID_ACCOUNT", "browser may be \"everyday\" or \"own\".")
     check_target({"tenant": data["tenant"], "worker": data["worker"], "week_start": "2026-01-05", "timezone": data["timezone"]})
     return data
 
@@ -462,6 +477,46 @@ DIALOG_OPEN_JS = "() => [...document.querySelectorAll('body *')].some(e => e.chi
 RANGE_JS = "() => { const e = document.querySelector('[data-automation-id=dateRangeTitle]'); return e ? e.innerText.trim() : ''; }"
 
 
+def summarize_week(account, week, calendar):
+    """One week's hours and status from its calendar alone. It is not cross-checked against the review or block details, so it never supports a save or submission."""
+    if parse_calendar_range((calendar.get("range") or [""])[0]) != week:
+        refuse("WEEK_MISMATCH", "The calendar is not showing the selected week.")
+    if f"selectedItem_{account['worker']}" not in (calendar.get("workers") or []) or len(calendar.get("worker_labels") or []) != 1:
+        refuse("WORKER_MISMATCH", "The calendar does not show exactly the confirmed worker.")
+    found = {"week_start": week.isoformat()}
+    try:
+        blocks, _markers, _holidays = parse_events(calendar.get("events") or [], week)
+        shown = calendar.get("hours") or []
+        if len(shown) != 7:
+            refuse("LAYOUT_CHANGED", "The calendar does not show hours for all seven days.")
+        minutes = sum(hours(text, "Hours:") for text in shown)
+        timesheet = bool(calendar.get("summary"))
+        if timesheet and summary_minutes(calendar["summary"], "Timesheet Total") != minutes:
+            refuse("TOTAL_MISMATCH", "The timesheet total disagrees with the days' hours.")
+        if bool(minutes) != bool(blocks) or (blocks and not timesheet):
+            refuse("VIEWS_DISAGREE", "The calendar's hours and blocks disagree.")
+    except Refusal as error:
+        return found | {"status": "unreadable", "code": error.code, "remedy": "Look at this week in Workday."}
+    labels = {}
+    for block in blocks:
+        labels[block["label"]] = labels.get(block["label"], 0) + 1
+    statuses = {STATUS_LABELS.get(label, "unknown") for label in labels}
+    status = "no-timesheet" if not timesheet else "empty" if not blocks else statuses.pop() if len(statuses) == 1 else "mixed"
+    return found | {"status": status, "minutes": minutes, "labels": labels}
+
+
+def overview_weeks(first, last):
+    """The Mondays of every week from the one holding the first date to the one holding the last."""
+    try:
+        start, end = date.fromisoformat(first), date.fromisoformat(last)
+    except (TypeError, ValueError):
+        refuse("INVALID_INPUT", "Give --from and --to as YYYY-MM-DD.")
+    start, end = start - timedelta(days=start.weekday()), end - timedelta(days=end.weekday())
+    if end < start or (end - start).days // 7 >= MAX_OVERVIEW_WEEKS:
+        refuse("INVALID_INPUT", f"Choose between one and {MAX_OVERVIEW_WEEKS} weeks, earliest first.")
+    return [start + timedelta(days=7 * i) for i in range((end - start).days // 7 + 1)]
+
+
 def stable(tab, script, arg=None, tries=20):
     """Evaluate until two reads 750 ms apart agree, so a half-rendered view is never read."""
     previous = None
@@ -496,10 +551,115 @@ def open_calendar(tab, account):
         tab.wait_for("() => !!document.querySelector('[data-automation-id=dateRangeTitle]') && !!document.querySelector('[data-automation-id=calendarevent], [data-automation-id^=\"hoursEntered_\"]')", timeout=STEP_S)
     except BrowserError:
         if not (tab.url() or "").startswith(prefix):
-            refuse("SIGN_IN_REQUIRED", "Workday asked for sign-in. Sign in to Workday in that Chrome profile yourself, then run again.")
+            refuse("SIGN_IN_REQUIRED", sign_in_remedy(account))
         refuse("LAYOUT_CHANGED", "Enter My Time did not show its week calendar.")
     if not (tab.url() or "").startswith(prefix):
-        refuse("SIGN_IN_REQUIRED", "Workday asked for sign-in. Sign in to Workday in that Chrome profile yourself, then run again.")
+        refuse("SIGN_IN_REQUIRED", sign_in_remedy(account))
+
+
+def sign_in_remedy(account):
+    if account.get("browser") == "own":
+        return "Workday's own Chrome profile is signed out. Run workday_browser.py sign-in so the user can sign in there, then run again."
+    return "Workday asked for sign-in. Sign in to Workday in that Chrome profile yourself, then run again."
+
+
+# Workday's own Chrome profile
+
+
+def profile_path():
+    return state_base() / "chrome-profile"
+
+
+@contextlib.contextmanager
+def own_profile():
+    """The tool's own Chrome profile directory, locked to one user of it at a time. It holds a Workday sign-in, so it stays owner-only and outside Git checkouts."""
+    path = profile_path()
+    for part in (path, *path.parents):
+        if (part / ".git").exists():
+            refuse("PRIVATE_STORAGE_REQUIRED", "Keep Workday's Chrome profile outside Git checkouts.")
+    private_directory(path.parent)
+    private_directory(path)
+    fd = os.open(path.with_name("chrome-profile.lock"), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            refuse("PROFILE_IN_USE", "Another Workday command or session is using Workday's own Chrome profile; wait for it or stop the session first.")
+        yield path
+    finally:
+        os.close(fd)
+
+
+def sign_in_record():
+    try:
+        return json.loads((state_base() / "sign-in.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def note_sign_in(account, event):
+    """Keep when the own profile was signed in, last worked and was first found signed out, so how long a sign-in lasts is measured rather than guessed."""
+    if account.get("browser") != "own":
+        return
+    record, now = sign_in_record(), datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if event == "signed_in_at":
+        record = {"signed_in_at": now, "last_working_at": now, "previous": {k: v for k, v in record.items() if k != "previous"} or None}
+    elif event == "signed_out_at":
+        record.setdefault("signed_out_at", now)
+    else:
+        record[event] = now
+    with contextlib.suppress(OSError, Refusal):
+        write_private(state_base() / "sign-in.json", record)
+
+
+def sign_in(account, minutes=SIGN_IN_MINUTES, launch=None):
+    """Open the own profile in a visible Chrome at Workday, wait while the user signs in themself, and confirm the account. Until a Workday page has settled it looks only at tab addresses."""
+    if account.get("browser") != "own":
+        refuse("OWN_PROFILE_NOT_CHOSEN", "sign-in is for Workday's own Chrome profile; set \"browser\": \"own\" in the account file when the user chooses it.")
+    signed_in = f"{account['origin']}/{account['tenant']}/d/"
+    with own_profile() as path:
+        try:
+            chrome = (launch or Chrome.launch)(path, headless=False, url=account["origin"] + account["enter_time_path"])
+        except BrowserError as error:
+            refuse("BROWSER_NOT_STARTED", f"{error}.")
+        try:
+            deadline, since, last = time.monotonic() + minutes * 60, None, None
+            while time.monotonic() < deadline:
+                urls = sorted(p.get("url") or "" for p in chrome.pages())
+                if not urls:
+                    refuse("SIGN_IN_CANCELLED", "The sign-in window was closed before Workday opened; nothing was changed.")
+                current = next((u for u in urls if u.startswith(signed_in)), None)
+                if current != last or current is None:
+                    since, last = time.monotonic(), current
+                elif time.monotonic() - since >= SIGN_IN_STEADY_S:
+                    if confirm_signed_in(chrome, account):
+                        note_sign_in(account, "signed_in_at")
+                        return {"status": "signed-in"}
+                    last = None
+                time.sleep(SIGN_IN_POLL_S)
+        except BrowserError:
+            refuse("SIGN_IN_CANCELLED", "Chrome closed before Workday opened; nothing was changed.")
+        finally:
+            chrome.close()
+    refuse("SIGN_IN_TIMED_OUT", f"Workday did not open within {minutes} minutes; run sign-in again when the user is ready.")
+
+
+def confirm_signed_in(chrome, account):
+    """Open Enter My Time in a separate tab and check it shows the confirmed worker. False while Workday still wants a sign-in."""
+    tab = chrome.open_tab(account["origin"] + account["enter_time_path"])
+    try:
+        open_calendar(tab, account)
+        workers = stable(tab, CALENDAR_JS)["workers"]
+    except Refusal as error:
+        if error.code == "SIGN_IN_REQUIRED":
+            return False
+        raise
+    finally:
+        with contextlib.suppress(BrowserError):
+            tab.close()
+    if f"selectedItem_{account['worker']}" not in workers:
+        refuse("WORKER_MISMATCH", "Workday is signed in as a different worker; sign out there and sign in to the confirmed account.")
+    return True
 
 
 def go_to_week(tab, week_start):
@@ -712,7 +872,7 @@ def week_over(account, plan, today=None):
 
 
 class Session:
-    """One approved connection and one background tab of the user's Chrome, for reads and, when the account allows it, saves.
+    """One connection and one background tab, of the user's running Chrome or of Workday's own Chrome as the account chooses, for reads and, when the account allows it, saves.
 
     As a use-workday transport it declares the re-read safeguard: no atomic revision guard exists in Workday's pages, so each save is preceded by a fresh full read and a last calendar check, relies on Workday refusing overlapping times, and is followed by a full read.
     """
@@ -721,13 +881,20 @@ class Session:
     supports_conditional_create = False
 
     def __init__(self, account):
-        self.account, self.tab = account, None
+        self.account, self.tab, self.profile = account, None, contextlib.ExitStack()
+        own = account.get("browser") == "own"
         try:
-            self.chrome = Chrome.connect(CONNECT_S)
+            if own:
+                self.chrome = Chrome.launch(self.profile.enter_context(own_profile()))
+            else:
+                self.chrome = Chrome.connect(CONNECT_S)
         except BrowserError as error:
+            self.profile.close()
+            if own:
+                refuse("BROWSER_NOT_STARTED", f"{error}.")
             refuse("BROWSER_NOT_CONNECTED", f"{error}. Keep Chrome open with remote debugging on at chrome://inspect/#remote-debugging, run again and click Allow when Chrome asks.")
         try:
-            context = select_context(self.chrome.pages(), account)
+            context = None if own else select_context(self.chrome.pages(), account)
             self.tab = self.chrome.open_tab("about:blank", context)
         except BrowserError as error:
             self.close()
@@ -745,6 +912,7 @@ class Session:
                 pass
             self.tab = None
         self.chrome.close()
+        self.profile.close()
 
     def show_week(self, week):
         """Load Enter My Time afresh and move to the week, so the page reflects Workday's current data."""
@@ -754,7 +922,13 @@ class Session:
             self.tab.wait_for("() => !window.__agentHandsStale", timeout=STEP_S)
         except BrowserError:
             refuse("BROWSER_STEP_FAILED", "Enter My Time did not load.")
-        open_calendar(self.tab, self.account)
+        try:
+            open_calendar(self.tab, self.account)
+        except Refusal as error:
+            if error.code == "SIGN_IN_REQUIRED":
+                note_sign_in(self.account, "signed_out_at")
+            raise
+        note_sign_in(self.account, "last_working_at")
         go_to_week(self.tab, week)
 
     def read(self, binding):
@@ -775,6 +949,27 @@ class Session:
         snapshot, result, self.observations = build_snapshot(self.account, target, calendar, review, details)
         self.result = result
         return snapshot
+
+    def overview(self, weeks):
+        """Each week's calendar, read twice a pause apart so a week still loading is never reported; stops at the first that will not settle."""
+        found = []
+        try:
+            self.show_week(weeks[0])
+            for week in weeks:
+                go_to_week(self.tab, week)
+                calendar = stable(self.tab, CALENDAR_JS)
+                for _ in range(5):
+                    time.sleep(OVERVIEW_PAUSE_S)
+                    again = stable(self.tab, CALENDAR_JS)
+                    if again == calendar:
+                        break
+                    calendar = again
+                else:
+                    refuse("PAGE_UNSETTLED", "Workday kept changing while being read; try again when it has finished loading.")
+                found.append(summarize_week(self.account, week, calendar))
+        except BrowserError as error:
+            refuse("BROWSER_STEP_FAILED", f"The overview stopped ({error}); nothing was changed in Workday. Run again once the page is idle.")
+        return found
 
     def cancel_quick_add(self):
         """Close an unsent Quick Add, confirming Workday's Discard Changes prompt; the tab is closed afterwards in any case."""
@@ -893,10 +1088,7 @@ def read_week(account, target, session=None):
 
 
 def journal_dir():
-    base = Path(os.environ.get(STATE_ENV) or str(Path.home() / ".agent-hands"))
-    if not base.is_absolute():
-        refuse("PRIVATE_STORAGE_REQUIRED", f"Set {STATE_ENV} to an absolute private directory.")
-    return base / "workday" / "journal"
+    return state_base() / "journal"
 
 
 def load_json(path):
@@ -1000,20 +1192,6 @@ def reconcile(account, target, session=None):
         return result
 
 
-def write_private(path, value):
-    path = Path(path).resolve()
-    for part in (path.parent, *path.parent.parents):
-        if (part / ".git").exists():
-            refuse("PRIVATE_STORAGE_REQUIRED", "Write snapshots outside Git checkouts.")
-    pending = path.with_name(f".{path.name}.{uuid.uuid4().hex}")
-    fd = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as out:
-        json.dump(value, out, sort_keys=True, indent=2)
-        out.flush()
-        os.fsync(out.fileno())
-    os.replace(pending, path)
-
-
 SESSION_IDLE_MINUTES = 20
 SESSION_REPLY_SECONDS = 1800
 MAX_MESSAGE = 4_000_000
@@ -1028,6 +1206,15 @@ def perform(account, request, session=None):
     if command == "submit":
         result = submit(account, request["plan"], request["approved_fingerprint"], session)
         return result, 0 if result["status"] == "submitted" else 3
+    if command == "overview":
+        weeks = overview_weeks(request["from"], request["to"])
+        own = session is None
+        session = session or Session(account)
+        try:
+            return {"status": "ok", "source": "workday-calendar-only", "weeks": session.overview(weeks)}, 0
+        finally:
+            if own:
+                session.close()
     if command not in ("read", "reconcile", "submit-preview"):
         refuse("INVALID_INPUT", "Unknown command.")
     target = check_target(request["target"])
@@ -1049,10 +1236,7 @@ def perform(account, request, session=None):
 
 
 def session_path():
-    base = Path(os.environ.get(STATE_ENV) or str(Path.home() / ".agent-hands"))
-    if not base.is_absolute():
-        refuse("PRIVATE_STORAGE_REQUIRED", f"Set {STATE_ENV} to an absolute private directory.")
-    return base / "workday" / "session.sock"
+    return state_base() / "session.sock"
 
 
 def private_directory(path):
@@ -1120,8 +1304,12 @@ def handle(account, account_file, session, request):
         return {"ok": False, "code": "INVALID_INPUT", "remedy": "The request did not match the command's inputs.", "exit": 2}
 
 
-def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session=None, ready=None):
-    """Hold one approved Chrome connection and answer the bounded commands over an owner-only Unix socket until idle, stopped or disconnected."""
+def announce_json(value):
+    print(json.dumps(value), flush=True)
+
+
+def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session=None, announce=announce_json):
+    """Hold one Chrome connection and answer the bounded commands over an owner-only Unix socket until idle, stopped or disconnected."""
     path = session_path()
     private_directory(path.parent)
     if path.exists() or path.is_symlink():
@@ -1146,11 +1334,10 @@ def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session
         finally:
             os.umask(previous)
         os.chmod(path, 0o600)
-        server.listen(1)
+        # A command that finds the queue full would be refused and connect to Chrome by itself.
+        server.listen(16)
         server.settimeout(1.0)
-        print(json.dumps({"status": "ready", "idle_minutes": idle_minutes}), flush=True)
-        if ready:
-            ready()
+        announce({"status": "ready", "idle_minutes": idle_minutes})
         last = time.monotonic()
         while time.monotonic() - last < idle_minutes * 60:
             try:
@@ -1182,8 +1369,20 @@ def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session
         except FileNotFoundError:
             pass
         session.close()
-        print(json.dumps({"status": "ended", "reason": reason}), flush=True)
+        announce({"status": "ended", "reason": reason})
     return 0
+
+
+def week_choice(parser):
+    choice = parser.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--week", help="Monday of the week, YYYY-MM-DD, for the confirmed account")
+    choice.add_argument("--target", help="use-workday target JSON")
+
+
+def chosen_target(account, args):
+    if args.target:
+        return load_json(args.target)
+    return {"tenant": account["tenant"], "worker": account["worker"], "week_start": args.week, "timezone": account["timezone"]}
 
 
 def main(argv=None):
@@ -1192,7 +1391,7 @@ def main(argv=None):
     check = sub.add_parser("check", help="Validate the account file and runtime without contacting Chrome or Workday")
     check.add_argument("--account")
     read = sub.add_parser("read", help="Read one complete week from the signed-in Chrome")
-    read.add_argument("--target", required=True, help="use-workday target JSON")
+    week_choice(read)
     read.add_argument("--account")
     read.add_argument("--out", help="Write the snapshot here, owner-only and outside Git checkouts")
     write = sub.add_parser("save", help="Save a reviewed use-workday plan's additions as unsubmitted blocks")
@@ -1200,30 +1399,46 @@ def main(argv=None):
     write.add_argument("--approved-fingerprint", required=True, help="The plan_fingerprint the user approved")
     write.add_argument("--account")
     settle = sub.add_parser("reconcile", help="Settle an uncertain save from a fresh read")
-    settle.add_argument("--target", required=True)
+    week_choice(settle)
     settle.add_argument("--account")
     look = sub.add_parser("submit-preview", help="Read a week and its Submit Time panel, then cancel without submitting")
-    look.add_argument("--target", required=True)
+    week_choice(look)
+    several = sub.add_parser("overview", help="List several weeks' hours and statuses from the calendar, read-only")
+    several.add_argument("--from", dest="first", required=True, help="A date in the first week, YYYY-MM-DD")
+    several.add_argument("--to", dest="last", help="A date in the last week; today when omitted")
+    several.add_argument("--account")
     look.add_argument("--out", help="Write the submission plan here, owner-only and outside Git checkouts")
     look.add_argument("--account")
     send = sub.add_parser("submit", help="Submit a week exactly as an approved submit-preview showed it")
     send.add_argument("--plan", required=True)
     send.add_argument("--approved-fingerprint", required=True)
     send.add_argument("--account")
-    hold = sub.add_parser("session", help="Hold one approved Chrome connection for several commands")
+    enter = sub.add_parser("sign-in", help="Open Workday's own Chrome profile for the user to sign in themself")
+    enter.add_argument("--minutes", type=int, default=SIGN_IN_MINUTES)
+    enter.add_argument("--account")
+    hold = sub.add_parser("session", help="Hold one Chrome connection for several commands")
     hold.add_argument("action", choices=["start", "status", "stop"])
     hold.add_argument("--idle-minutes", type=int, default=SESSION_IDLE_MINUTES)
     hold.add_argument("--account")
     args = parser.parse_args(argv)
     try:
         account = load_account(account_path(args.account))
+        if args.command == "check" and account.get("browser") == "own":
+            print(json.dumps({"status": "ok", "account": "valid", "browser": "own", "profile_exists": profile_path().is_dir(), "sign_in": sign_in_record()}, indent=2))
+            return 0
+        if args.command == "sign-in":
+            if not 1 <= args.minutes <= 60:
+                refuse("INVALID_INPUT", "--minutes must be between 1 and 60.")
+            print(json.dumps({"status": "waiting", "next_action": "Sign in to Workday in the Chrome window that opens."}), flush=True)
+            print(json.dumps(sign_in(account, args.minutes)))
+            return 0
         if args.command == "check":
             try:
                 devtools_port()
                 debugging = "on"
             except BrowserError:
                 debugging = "off; turn it on at chrome://inspect/#remote-debugging"
-            print(json.dumps({"status": "ok", "account": "valid", "chrome_remote_debugging": debugging}, indent=2))
+            print(json.dumps({"status": "ok", "account": "valid", "browser": "everyday", "chrome_remote_debugging": debugging}, indent=2))
             return 0
         account_file = str(account_path(args.account).resolve())
         if args.command == "session":
@@ -1236,8 +1451,10 @@ def main(argv=None):
             return 0 if reply is None or reply.get("ok") else 2
         if args.command in ("save", "submit"):
             request = {"command": args.command, "plan": load_json(args.plan), "approved_fingerprint": args.approved_fingerprint}
+        elif args.command == "overview":
+            request = {"command": "overview", "from": args.first, "to": args.last or datetime.now(ZoneInfo(account["timezone"])).date().isoformat()}
         else:
-            request = {"command": args.command, "target": load_json(args.target)}
+            request = {"command": args.command, "target": chosen_target(account, args)}
         reply = through_session(dict(request, account=account_file))
         if reply is None:
             result, code = perform(account, request)
