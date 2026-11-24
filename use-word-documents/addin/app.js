@@ -44,6 +44,29 @@
           if (Office.context.document.settings.get('Office.AutoShowTaskpaneWithDocument') !== true) refuse('startup_unverified');
           return {status: 'startup_saved'};
         }
+        if (job.action === 'replace-tail') {
+          const edit=job.edit;
+          const normalized=values=>values.map(v=>v.replace(/[\r\f]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ')).filter(v=>v.trim());
+          const same=(a,b)=>JSON.stringify(normalized(a))===JSON.stringify(normalized(b));
+          if(!edit || edit.kind!=='replace-tail' || !Array.isArray(edit.before) || !Array.isArray(edit.after) || !Array.isArray(edit.replacements) || edit.replacements.length>5 || typeof edit.anchor!=='string' || !edit.anchor || typeof edit.label!=='string' || !edit.label)refuse('unsupported_edit');
+          let url;try{url=new URL(edit.url);}catch{refuse('unsupported_edit');}
+          if(url.protocol!=='https:'||url.username||url.password||!same(text,edit.before))refuse('stale_or_unsupported_edit');
+          let index=text.indexOf(edit.anchor);
+          if(index<1 || text.lastIndexOf(edit.anchor)!==index)refuse('ambiguous_anchor');
+          for(const replacement of edit.replacements)if(typeof replacement.before!=='string'||typeof replacement.after!=='string'||replacement.after.length>4000||/[\x00-\x1f]/.test(replacement.after)||text.slice(0,index).filter(v=>v===replacement.before).length!==1)refuse('stale_preview');
+          // Remove empty paragraph breaks immediately before the heading as part of the reviewed tail.
+          while(index>0 && !text[index-1].trim())index--;
+          await checkTarget();paragraphs.load('items/text');await context.sync();
+          if(!same(paragraphs.items.map(p=>p.text),edit.before))refuse('stale_preview');
+          const escape=value=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+          const tail=paragraphs.items[index].getRange(Word.RangeLocation.start).expandTo(body.getRange(Word.RangeLocation.end));
+          dispatched=true;
+          for(const replacement of edit.replacements)paragraphs.items.find(p=>p.text===replacement.before).getRange(Word.RangeLocation.content).insertText(replacement.after,Word.InsertLocation.replace);
+          tail.insertHtml(`<p><a href="${escape(edit.url)}">${escape(edit.label)}</a></p>`,Word.InsertLocation.replace);
+          await context.sync();context.document.save();await context.sync();paragraphs.load('items/text');await context.sync();
+          if(!same(paragraphs.items.map(p=>p.text),edit.after))refuse('session_result_unverified');
+          return {status:'save_returned'};
+        }
         if (job.action !== 'replace') refuse('unsupported_operation');
         const edit = job.edit;
         if (!edit || typeof edit.find !== 'string' || !edit.find || edit.find.length > 255 || /[\x00-\x1f^]/.test(edit.find) || typeof edit.replacement !== 'string' || edit.replacement.length > 4000 || /[\x00-\x1f]/.test(edit.replacement)) refuse('unsupported_edit');

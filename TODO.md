@@ -2,6 +2,7 @@
 Use this file as a short map; detailed reasoning and task state belong in the relevant spike pair.
 
 ## Active
+- Microsoft Forms authoring and Word tail separation (2026-11-24): bounded owned-browser CLI implementation and authorized live verification. [Forms](docs/active-spikes/microsoft-forms.todo.md); [Word](docs/active-spikes/word-tail-separation.todo.md).
 - Penpot Design Capabilities (slug `penpot-design-capabilities`, opened 2026-10-29): `use-penpot` maps the capabilities Wireframe Workflows needs, tested on the hosted server; the Plugin API cannot move boards between pages, so `copy_boards.py` copies them through the backend API with the access token, tested live on 2026-10-29. Manifest discovery is done and checked live read-only (2026-11-23); page ordering is verified with a live reorder and restore on a real file (2026-11-23); promotion replacement is built with the user's adopted design and verified by a consented hosted replacement and restore (2026-11-23); the open-editor check remains. [Reasoning](docs/active-spikes/penpot-design-capabilities.md); [tasks](docs/active-spikes/penpot-design-capabilities.todo.md).
 
 ## Recently completed

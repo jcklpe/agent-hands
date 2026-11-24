@@ -40,7 +40,18 @@ Apply checks the selected browser identity against Graph, exact document identit
 
 An operation receives a durable dispatch record before it is delivered. It cannot be dispatched twice, including after a crash or a confirmed refusal. For `uncertain_after_dispatch`, use `verify` and inspect the document before considering a new preview; observing original text once does not prove that a delayed save will never arrive. Do not delete journals or make a new operation merely to bypass a refused replay. `cloud_text_verified` confirms the expected target text in a downloaded cloud version, not all formatting or every later coauthor action.
 
-## Bounds and failures
+## Separate a reviewed document tail
+For an explicitly requested structural split of a paragraph-only document, `scripts/tail.mjs` can remove one uniquely headed tail, replace up to five exact prefix paragraphs, and insert one HTTPS link to the separated document. It uses Word coauthoring, so the document may remain open. Create and verify the separate document first; this command does not create it. It preserves the target's existing headers and footers rather than importing a replacement file.
+
+```sh
+node scripts/tail.mjs preview example --drive DRIVE_ID --item ITEM_ID --spec /private/tail.json
+node scripts/tail.mjs apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute
+node scripts/tail.mjs verify example --plan OPERATION_ID
+```
+
+The specification is `{"anchor":"Draft appendix","label":"Separate draft","url":"https://example.test/draft","replacements":[{"before":"The appendix follows.","after":"See the separate draft."}]}`. Preview compares the complete normalized Word and cloud bodies, not just the heading. It refuses comments, tracked revisions, body fields, tables, content controls and embedded objects. Apply rechecks the whole body and account, records dispatch once, performs the edit through Office.js, and independently checks the saved body. Word nonbreaking spaces and soft paragraph breaks are normalized for text comparison; whitespace-only paragraphs are omitted. This is not byte-for-byte formatting verification or atomic protection from simultaneous edits. Any intervening text change needs another preview; an uncertain dispatched operation must only be verified, never automatically repeated.
+
+## Other bounds and failures
 Supported targets are commercial Microsoft 365 SharePoint/OneDrive for Business DOCX files up to 20 MB, with at most 200,000 body-text characters. An edit is a unique literal match of 1–255 characters within one ordinary top-level paragraph and a replacement of at most 4,000 characters, without control characters. Paragraphs containing fields, content controls, hyperlinks or embedded objects cannot establish a cloud baseline for editing. WordApi 1.3 and a read/write Word Online session are required. The replaced range inherits Word's formatting behavior; arbitrary mixed-format fidelity is not certified. Cloud checks refuse revision-bearing DOCX files and enabled Track Changes.
 
 `authentication_required` means the private browser needs normal sign-in/MFA. `addin_setup_required` means no verified add-in session started; for an authorized edit, run headless `prepare`. `automatic_setup_unavailable` or `automatic_setup_incomplete` means the expected setup controls or bridge connection failed; inspect with `configure`, noting that an add-in reference may already have been inserted. `startup_cloud_unverified` means Word returned a setting save but independent persistence was not established. No content edit is automatically attempted after these failures. `profile_busy` preserves the other owned session; never terminate normal Chrome to resolve it. Stale/ambiguous anchors require a new inspection and preview. No generic JavaScript, token export, browser-profile override, normal-profile attachment, lock bypass or automatic scope expansion is exposed.
