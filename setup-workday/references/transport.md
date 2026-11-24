@@ -1,5 +1,5 @@
 # Workday transport status
-Reviewed 2026-11-24. The existing-session browser reader below reads complete weeks and is proven live. Saving through Quick Add under the user's re-read safeguard is implemented and tested offline; no live save has run yet. `use-workday`'s own CLI never contacts Workday.
+Reviewed 2026-11-24. The existing-session browser reader below reads complete weeks, and saving through Quick Add under the user's re-read safeguard has run live: a week of the user's actual work saved block by block, each read back as a Not Submitted draft. `use-workday`'s own CLI never contacts Workday. Submission is not part of the tool.
 
 ## Discovery evidence and limits
 A bounded repository/configs filename search and PATH check found the existing Workday planning pair, no `workday` executable, and no prior setup/use implementation. The existing Word browser adapter owns an Office.js-specific session and is not a Workday or ordinary-browser attachment interface. No existing implementation was imported or duplicated.
@@ -39,7 +39,7 @@ The reader takes the week from the Enter My Time calendar, Review Time by Week a
 - A "Time Period End" marker gives the ending period's start and end; a week without one lies inside a single period.
 - Review Time by Week drops its In, Out and Out Reason columns for an empty week.
 - Details repeat each label for screen readers, and a background tab can run adjacent texts together, so the reader takes text from individual elements and text nodes rather than rendered lines.
-- Block approval status comes from the calendar's appointment style; only `approved` has been seen, so every other style reads as unknown, which `use-workday` treats as protected.
+- Block status comes from the label each calendar block shows, cross-checked against its appointment style: `saved` with Not Submitted, `submitted` with Submitted and `approved` with Approved, all seen live. Any other label reads as unknown, which `use-workday` treats as protected; "Pay date" markers are informational all-day items.
 
 Live proof, 2026-11-23, with the user's approval at each connection: a complete approved week read exactly, with its pay-period boundary, classification and totals, and the snapshot validated through `use-workday read-timesheet`. An empty week also read correctly. Writes, the entry dialog and the permitted time-type list remain unread; an empty week takes its time types from the account file's user-confirmed list.
 
@@ -57,6 +57,6 @@ Use one shared private journal directory, `~/.agent-hands/workday/journal/` or b
 ## Remaining acceptance gates
 - Verify a supported authorized transport from the actual CLI runtime and record exact source/version, scopes, session ownership and platform.
 - Proved 2026-11-23 for the browser reader: complete read-only retrieval of an authorized week with identity, time zone, classification, periods, totals and the approved status. Statuses other than approved have not been observed yet.
-- Verify draft-only persistence through Quick Add, authoritative readback and settled reconciliation on separately authorized real work, including the Not Submitted label, conflict and expiry behaviour. Do not create disposable payroll data to test.
+- Verified 2026-11-24 on approved real work: draft-only persistence through Quick Add and authoritative readback, with the Not Submitted label and Workday's reading of the entered times. Still unexercised live: an uncertain save and its reconciliation, Workday's overlap refusal and session expiry. Do not create disposable payroll data to test them.
 - Verify client installation/discovery separately. Current commands are repository-relative only; no global links or PATH installation were performed.
 - Human QA and Linux/WSL/native Windows remain outstanding. The current executor journal uses Unix `fcntl`; Windows requires a separately tested lock implementation. No token/cost reduction is measured.

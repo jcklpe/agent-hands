@@ -26,7 +26,7 @@ from chrome_session import BrowserError, Chrome, devtools_port  # noqa: E402
 STATE_ENV = "AGENT_HANDS_STATE_DIR"
 # Status comes from the label each calendar block shows. Labels seen on a real tenant map to a status; anything else reads as unknown, which use-workday treats as protected. A style seen with its label must agree with it.
 STATUS_LABELS = {"Approved": "approved", "Not Submitted": "draft", "Submitted": "submitted"}
-STYLE_LABELS = {"approved": "Approved"}
+STYLE_LABELS = {"approved": "Approved", "saved": "Not Submitted", "submitted": "Submitted"}
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 # Quick Add enters in/out blocks of this time-entry code; anything else is refused before Workday is touched.
 SAVE_TYPES = {"Hours Worked"}
@@ -356,7 +356,7 @@ def build_snapshot(account, target, calendar, review, details):
     result = read_timesheet(snapshot, target)
     observations = {
         "styles": sorted({b["style"] for b in blocks}), "status_labels": sorted({b["label"] for b in blocks}), "payment_statuses": payment, "classification_minutes": classifications,
-        "summary": {item.get("label"): item.get("value") for item in calendar.get("summary") or []}, "holidays": holidays,
+        "summary": {item.get("label"): item.get("value") for item in calendar.get("summary") or []}, "all_day_items": holidays,
         "pay_period_markers": [[s.isoformat(), e.isoformat()] for s, e in markers], "comments": comments,
         "time_types": {"observed": sorted(observed_types), "from_account": sorted(account.get("time_types", []))},
         "revision_note": "Fingerprint of the calendar as read; Workday offers no service revision through the browser.",

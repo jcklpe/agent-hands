@@ -1,6 +1,6 @@
 ---
 attention: live
-status: saves-built
+status: saves-working
 implementation: browser-read-and-save
 reviewed: 2026-11-24
 ---
@@ -31,6 +31,11 @@ Workday follows the Penpot scope. The immediate deliverable is a transport decis
 - Verified official Chrome M144 native connection approval and current Playwright channel attachment/detachment documentation. The installed Chrome 157 and Playwright 1.65.1 support the documented surface; no runtime installation or dependency change was made.
 - An isolated headless synthetic attach/read/disconnect check preserved the owner's original page and closed only the disposable browser on fixture cleanup. It did not use normal-profile data or credentials.
 - The user explicitly authorized a read-only existing-session probe. After the initial connection failure, two attempts attached and disconnected but found no matching Workday tab; a bounded diagnostic retry could not establish the native connection. The next gate is exact target/profile selection and native approval-state clarification. No Workday headings or timesheet data were retrieved, and no timesheet write, cookie/profile export, automatic security-setting change or normal-tab mutation was performed. Complete worker/week retrieval and production save semantics remain unproved.
+
+## First live save — 2026-11-24
+- The user confirmed one week's actual hours and approved the exact previewed plan. `workday_browser.py save` entered its Hours Worked blocks through Quick Add, each read back as a draft before the next, with total and classification matching; an independent read afterwards agreed and no journal intent remained. Workday labels the new blocks Not Submitted with calendar style `saved`, and accepted the times as typed.
+- At the user's explicit request the same week was then submitted by hand in a model-directed Chrome tab, not by the tool: the Submit Time panel showed the exact range and total and the standard accuracy certification, and after Submit the blocks read Submitted (style `submitted`) with manager approval as the next step. Submission stays outside the tool.
+- The reader now cross-checks the `saved` and `submitted` styles against their labels, and reports Pay date markers as all-day items rather than holidays. All 17 reader tests pass.
 
 ## Saving under the re-read safeguard — 2026-11-24
 - The user chose the re-read safeguard (decision recorded in the concept doc). The engine now accepts a transport declaring `save_safeguard = "reread"` only with `allow_reread`, which the browser `save` command passes only when the account file records the choice. A transport that stops before sending raises `NotDispatched`, which clears the intent and stops cleanly; intents carry the time they were written. The existing atomic path is unchanged.
@@ -90,6 +95,7 @@ The user asked to build the browser route fully and offered browser access. Grou
   - 2026-11-23: the browser reader returns the validated v1 snapshot and compact observations; the existing offline `preview` consumes it.
 - [ ] Implement `save-draft` with explicit saved/not-submitted verification and partial-save reconciliation. A save that submits or certifies must refuse this operation.
   - 2026-11-24: implemented through Quick Add under the user's re-read safeguard, with per-block readback as a draft, clean stops before sending and a `reconcile` command; offline-tested. Stays open until a live save on real work is verified.
+  - 2026-11-24, live: a week of approved real work saved and read back as Not Submitted drafts. Partial-save reconciliation is built and offline-tested but has not been needed live.
 - [ ] Implement `submit-approved` against exact reviewed data and a fresh explicit user authorization. Inspect the certification/range/total, refuse materially changed text or targets, and verify submitted/sent-for-approval. Already-submitted matching data must not be submitted again.
 - [ ] Write the owning setup/use skill instructions, operation examples, native entrypoint, privacy/storage rules, supported runtime/platform matrix and recovery guidance. Keep employer policy in the private consumer skill.
 

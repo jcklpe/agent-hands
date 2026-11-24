@@ -101,7 +101,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot["revision"].startswith("calendar-sha256:"))
         self.assertEqual(result["daily_minutes"], {"2026-10-26": 180, "2026-10-30": 360, "2026-11-01": 180})
         self.assertEqual(observations["classification_minutes"], {"Example Class": 720})
-        self.assertEqual(observations["holidays"], ["Synthetic Holiday"])
+        self.assertEqual(observations["all_day_items"], ["Synthetic Holiday"])
         self.assertEqual(observations["payment_statuses"], {"Paid": 3})
         self.assertEqual(snapshot["pay_periods"]["2026-10-31"], "2026-10-16..2026-10-31")
         self.assertEqual(snapshot["pay_periods"]["2026-11-01"], "2026-11-01..")
@@ -125,9 +125,12 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(observations["status_labels"], ["Not Submitted"])
         snapshot, _, _ = build(calendar=calendar(style="pending", label="Pending Review"))
         self.assertEqual(snapshot["status"], "unknown")
-        with self.assertRaises(WB.Refusal) as caught:
-            build(calendar=calendar(style="approved", label="Submitted"))
-        self.assertEqual(caught.exception.code, "VIEWS_DISAGREE")
+        self.assertEqual(build(calendar=calendar(style="saved", label="Not Submitted"))[0]["status"], "draft")
+        self.assertEqual(build(calendar=calendar(style="submitted", label="Submitted"))[0]["status"], "submitted")
+        for style, label in (("approved", "Submitted"), ("saved", "Approved"), ("submitted", "Not Submitted")):
+            with self.assertRaises(WB.Refusal) as caught:
+                build(calendar=calendar(style=style, label=label))
+            self.assertEqual(caught.exception.code, "VIEWS_DISAGREE")
 
     def test_the_revision_follows_content_not_order_or_joined_text(self):
         first = calendar()
