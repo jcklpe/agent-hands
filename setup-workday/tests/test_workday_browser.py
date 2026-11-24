@@ -234,6 +234,10 @@ class StorageTests(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
         self.root = Path(os.path.realpath(self.dir.name))
+        # Never route through a real running session on this machine.
+        env = patch.dict(os.environ, {WB.STATE_ENV: str(self.root)})
+        env.start()
+        self.addCleanup(env.stop)
 
     def write_account(self, value, mode=0o600):
         path = self.root / "account.json"

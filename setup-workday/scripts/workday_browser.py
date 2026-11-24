@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import stat
 import sys
 import time
@@ -719,13 +720,15 @@ class Session:
             raise RuntimeError("The save's outcome is unknown")
 
 
-def read_week(account, target):
-    session = Session(account)
+def read_week(account, target, session=None):
+    own = session is None
+    session = session or Session(account)
     try:
         snapshot = session.read(target)
         return snapshot, session.result, session.observations
     finally:
-        session.close()
+        if own:
+            session.close()
 
 
 def journal_dir():
@@ -739,7 +742,7 @@ def load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def save(account, plan, approved):
+def save(account, plan, approved, session=None):
     if account.get("save_safeguard") not in SAVE_SAFEGUARDS:
         refuse("SAVES_NOT_ENABLED", "Saving needs the user's explicit choice of the re-read safeguard in the account file ('save_safeguard': 'reread').")
     verify_plan(plan)
@@ -749,11 +752,13 @@ def save(account, plan, approved):
     for entry in plan["additions"]:
         check_saveable(entry, week)
     journal = Journal(journal_dir())
-    session = Session(account)
+    own = session is None
+    session = session or Session(account)
     try:
         return save_draft(session, plan, approved, journal, allow_reread=True)
     finally:
-        session.close()
+        if own:
+            session.close()
 
 
 def settle_outcome(intent, snapshot, now):
@@ -767,17 +772,19 @@ def settle_outcome(intent, snapshot, now):
     return "not-applied" if now - recorded >= SETTLE else "wait"
 
 
-def reconcile(account, target):
+def reconcile(account, target, session=None):
     journal = Journal(journal_dir())
     with journal.guard(target):
         if not journal.pending():
             return {"status": "nothing-pending", "target": target}
         intent = journal.read_intent()
-        session = Session(account)
+        own = session is None
+        session = session or Session(account)
         try:
             snapshot = session.read(target)
         finally:
-            session.close()
+            if own:
+                session.close()
         outcome = settle_outcome(intent, snapshot, datetime.now(timezone.utc))
         if outcome in ("landed", "not-applied"):
             journal.clear()
@@ -803,6 +810,166 @@ def write_private(path, value):
     os.replace(pending, path)
 
 
+SESSION_IDLE_MINUTES = 20
+SESSION_REPLY_SECONDS = 1800
+MAX_MESSAGE = 4_000_000
+
+
+def perform(account, request, session=None):
+    """Run one bounded command and return its output and exit status. A given session is reused and left open."""
+    command = request.get("command")
+    if command == "save":
+        result = save(account, request["plan"], request["approved_fingerprint"], session)
+        return result, {"saved-draft": 0, "unchanged": 0, "stopped": 2}.get(result.get("status"), 3)
+    if command not in ("read", "reconcile"):
+        refuse("INVALID_INPUT", "Unknown command.")
+    target = check_target(request["target"])
+    check_binding(account, target)
+    if command == "reconcile":
+        result = reconcile(account, target, session)
+        return result, 0 if result["status"] in ("nothing-pending", "landed", "not-applied") else 2
+    snapshot, result, observations = read_week(account, target, session)
+    return {"status": "ok", "source": "workday-browser", "read": result, "observations": observations, "snapshot": snapshot}, 0
+
+
+def session_path():
+    base = Path(os.environ.get(STATE_ENV) or str(Path.home() / ".agent-hands"))
+    if not base.is_absolute():
+        refuse("PRIVATE_STORAGE_REQUIRED", f"Set {STATE_ENV} to an absolute private directory.")
+    return base / "workday" / "session.sock"
+
+
+def private_directory(path):
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        refuse("PRIVATE_STORAGE_REQUIRED", f"{path} must be an owner-only directory (mode 0700).")
+
+
+def read_message(conn):
+    data = b""
+    while not data.endswith(b"\n"):
+        chunk = conn.recv(65536)
+        if not chunk:
+            break
+        data += chunk
+        if len(data) > MAX_MESSAGE:
+            raise ValueError("message too large")
+    return json.loads(data.decode("utf-8"))
+
+
+def send_message(conn, value):
+    conn.sendall((json.dumps(value) + "\n").encode("utf-8"))
+
+
+def through_session(request):
+    """Send a command to a running session; None when no session is running, so the caller connects itself."""
+    path = session_path()
+    if not path.exists():
+        return None
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(SESSION_REPLY_SECONDS)
+    try:
+        conn.connect(str(path))
+    except OSError:
+        conn.close()
+        return None
+    with conn:
+        send_message(conn, request)
+        return read_message(conn)
+
+
+def alive(session):
+    try:
+        session.chrome.call("Browser.getVersion", timeout=5)
+        return True
+    except BrowserError:
+        return False
+
+
+def handle(account, account_file, session, request):
+    if not isinstance(request, dict) or request.get("account") != account_file:
+        return {"ok": False, "code": "SESSION_ACCOUNT_MISMATCH", "remedy": "This session serves a different account file; stop it or use the same --account.", "exit": 2}
+    command = request.get("command")
+    if command == "status":
+        return {"ok": True, "result": {"status": "running"}, "exit": 0}
+    if command == "stop":
+        return {"ok": True, "result": {"status": "stopped"}, "exit": 0, "stop": True}
+    try:
+        result, code = perform(account, request, session)
+        return {"ok": True, "result": result, "exit": code}
+    except Refusal as error:
+        return {"ok": False, "code": error.code, "remedy": error.remedy, "exit": 2}
+    except (KeyError, TypeError, ValueError, OSError):
+        return {"ok": False, "code": "INVALID_INPUT", "remedy": "The request did not match the command's inputs.", "exit": 2}
+
+
+def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session=None, ready=None):
+    """Hold one approved Chrome connection and answer the bounded commands over an owner-only Unix socket until idle, stopped or disconnected."""
+    path = session_path()
+    private_directory(path.parent)
+    if path.exists() or path.is_symlink():
+        info = path.lstat()
+        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+            refuse("PRIVATE_STORAGE_REQUIRED", f"{path} exists and is not this user's session socket.")
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.connect(str(path))
+            refuse("SESSION_RUNNING", "A Workday session is already running; use it or stop it first.")
+        except OSError:
+            path.unlink()
+        finally:
+            probe.close()
+    session = (make_session or Session)(account)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    reason = "idle"
+    try:
+        previous = os.umask(0o177)
+        try:
+            server.bind(str(path))
+        finally:
+            os.umask(previous)
+        os.chmod(path, 0o600)
+        server.listen(1)
+        server.settimeout(1.0)
+        print(json.dumps({"status": "ready", "idle_minutes": idle_minutes}), flush=True)
+        if ready:
+            ready()
+        last = time.monotonic()
+        while time.monotonic() - last < idle_minutes * 60:
+            try:
+                conn, _ = server.accept()
+            except socket.timeout:
+                continue
+            with conn:
+                conn.settimeout(60)
+                try:
+                    request = read_message(conn)
+                except (OSError, ValueError):
+                    continue
+                reply = handle(account, account_file, session, request)
+                try:
+                    send_message(conn, reply)
+                except OSError:
+                    pass
+            last = time.monotonic()
+            if reply.get("stop"):
+                reason = "stopped"
+                break
+            if not alive(session):
+                reason = "chrome-disconnected"
+                break
+    finally:
+        server.close()
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        session.close()
+        print(json.dumps({"status": "ended", "reason": reason}), flush=True)
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -819,6 +986,10 @@ def main(argv=None):
     settle = sub.add_parser("reconcile", help="Settle an uncertain save from a fresh read")
     settle.add_argument("--target", required=True)
     settle.add_argument("--account")
+    hold = sub.add_parser("session", help="Hold one approved Chrome connection for several commands")
+    hold.add_argument("action", choices=["start", "status", "stop"])
+    hold.add_argument("--idle-minutes", type=int, default=SESSION_IDLE_MINUTES)
+    hold.add_argument("--account")
     args = parser.parse_args(argv)
     try:
         account = load_account(account_path(args.account))
@@ -830,21 +1001,32 @@ def main(argv=None):
                 debugging = "off; turn it on at chrome://inspect/#remote-debugging"
             print(json.dumps({"status": "ok", "account": "valid", "chrome_remote_debugging": debugging}, indent=2))
             return 0
+        account_file = str(account_path(args.account).resolve())
+        if args.command == "session":
+            if args.action == "start":
+                if not 1 <= args.idle_minutes <= 240:
+                    refuse("INVALID_INPUT", "--idle-minutes must be between 1 and 240.")
+                return serve(account, account_file, args.idle_minutes)
+            reply = through_session({"command": args.action, "account": account_file})
+            print(json.dumps(reply["result"] if reply and reply.get("ok") else {"status": "not-running"} if reply is None else reply, indent=2))
+            return 0 if reply is None or reply.get("ok") else 2
         if args.command == "save":
-            result = save(account, load_json(args.plan), args.approved_fingerprint)
-            print(json.dumps(result, sort_keys=True, indent=2))
-            return {"saved-draft": 0, "unchanged": 0, "stopped": 2}.get(result.get("status"), 3)
-        target = check_target(load_json(args.target))
-        check_binding(account, target)
-        if args.command == "reconcile":
-            result = reconcile(account, target)
-            print(json.dumps(result, sort_keys=True, indent=2))
-            return 0 if result["status"] in ("nothing-pending", "landed", "not-applied") else 2
-        snapshot, result, observations = read_week(account, target)
-        if args.out:
-            write_private(args.out, snapshot)
-        print(json.dumps({"status": "ok", "source": "workday-browser", "read": result, "observations": observations}, sort_keys=True, indent=2))
-        return 0
+            request = {"command": "save", "plan": load_json(args.plan), "approved_fingerprint": args.approved_fingerprint}
+        else:
+            request = {"command": args.command, "target": load_json(args.target)}
+        reply = through_session(dict(request, account=account_file))
+        if reply is None:
+            result, code = perform(account, request)
+        elif not reply.get("ok"):
+            refuse(reply.get("code", "SESSION_FAILED"), reply.get("remedy", "The running session could not complete the command."))
+        else:
+            result, code = reply["result"], reply["exit"]
+        if args.command == "read":
+            snapshot = result.pop("snapshot")
+            if args.out:
+                write_private(args.out, snapshot)
+        print(json.dumps(result, sort_keys=True, indent=2))
+        return code
     except Refusal as error:
         print(json.dumps({"status": "blocked", "code": error.code, "remedy": error.remedy}), file=sys.stderr)
         return 2
