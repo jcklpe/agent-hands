@@ -191,6 +191,10 @@ class Tab:
     def navigate(self, url):
         self.chrome.call("Page.navigate", {"url": url}, self.session)
 
+    def insert_text(self, text):
+        """Type text into the focused element as keyboard input would."""
+        self.chrome.call("Input.insertText", {"text": text}, self.session)
+
     def url(self):
         return self.evaluate("() => location.href")
 

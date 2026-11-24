@@ -23,11 +23,11 @@ HEADERS = [h + "\nSort and filter column" for h in WB.REVIEW_HEADERS[:-1]] + ["D
 BLOCKS = [("10-26", "9-0", "12-0", "Mon, 10/26", "09:00 AM", "12:00 PM", "3", "10/26/2026"), ("10-30", "8-0", "14-0", "Fri, 10/30", "08:00 AM", "02:00 PM", "6", "10/30/2026"), ("11-1", "13-0", "16-0", "Sun, 11/1", "01:00 PM", "04:00 PM", "3", "11/01/2026")]
 
 
-def calendar(blocks=BLOCKS, style="approved", hours=("3", "0", "0", "0", "6", "0", "3"), total="12"):
+def calendar(blocks=BLOCKS, style="approved", hours=("3", "0", "0", "0", "6", "0", "3"), total="12", label="Approved"):
     # The marker's text as a background tab renders it, with the title and dates run together.
     events = [{"text": "Time Period End10/16/2026 - 10/31/2026", "title": "Time Period End", "subtitle": "10/16/2026 - 10/31/2026", "style": "non-event", "id": "", "allday": "true", "start": "10-31-0-0", "end": "10-31-0-0"}, {"text": "Synthetic Holiday", "title": "Synthetic Holiday", "subtitle": "", "style": "non-event", "id": "", "allday": "true", "start": "10-28-0-0", "end": "10-28-0-0"}]
     for i, (day, start, end, *_rest) in enumerate(blocks):
-        events.append({"text": "Hours Worked", "title": "Hours Worked", "style": style, "id": f"5773${i}", "allday": "false", "start": f"{day}-{start}", "end": f"{day}-{end}"})
+        events.append({"text": "Hours Worked", "title": "Hours Worked", "subtitle": "", "label": label, "style": style, "id": f"5773${i}", "allday": "false", "start": f"{day}-{start}", "end": f"{day}-{end}"})
     return {"range": ["Oct 26 – Nov 1, 2026"], "workers": ["selectedItem_000$000001"], "worker_labels": ["Synthetic Worker (abc123)"], "hours": [f"Hours: {h}" for h in hours], "summary": [{"label": "Example Time Entry: Example Hours", "value": total}, {"label": "Timesheet Total", "value": total}], "events": events}
 
 
@@ -98,7 +98,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot["service_total_minutes"], 720)
         self.assertEqual(snapshot["entries"][0]["entry"], {"date": "2026-10-26", "start": "09:00", "end": "12:00", "breaks": [], "time_type": "Hours Worked", "worktags": {}})
         self.assertFalse(snapshot["draft_save_supported"])
-        self.assertTrue(snapshot["revision"].startswith("content-sha256:"))
+        self.assertTrue(snapshot["revision"].startswith("calendar-sha256:"))
         self.assertEqual(result["daily_minutes"], {"2026-10-26": 180, "2026-10-30": 360, "2026-11-01": 180})
         self.assertEqual(observations["classification_minutes"], {"Example Class": 720})
         self.assertEqual(observations["holidays"], ["Synthetic Holiday"])
@@ -119,11 +119,30 @@ class SnapshotTests(unittest.TestCase):
             build(account=ACCOUNT | {"time_types": ["Hours Worked"]}, review=empty["review"], details=[])
         self.assertEqual(caught.exception.code, "VIEWS_DISAGREE")
 
-    def test_unseen_styles_read_as_unknown(self):
-        snapshot, _, observations = build(calendar=calendar(style="notsubmitted"))
-        self.assertEqual({r["status"] for r in snapshot["entries"]}, {"unknown"})
+    def test_status_comes_from_the_block_label(self):
+        snapshot, _, observations = build(calendar=calendar(style="notsubmitted", label="Not Submitted"))
+        self.assertEqual((snapshot["status"], {r["status"] for r in snapshot["entries"]}), ("draft", {"draft"}))
+        self.assertEqual(observations["status_labels"], ["Not Submitted"])
+        snapshot, _, _ = build(calendar=calendar(style="pending", label="Pending Review"))
         self.assertEqual(snapshot["status"], "unknown")
-        self.assertEqual(observations["styles"], ["notsubmitted"])
+        with self.assertRaises(WB.Refusal) as caught:
+            build(calendar=calendar(style="approved", label="Submitted"))
+        self.assertEqual(caught.exception.code, "VIEWS_DISAGREE")
+
+    def test_the_revision_follows_content_not_order_or_joined_text(self):
+        first = calendar()
+        shuffled = copy.deepcopy(first)
+        shuffled["events"].reverse()
+        for event in shuffled["events"]:
+            event["text"] = event["text"].replace(" ", "")
+        self.assertEqual(WB.calendar_revision(first), WB.calendar_revision(shuffled))
+        changed = copy.deepcopy(first)
+        changed["events"][2]["end"] = "10-26-15-0"
+        self.assertNotEqual(WB.calendar_revision(first), WB.calendar_revision(changed))
+
+    def test_saves_are_advertised_only_with_the_accounts_choice(self):
+        self.assertFalse(build()[0]["draft_save_supported"])
+        self.assertTrue(build(account=ACCOUNT | {"save_safeguard": "reread"})[0]["draft_save_supported"])
 
     def test_disagreements_and_unsupported_entries_refuse(self):
         other_worker = calendar()
@@ -221,7 +240,7 @@ class StorageTests(unittest.TestCase):
 
     def test_account_rules(self):
         self.assertEqual(WB.load_account(self.write_account(ACCOUNT))["tenant"], "exampletenant")
-        for value, mode, code in ((ACCOUNT, 0o644, "PRIVATE_STORAGE_REQUIRED"), (ACCOUNT | {"extra": 1}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"enter_time_path": "/elsewhere/x"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"origin": "http://x"}, 0o600, "INVALID_ACCOUNT")):
+        for value, mode, code in ((ACCOUNT, 0o644, "PRIVATE_STORAGE_REQUIRED"), (ACCOUNT | {"extra": 1}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"save_safeguard": "none"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"enter_time_path": "/elsewhere/x"}, 0o600, "INVALID_ACCOUNT"), (ACCOUNT | {"origin": "http://x"}, 0o600, "INVALID_ACCOUNT")):
             with self.assertRaises(WB.Refusal) as caught:
                 WB.load_account(self.write_account(value, mode))
             self.assertEqual(caught.exception.code, code)
@@ -246,7 +265,7 @@ class StorageTests(unittest.TestCase):
             code = WB.main(["read", "--target", str(target), "--account", str(account)])
         self.assertEqual((code, out.getvalue()), (2, ""))
         self.assertEqual(json.loads(err.getvalue())["code"], "TARGET_MISMATCH")
-        with patch.object(WB, "read_week", return_value=(calendar(), review(), details())):
+        with patch.object(WB, "read_week", return_value=build()):
             target.write_text(json.dumps(TARGET), encoding="utf-8")
             out, err = io.StringIO(), io.StringIO()
             with redirect_stdout(out), redirect_stderr(err):

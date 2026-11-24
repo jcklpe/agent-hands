@@ -12,25 +12,33 @@ import stat
 import sys
 import time
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "use-workday" / "scripts"))
-from workday_core import Refusal, read_timesheet, target as check_target  # noqa: E402
+from workday_core import NotDispatched, Refusal, read_timesheet, save_draft, target as check_target, verify_plan  # noqa: E402
+from workday_journal import Journal  # noqa: E402
 sys.path.insert(0, str(HERE))
 from chrome_session import BrowserError, Chrome, devtools_port  # noqa: E402
 
 STATE_ENV = "AGENT_HANDS_STATE_DIR"
-# Only styles seen on a real tenant map to a status. Anything else reads as unknown, which use-workday treats as protected.
-STYLE_STATUS = {"approved": "approved"}
+# Status comes from the label each calendar block shows. Labels seen on a real tenant map to a status; anything else reads as unknown, which use-workday treats as protected. A style seen with its label must agree with it.
+STATUS_LABELS = {"Approved": "approved", "Not Submitted": "draft", "Submitted": "submitted"}
+STYLE_LABELS = {"approved": "Approved"}
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+# Quick Add enters in/out blocks of this time-entry code; anything else is refused before Workday is touched.
+SAVE_TYPES = {"Hours Worked"}
+SAVE_SAFEGUARDS = {"reread"}
+# A save whose outcome was lost counts as not applied only once the week still lacks it this long after the attempt.
+SETTLE = timedelta(minutes=10)
 MONTHS = {name: number for number, name in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 REVIEW_HEADERS = ["Date", "Status", "Type", "In", "Out", "Out Reason", "Quantity", "Units", "Worktags", "Comment", "Details"]
 REPORTED_LABELS = ["Reported Quantity", "Time Entry Code", "In", "Out", "Out Reason", "Source", "Time Block Comment"]
 CALCULATED_LABELS = ["Calculated Date", "Calculated Time In", "Calculated Time Out", "Calculated Quantity", "Time Calculation Tag"]
 ACCOUNT_REQUIRED = {"schema_version", "origin", "tenant", "worker", "timezone", "timezone_label", "enter_time_path"}
-ACCOUNT_OPTIONAL = {"time_types"}
+ACCOUNT_OPTIONAL = {"time_types", "save_safeguard"}
 CONNECT_S = 120
 STEP_S = 30
 MAX_WEEK_STEPS = 104
@@ -75,6 +83,8 @@ def load_account(path):
     types = data.get("time_types", [])
     if not isinstance(types, list) or not all(isinstance(t, str) and t.strip() for t in types):
         refuse("INVALID_ACCOUNT", "time_types must be a list of confirmed Workday time-entry codes.")
+    if "save_safeguard" in data and data["save_safeguard"] not in SAVE_SAFEGUARDS:
+        refuse("INVALID_ACCOUNT", "save_safeguard may only be \"reread\", and only when the user chose it.")
     check_target({"tenant": data["tenant"], "worker": data["worker"], "week_start": "2026-01-05", "timezone": data["timezone"]})
     return data
 
@@ -173,7 +183,7 @@ def parse_events(events, week_start):
             on = day_in_week(days, start[0], start[1])
             if day_in_week(days, end[0], end[1]) != on:
                 refuse("UNSUPPORTED_ENTRY", "A block that crosses midnight is not supported.")
-            blocks.append({"id": event["id"], "style": event.get("style") or "", "title": event.get("title") or "", "date": on, "start": f"{start[2]:02d}:{start[3]:02d}", "end": f"{end[2]:02d}:{end[3]:02d}"})
+            blocks.append({"id": event["id"], "style": event.get("style") or "", "label": event.get("label") or "", "title": event.get("title") or "", "date": on, "start": f"{start[2]:02d}:{start[3]:02d}", "end": f"{end[2]:02d}:{end[3]:02d}"})
             continue
         text = event.get("text") or ""
         # A background tab can run the title and dates together, so the marker is read from its own title and subtitle; anything that mentions a time period but does not parse stops the read.
@@ -259,6 +269,14 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
+def calendar_revision(calendar):
+    """A fingerprint of what the week calendar shows, independent of event order and of how a background tab joins text."""
+    keys = ("id", "style", "allday", "start", "end", "title", "subtitle", "label")
+    events = sorted(({k: e.get(k) for k in keys} for e in calendar.get("events") or []), key=lambda e: json.dumps(e, sort_keys=True))
+    material = {k: calendar.get(k) for k in ("range", "workers", "hours", "summary")} | {"events": events}
+    return "calendar-sha256:" + fingerprint(material)
+
+
 def build_snapshot(account, target, calendar, review, details):
     """Cross-check the three views and produce a validated v1 snapshot plus observations. Refuses on any disagreement."""
     week = date.fromisoformat(target["week_start"])
@@ -302,7 +320,9 @@ def build_snapshot(account, target, calendar, review, details):
         for field, expected in (("In", block["start"]), ("Out", block["end"]), ("Calculated Time In", block["start"]), ("Calculated Time Out", block["end"])):
             if detail_time(reported.get(field) or calculated.get(field), account["timezone_label"]) != (block["date"], expected):
                 refuse("VIEWS_DISAGREE", "A block's details show different times from the calendar.")
-        status = STYLE_STATUS.get(block["style"], "unknown")
+        if block["style"] in STYLE_LABELS and STYLE_LABELS[block["style"]] != block["label"]:
+            refuse("VIEWS_DISAGREE", "A block's status label disagrees with its calendar style.")
+        status = STATUS_LABELS.get(block["label"], "unknown")
         entries.append({"id": block["id"], "status": status, "entry": {"date": block["date"].isoformat(), "start": block["start"], "end": block["end"], "breaks": [], "time_type": row["Type"], "worktags": {}}})
         observed_types.add(row["Type"])
         tag = calculated["Time Calculation Tag"]
@@ -328,19 +348,18 @@ def build_snapshot(account, target, calendar, review, details):
         refuse("UNKNOWN_TIME_TYPES", "No time type is visible this week; add the user-confirmed time-entry codes to the account file's time_types.")
     statuses = {r["status"] for r in entries}
     week_status = "empty" if not entries else statuses.pop() if len(statuses) == 1 else "unknown"
-    raw = {"calendar": calendar, "review": review, "details": details}
     snapshot = {
-        "schema_version": 1, "target": target, "revision": "content-sha256:" + fingerprint(raw), "status": week_status,
+        "schema_version": 1, "target": target, "revision": calendar_revision(calendar), "status": week_status,
         "entries": entries, "allowed_time_types": types, "pay_periods": pay_periods(week, markers),
-        "service_total_minutes": total, "draft_save_supported": False, "certification": "",
+        "service_total_minutes": total, "draft_save_supported": account.get("save_safeguard") in SAVE_SAFEGUARDS, "certification": "",
     }
     result = read_timesheet(snapshot, target)
     observations = {
-        "styles": sorted({b["style"] for b in blocks}), "payment_statuses": payment, "classification_minutes": classifications,
+        "styles": sorted({b["style"] for b in blocks}), "status_labels": sorted({b["label"] for b in blocks}), "payment_statuses": payment, "classification_minutes": classifications,
         "summary": {item.get("label"): item.get("value") for item in calendar.get("summary") or []}, "holidays": holidays,
         "pay_period_markers": [[s.isoformat(), e.isoformat()] for s, e in markers], "comments": comments,
         "time_types": {"observed": sorted(observed_types), "from_account": sorted(account.get("time_types", []))},
-        "revision_note": "Content fingerprint of this read; Workday offers no service revision through the browser.",
+        "revision_note": "Fingerprint of the calendar as read; Workday offers no service revision through the browser.",
     }
     return snapshot, result, observations
 
@@ -356,7 +375,7 @@ CALENDAR_JS = """() => {
     worker_labels: q('[data-automation-id=promptOption]').map(t),
     hours: q('[data-automation-id^="hoursEntered_"]').map(t),
     summary: q('[data-automation-id=summarizedListItem]').map(e => ({label: t(e.querySelector('[data-automation-id=summarizedListItemLabel]')), value: t(e.querySelector('[data-automation-id=summarizedListItemValue]'))})),
-    events: q('[data-automation-id=calendarevent]').map(e => ({text: t(e), title: t(e.querySelector('[data-automation-id=calendarAppointmentTitle]')), subtitle: t(e.querySelector('[data-automation-id=calendarAppointmentSubtitle]')), style: e.getAttribute('data-automation-appointment-style'), id: e.getAttribute('data-automation-eventid'), allday: e.getAttribute('data-automation-allday'), start: e.getAttribute('data-automation-startdate'), end: e.getAttribute('data-automation-enddate')}))
+    events: q('[data-automation-id=calendarevent]').map(e => ({text: t(e), title: t(e.querySelector('[data-automation-id=calendarAppointmentTitle]')), subtitle: t(e.querySelector('[data-automation-id=calendarAppointmentSubtitle]')), label: (() => { const parts = ['calendarAppointmentTitle', 'calendarAppointmentSubtitle', 'calendarAppointmentSubtitle2']; const leaves = [...e.querySelectorAll('*')].filter(x => x.children.length === 0 && (x.textContent || '').trim() && !parts.some(p => x.closest('[data-automation-id=' + p + ']'))); return leaves.length ? leaves[leaves.length - 1].textContent.trim() : ''; })(), style: e.getAttribute('data-automation-appointment-style'), id: e.getAttribute('data-automation-eventid'), allday: e.getAttribute('data-automation-allday'), start: e.getAttribute('data-automation-startdate'), end: e.getAttribute('data-automation-enddate')}))
   };
 }"""
 
@@ -504,38 +523,270 @@ def read_details(tab, index):
     return {"reported": reported, "calculated": calculated}
 
 
-def read_week(account, target):
-    week = date.fromisoformat(target["week_start"])
+QA_PRELUDE = FIRE_JS + """
+const qa = () => [...document.querySelectorAll('[role=dialog], [data-automation-id=popUpDialog]')].find(d => (d.textContent || '').includes('Quick Add'));
+const fieldLabel = (el) => { let n = el; for (let i = 0; i < 8 && n; i++) { const l = n.querySelector && n.querySelector('[data-automation-id=formLabel]'); if (l) return (l.textContent || '').trim(); n = n.parentElement; } return null; };
+const lines = (root) => { const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const out = []; while (w.nextNode()) { const v = w.currentNode.textContent.trim(); if (v) out.push(v); } return out; };
+const timeInput = (label) => { const d = qa(); return d ? [...d.querySelectorAll('input[type=text]')].find(i => fieldLabel(i) === label) : null; };
+"""
+
+QA_STATE_JS = "() => { " + QA_PRELUDE + """ const d = qa(); if (!d) return null;
+  return {lines: lines(d),
+    workers: [...d.querySelectorAll('[data-automation-id^="selectedItem_"]')].map(e => e.getAttribute('data-automation-id')),
+    selected: [...d.querySelectorAll('[data-automation-id=selectedItem]')].map(e => (e.textContent || '').trim()),
+    times: [...d.querySelectorAll('input[type=text]')].filter(i => ['In', 'Out'].includes(fieldLabel(i))).map(i => [fieldLabel(i), i.value]),
+    days: [...d.querySelectorAll('input[type=checkbox]')].map(i => [fieldLabel(i), i.checked]),
+    buttons: [...d.querySelectorAll('button')].map(b => b.getAttribute('title') || (b.textContent || '').trim()).filter(Boolean)}; }"""
+
+QA_BUTTON_JS = "(title) => { " + QA_PRELUDE + " const d = qa(); const b = d ? [...d.querySelectorAll('button')].find(x => x.getAttribute('title') === title) : null; return b ? fire(b) : false; }"
+QA_FOCUS_JS = "(label) => { " + QA_PRELUDE + " const i = timeInput(label); if (!i) return false; i.focus(); i.select(); return document.activeElement === i; }"
+QA_SET_JS = "(args) => { " + QA_PRELUDE + """ const i = timeInput(args[0]); if (!i) return false;
+  if (i.value !== args[1]) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, args[1]); i.dispatchEvent(new Event('input', {bubbles: true})); }
+  i.dispatchEvent(new Event('change', {bubbles: true})); i.blur(); i.dispatchEvent(new FocusEvent('focusout', {bubbles: true})); return true; }"""
+QA_DAY_JS = "(day) => { " + QA_PRELUDE + " const d = qa(); const box = d ? [...d.querySelectorAll('input[type=checkbox]')].find(i => fieldLabel(i) === day) : null; if (!box) return false; if (!box.checked) fire(box); return box.checked; }"
+QA_OPEN_JS = "() => { " + QA_PRELUDE + " return !!qa(); }"
+QA_STEP2_JS = "() => { " + QA_PRELUDE + " const d = qa(); return !!d && d.querySelectorAll('input[type=checkbox]').length === 7 && !!timeInput('In') && !!timeInput('Out'); }"
+QA_DONE_JS = "() => { " + QA_PRELUDE + " return !qa() && !!document.querySelector('[data-automation-id=dateRangeTitle]'); }"
+DISCARD_JS = "() => { " + FIRE_JS + " const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').trim() === 'Discard'); return b ? fire(b) : false; }"
+
+
+def twelve_hour(value):
+    hour, minute = (int(part) for part in value.split(":"))
+    return f"{hour % 12 or 12}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
+
+
+def field_value(lines, label):
+    """The value after a form label, skipping the repeated copy of the label."""
+    for index, line in enumerate(lines):
+        if line == label:
+            following = [value for value in lines[index + 1:index + 3] if value != label]
+            return following[0] if following else None
+    return None
+
+
+def check_saveable(entry, week_start):
+    if entry.get("time_type") not in SAVE_TYPES:
+        refuse("UNSUPPORTED_ENTRY", f"Saving supports {', '.join(sorted(SAVE_TYPES))} blocks only.")
+    if entry.get("breaks"):
+        refuse("UNSUPPORTED_ENTRY", "Saving a block with breaks is not supported; enter it as separate blocks.")
+    if entry.get("worktags"):
+        refuse("UNSUPPORTED_ENTRY", "Saving worktags is not supported.")
+    day = date.fromisoformat(entry["date"])
+    if not 0 <= (day - week_start).days <= 6:
+        refuse("WEEK_MISMATCH", "An entry falls outside the selected week.")
+    return WEEKDAYS[(day - week_start).days]
+
+
+def check_quick_add_start(state, account, week_start):
+    if f"selectedItem_{account['worker']}" not in state["workers"]:
+        refuse("WORKER_MISMATCH", "Quick Add is not set to the confirmed worker.")
+    dates = (field_value(state["lines"], "Start Date"), field_value(state["lines"], "End Date"))
+    if dates != (week_start.strftime("%m/%d/%Y"), (week_start + timedelta(days=6)).strftime("%m/%d/%Y")):
+        refuse("WEEK_MISMATCH", "Quick Add is not set to the selected week.")
+    if state["selected"] != ["Hours Worked"]:
+        refuse("UNSUPPORTED_ENTRY", "Quick Add did not start with Hours Worked as the only time type.")
+
+
+def check_quick_add_ready(state, entry, day):
+    if "Hours Worked" not in (field_value(state["lines"], "Time Type") or ""):
+        refuse("UNSUPPORTED_ENTRY", "Quick Add's time type changed before saving.")
+    if field_value(state["lines"], "Out Reason") != "Out":
+        refuse("UNSUPPORTED_ENTRY", "Quick Add's out reason is not Out.")
+    times = dict(state["times"])
     try:
-        chrome = Chrome.connect(CONNECT_S)
-    except BrowserError as error:
-        refuse("BROWSER_NOT_CONNECTED", f"{error}. Keep Chrome open with remote debugging on at chrome://inspect/#remote-debugging, run again and click Allow when Chrome asks.")
-    tab, stage = None, "select-profile"
-    try:
-        context = select_context(chrome.pages(), account)
-        stage = "open-tab"
-        tab = chrome.open_tab(account["origin"] + account["enter_time_path"], context)
-        stage = "calendar"
-        open_calendar(tab, account)
-        go_to_week(tab, week)
-        calendar = stable(tab, CALENDAR_JS)
-        stage = "review"
-        open_review(tab)
-        review = stable(tab, REVIEW_JS)
-        if review["rows"] and review["empty"]:
-            refuse("LAYOUT_CHANGED", "Review Time by Week shows rows and 'No items available' at once.")
-        stage = "details"
-        details = [read_details(tab, i) for i in range(len(review["rows"]))]
-        return calendar, review, details
-    except BrowserError as error:
-        refuse("BROWSER_STEP_FAILED", f"The {stage} step failed ({error}); nothing was changed in Workday. Run again once the page is idle.")
-    finally:
-        if tab is not None:
+        shown = (clock(times.get("In")), clock(times.get("Out")))
+    except Refusal:
+        refuse("LAYOUT_CHANGED", "Workday did not accept the in and out times as entered.")
+    if shown != (entry["start"], entry["end"]):
+        refuse("LAYOUT_CHANGED", "Workday shows different in and out times from the plan.")
+    ticked = [name for name, checked in state["days"] if checked]
+    if [name for name, _ in state["days"]] != WEEKDAYS or ticked != [day]:
+        refuse("LAYOUT_CHANGED", "Quick Add does not have exactly the planned day ticked.")
+
+
+class Session:
+    """One approved connection and one background tab of the user's Chrome, for reads and, when the account allows it, saves.
+
+    As a use-workday transport it declares the re-read safeguard: no atomic revision guard exists in Workday's pages, so each save is preceded by a fresh full read and a last calendar check, relies on Workday refusing overlapping times, and is followed by a full read.
+    """
+
+    save_safeguard = "reread"
+    supports_conditional_create = False
+
+    def __init__(self, account):
+        self.account, self.tab = account, None
+        try:
+            self.chrome = Chrome.connect(CONNECT_S)
+        except BrowserError as error:
+            refuse("BROWSER_NOT_CONNECTED", f"{error}. Keep Chrome open with remote debugging on at chrome://inspect/#remote-debugging, run again and click Allow when Chrome asks.")
+        try:
+            context = select_context(self.chrome.pages(), account)
+            self.tab = self.chrome.open_tab("about:blank", context)
+        except BrowserError as error:
+            self.close()
+            refuse("BROWSER_STEP_FAILED", f"Opening a tab failed ({error}); nothing was changed in Workday.")
+        except Refusal:
+            self.close()
+            raise
+        self.observations = None
+
+    def close(self):
+        if self.tab is not None:
             try:
-                tab.close()
+                self.tab.close()
             except BrowserError:
                 pass
-        chrome.close()
+            self.tab = None
+        self.chrome.close()
+
+    def show_week(self, week):
+        """Load Enter My Time afresh and move to the week, so the page reflects Workday's current data."""
+        self.tab.evaluate("() => { window.__agentHandsStale = true; return true; }")
+        self.tab.navigate(self.account["origin"] + self.account["enter_time_path"])
+        try:
+            self.tab.wait_for("() => !window.__agentHandsStale", timeout=STEP_S)
+        except BrowserError:
+            refuse("BROWSER_STEP_FAILED", "Enter My Time did not load.")
+        open_calendar(self.tab, self.account)
+        go_to_week(self.tab, week)
+
+    def read(self, binding):
+        target = check_target(binding)
+        stage = "calendar"
+        try:
+            self.show_week(date.fromisoformat(target["week_start"]))
+            calendar = stable(self.tab, CALENDAR_JS)
+            stage = "review"
+            open_review(self.tab)
+            review = stable(self.tab, REVIEW_JS)
+            if review["rows"] and review["empty"]:
+                refuse("LAYOUT_CHANGED", "Review Time by Week shows rows and 'No items available' at once.")
+            stage = "details"
+            details = [read_details(self.tab, i) for i in range(len(review["rows"]))]
+        except BrowserError as error:
+            refuse("BROWSER_STEP_FAILED", f"The {stage} step failed ({error}); nothing was changed in Workday. Run again once the page is idle.")
+        snapshot, result, self.observations = build_snapshot(self.account, target, calendar, review, details)
+        self.result = result
+        return snapshot
+
+    def cancel_quick_add(self):
+        """Close an unsent Quick Add, confirming Workday's Discard Changes prompt; the tab is closed afterwards in any case."""
+        try:
+            if self.tab.evaluate(QA_OPEN_JS):
+                self.tab.evaluate(QA_BUTTON_JS, "Cancel")
+                time.sleep(1)
+                self.tab.evaluate(DISCARD_JS)
+                self.tab.wait_for("() => !(" + QA_OPEN_JS + ")()", timeout=10)
+        except BrowserError:
+            pass
+
+    def create_draft(self, binding, entry, expected_revision):
+        week = date.fromisoformat(binding["week_start"])
+        sent = False
+        try:
+            day = check_saveable(entry, week)
+            self.show_week(week)
+            if calendar_revision(stable(self.tab, CALENDAR_JS)) != expected_revision:
+                raise NotDispatched()
+            click(self.tab, '[data-automation-id=calendarToolbar] button[title="Actions"]', "Actions")
+            self.tab.wait_for("() => !!document.querySelector('[data-automation-id=dropdown-option][data-automation-label=\"Quick Add\"]')", timeout=STEP_S)
+            click(self.tab, '[data-automation-id=dropdown-option][data-automation-label="Quick Add"]', "Quick Add")
+            self.tab.wait_for("() => { " + QA_PRELUDE + " const d = qa(); return !!d && [...d.querySelectorAll('button')].some(b => b.getAttribute('title') === 'Next'); }", timeout=STEP_S)
+            check_quick_add_start(stable(self.tab, QA_STATE_JS), self.account, week)
+            if not self.tab.evaluate(QA_BUTTON_JS, "Next"):
+                refuse("LAYOUT_CHANGED", "Quick Add has no Next button.")
+            self.tab.wait_for(QA_STEP2_JS, timeout=STEP_S)
+            for label, value in (("In", entry["start"]), ("Out", entry["end"])):
+                text = twelve_hour(value)
+                if self.tab.evaluate(QA_FOCUS_JS, label):
+                    self.tab.insert_text(text)
+                self.tab.evaluate(QA_SET_JS, [label, text])
+            if not self.tab.evaluate(QA_DAY_JS, day):
+                refuse("LAYOUT_CHANGED", f"Quick Add's {day} box could not be ticked.")
+            check_quick_add_ready(stable(self.tab, QA_STATE_JS), entry, day)
+            # From here the request may reach Workday, so any failure is uncertain rather than a clean stop.
+            sent = True
+            if not self.tab.evaluate(QA_BUTTON_JS, "OK"):
+                raise BrowserError("Quick Add has no OK button")
+            self.tab.wait_for(QA_DONE_JS, timeout=STEP_S)
+        except NotDispatched:
+            self.cancel_quick_add()
+            raise
+        except (Refusal, BrowserError):
+            if not sent:
+                self.cancel_quick_add()
+                raise NotDispatched()
+            raise RuntimeError("The save's outcome is unknown")
+
+
+def read_week(account, target):
+    session = Session(account)
+    try:
+        snapshot = session.read(target)
+        return snapshot, session.result, session.observations
+    finally:
+        session.close()
+
+
+def journal_dir():
+    base = Path(os.environ.get(STATE_ENV) or str(Path.home() / ".agent-hands"))
+    if not base.is_absolute():
+        refuse("PRIVATE_STORAGE_REQUIRED", f"Set {STATE_ENV} to an absolute private directory.")
+    return base / "workday" / "journal"
+
+
+def load_json(path):
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def save(account, plan, approved):
+    if account.get("save_safeguard") not in SAVE_SAFEGUARDS:
+        refuse("SAVES_NOT_ENABLED", "Saving needs the user's explicit choice of the re-read safeguard in the account file ('save_safeguard': 'reread').")
+    verify_plan(plan)
+    target = check_target(plan["target"])
+    check_binding(account, target)
+    week = date.fromisoformat(target["week_start"])
+    for entry in plan["additions"]:
+        check_saveable(entry, week)
+    journal = Journal(journal_dir())
+    session = Session(account)
+    try:
+        return save_draft(session, plan, approved, journal, allow_reread=True)
+    finally:
+        session.close()
+
+
+def settle_outcome(intent, snapshot, now):
+    """What a fresh read says about an uncertain save: landed, not applied after the settling time, or still unresolved."""
+    drafts = [r["entry"] for r in snapshot["entries"] if r["status"] == "draft"]
+    if intent["entry"] in drafts:
+        return "landed"
+    if intent["entry"] in [r["entry"] for r in snapshot["entries"]]:
+        return "present-not-draft"
+    recorded = datetime.fromisoformat(intent["recorded_at"])
+    return "not-applied" if now - recorded >= SETTLE else "wait"
+
+
+def reconcile(account, target):
+    journal = Journal(journal_dir())
+    with journal.guard(target):
+        if not journal.pending():
+            return {"status": "nothing-pending", "target": target}
+        intent = journal.read_intent()
+        session = Session(account)
+        try:
+            snapshot = session.read(target)
+        finally:
+            session.close()
+        outcome = settle_outcome(intent, snapshot, datetime.now(timezone.utc))
+        if outcome in ("landed", "not-applied"):
+            journal.clear()
+        result = {"status": outcome, "target": target, "entry": intent["entry"]}
+        if outcome == "wait":
+            result["retry_after"] = (datetime.fromisoformat(intent["recorded_at"]) + SETTLE).isoformat()
+        if outcome == "present-not-draft":
+            result["next_action"] = "The entry exists but is not a draft; inspect it in Workday before deciding."
+        return result
 
 
 def write_private(path, value):
@@ -561,6 +812,13 @@ def main(argv=None):
     read.add_argument("--target", required=True, help="use-workday target JSON")
     read.add_argument("--account")
     read.add_argument("--out", help="Write the snapshot here, owner-only and outside Git checkouts")
+    write = sub.add_parser("save", help="Save a reviewed use-workday plan's additions as unsubmitted blocks")
+    write.add_argument("--plan", required=True, help="The plan object from use-workday preview")
+    write.add_argument("--approved-fingerprint", required=True, help="The plan_fingerprint the user approved")
+    write.add_argument("--account")
+    settle = sub.add_parser("reconcile", help="Settle an uncertain save from a fresh read")
+    settle.add_argument("--target", required=True)
+    settle.add_argument("--account")
     args = parser.parse_args(argv)
     try:
         account = load_account(account_path(args.account))
@@ -572,10 +830,17 @@ def main(argv=None):
                 debugging = "off; turn it on at chrome://inspect/#remote-debugging"
             print(json.dumps({"status": "ok", "account": "valid", "chrome_remote_debugging": debugging}, indent=2))
             return 0
-        target = check_target(json.loads(Path(args.target).read_text(encoding="utf-8")))
+        if args.command == "save":
+            result = save(account, load_json(args.plan), args.approved_fingerprint)
+            print(json.dumps(result, sort_keys=True, indent=2))
+            return {"saved-draft": 0, "unchanged": 0, "stopped": 2}.get(result.get("status"), 3)
+        target = check_target(load_json(args.target))
         check_binding(account, target)
-        calendar, review, details = read_week(account, target)
-        snapshot, result, observations = build_snapshot(account, target, calendar, review, details)
+        if args.command == "reconcile":
+            result = reconcile(account, target)
+            print(json.dumps(result, sort_keys=True, indent=2))
+            return 0 if result["status"] in ("nothing-pending", "landed", "not-applied") else 2
+        snapshot, result, observations = read_week(account, target)
         if args.out:
             write_private(args.out, snapshot)
         print(json.dumps({"status": "ok", "source": "workday-browser", "read": result, "observations": observations}, sort_keys=True, indent=2))

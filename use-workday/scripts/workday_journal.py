@@ -1,4 +1,4 @@
-"""Private crash journal and per-target process lock for future Unix adapters."""
+"""Private crash journal and per-target process lock for Unix adapters."""
 import json
 import os
 import stat
@@ -59,6 +59,12 @@ class Journal:
             os.fsync(fd)
         finally:
             os.close(fd)
+
+    def read_intent(self):
+        require(self.path is not None and self.pending(), 'NOTHING_PENDING', 'No outstanding intent for this target.')
+        fd = self._open(self.path, os.O_RDONLY)
+        with os.fdopen(fd) as f:
+            return json.load(f)
 
     def clear(self):
         require(self.path is not None)

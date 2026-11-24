@@ -7,6 +7,10 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+class NotDispatched(Exception):
+    """A transport raises this when it stopped before sending anything for an entry."""
+
+
 class Refusal(Exception):
     def __init__(self, code, remedy):
         self.code, self.remedy = code, remedy
@@ -178,21 +182,37 @@ def preview(value, allocation):
     return plan
 
 
+def uncertain(transport, binding, completed, proposed, pending):
+    # Do not expose raw transport errors: they can contain tokens or full pages.
+    observed_saved = []
+    try:
+        observed_state = snapshot(transport.read(binding), binding)
+        observed_saved = [r['entry'] for r in observed_state['entries'] if r['entry'] == proposed and r['status'] == 'draft']
+    except Exception:
+        pass
+    return {'status': 'uncertain', 'stage': 'save-or-readback', 'target': binding,
+            'completed': completed, 'attempted': proposed, 'observed_draft': observed_saved,
+            'pending': pending,
+            'next_action': 'Reconcile the journal with an authoritative read; do not retry automatically.'}
+
+
 def verify_plan(plan):
     fields(plan, 'schema_version operation target base_fingerprint allocation additions unchanged daily_minutes total_minutes pay_periods crosses_pay_period plan_fingerprint')
     body = {k: v for k, v in plan.items() if k != 'plan_fingerprint'}
     require(digest(body) == plan['plan_fingerprint'], 'PLAN_CHANGED', 'Generate and review a new preview.')
 
 
-def save_draft(transport, plan, approved_fingerprint, journal):
-    """Internal adapter contract. Production transport is deliberately not supplied.
+def save_draft(transport, plan, approved_fingerprint, journal, allow_reread=False):
+    """Save a reviewed plan's additions as drafts through a transport, one entry at a time.
 
     journal.guard(target) must serialize processes and persist intent before a mutation.
-    transport.create_draft must atomically guard expected_revision or refuse support.
-    A timeout never triggers an automatic retry, even when readback finds the entry.
+    transport.create_draft must atomically guard expected_revision, or, only where the user has explicitly chosen it for the account (allow_reread), declare save_safeguard = 'reread': a fresh full re-read before each entry, a last check of the page before sending, the service's own overlap refusal and a full re-read afterwards. That narrows but cannot close the window for a concurrent edit; the readback detects one afterwards.
+    create_draft raises NotDispatched when it stopped before sending anything. Any other failure is uncertain, and a timeout never triggers an automatic retry, even when readback finds the entry.
     """
     verify_plan(plan)
-    require(getattr(transport, 'supports_conditional_create', False) is True, 'UNSAFE_TRANSPORT', 'Use a verified atomic revision guard; browser preflight alone cannot prevent concurrent edits.')
+    atomic = getattr(transport, 'supports_conditional_create', False) is True
+    reread = allow_reread is True and getattr(transport, 'save_safeguard', None) == 'reread'
+    require(atomic or reread, 'UNSAFE_TRANSPORT', 'Use a verified atomic revision guard, or the re-read safeguard the user explicitly chose for this account.')
     require(approved_fingerprint == plan['plan_fingerprint'], 'APPROVAL_MISMATCH', 'Review and explicitly authorize the exact plan fingerprint.')
     binding = target(plan['target'])
     completed = []
@@ -211,13 +231,22 @@ def save_draft(transport, plan, approved_fingerprint, journal):
             expected_entries = [r['entry'] for r in state['entries']] + [proposed]
             try:
                 journal.intent({'target': binding, 'plan_fingerprint': plan['plan_fingerprint'],
-                                'entry': proposed, 'completed': completed})
+                                'entry': proposed, 'completed': completed,
+                                'recorded_at': datetime.now(timezone.utc).isoformat()})
             except Exception:
                 return {'status': 'stopped', 'stage': 'journal', 'target': binding,
                         'completed': completed, 'pending': plan['additions'][len(completed):],
                         'next_action': 'Repair private durable storage and reconcile any intent before a new preview.'}
             try:
                 transport.create_draft(binding, proposed, expected_revision=state['revision'])
+            except NotDispatched:
+                journal.clear()
+                return {'status': 'stopped', 'stage': 'before-save', 'target': binding,
+                        'completed': completed, 'pending': plan['additions'][index:],
+                        'next_action': 'Nothing was sent for the next entry. Re-read the week and review a new preview.'}
+            except Exception:
+                return uncertain(transport, binding, completed, proposed, plan['additions'][index + 1:])
+            try:
                 after = snapshot(transport.read(binding), binding)
                 require(after['status'] == 'draft' and all(r['status'] == 'draft' for r in after['entries']), 'READBACK_FAILED', 'Verify draft-only status before further work.')
                 require(after['allowed_time_types'] == state['allowed_time_types'] and after['pay_periods'] == state['pay_periods'] and after['certification'] == '' and after['draft_save_supported'], 'READBACK_FAILED', 'Reconcile changed classifications, periods or save semantics.')
@@ -228,17 +257,7 @@ def save_draft(transport, plan, approved_fingerprint, journal):
                 journal.clear()
                 state = after
             except Exception:
-                # Do not expose raw transport errors: they can contain tokens or full pages.
-                observed_saved = []
-                try:
-                    observed_state = snapshot(transport.read(binding), binding)
-                    observed_saved = [r['entry'] for r in observed_state['entries'] if r['entry'] == proposed and r['status'] == 'draft']
-                except Exception:
-                    pass
-                return {'status': 'uncertain', 'stage': 'save-or-readback', 'target': binding,
-                        'completed': completed, 'attempted': proposed, 'observed_draft': observed_saved,
-                        'pending': plan['additions'][index + 1:],
-                        'next_action': 'Reconcile the journal with an authoritative read; do not retry automatically.'}
+                return uncertain(transport, binding, completed, proposed, plan['additions'][index + 1:])
         return {'status': 'saved-draft' if completed else 'unchanged', 'target': binding,
                 'completed': completed, 'total_minutes': state['service_total_minutes'],
                 'fingerprint': digest(state), 'submitted': False}

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from workday_core import Refusal, preview, read_timesheet, save_draft
+from workday_core import NotDispatched, Refusal, preview, read_timesheet, save_draft
 from workday_journal import Journal
 
 BINDING = {'tenant': 'example.invalid', 'worker': 'synthetic-worker', 'week_start': '2026-02-02', 'timezone': 'America/Chicago'}
@@ -183,6 +183,42 @@ class WorkdayTests(unittest.TestCase):
         p = preview(f.state, allocation())
         self.refused(lambda: save_draft(f, p, p['plan_fingerprint'], self.journal), 'UNSAFE_TRANSPORT')
         self.assertEqual(f.calls, 0)
+
+    def test_reread_safeguard_needs_the_accounts_explicit_choice(self):
+        f = Fake()
+        f.supports_conditional_create = False
+        f.save_safeguard = 'reread'
+        p = preview(f.state, allocation())
+        self.refused(lambda: save_draft(f, p, p['plan_fingerprint'], self.journal), 'UNSAFE_TRANSPORT')
+        self.assertEqual(f.calls, 0)
+        result = save_draft(f, p, p['plan_fingerprint'], self.journal, allow_reread=True)
+        self.assertEqual((result['status'], f.calls), ('saved-draft', 2))
+
+    def test_a_stop_before_sending_is_clean_and_clears_the_intent(self):
+        f = Fake()
+        p = preview(f.state, allocation())
+        original = f.create_draft
+
+        def stop_on_second(binding, entry, expected_revision):
+            if f.calls == 1:
+                raise NotDispatched()
+            return original(binding, entry, expected_revision)
+
+        f.create_draft = stop_on_second
+        result = save_draft(f, p, p['plan_fingerprint'], self.journal)
+        self.assertEqual((result['status'], result['stage'], len(result['completed']), len(result['pending'])), ('stopped', 'before-save', 1, 1))
+        with self.journal.guard(BINDING):
+            self.assertFalse(self.journal.pending())
+
+    def test_an_uncertain_intent_records_when_it_was_written(self):
+        f = Fake()
+        f.fail_at = 1
+        p = preview(f.state, allocation())
+        self.assertEqual(save_draft(f, p, p['plan_fingerprint'], self.journal)['status'], 'uncertain')
+        with self.journal.guard(BINDING):
+            intent = self.journal.read_intent()
+        self.assertEqual(intent['entry'], block())
+        self.assertIn('recorded_at', intent)
 
     def test_plan_tamper_and_approval(self):
         f = Fake()

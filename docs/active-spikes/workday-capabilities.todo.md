@@ -1,8 +1,8 @@
 ---
 attention: live
-status: reads-working
-implementation: browser-reader
-reviewed: 2026-11-23
+status: saves-built
+implementation: browser-read-and-save
+reviewed: 2026-11-24
 ---
 # Workday capabilities — investigation and implementation handoff
 [Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry remains outside this implementation scope; the separately authorized read-only browser probe is recorded below.
@@ -31,6 +31,13 @@ Workday follows the Penpot scope. The immediate deliverable is a transport decis
 - Verified official Chrome M144 native connection approval and current Playwright channel attachment/detachment documentation. The installed Chrome 157 and Playwright 1.65.1 support the documented surface; no runtime installation or dependency change was made.
 - An isolated headless synthetic attach/read/disconnect check preserved the owner's original page and closed only the disposable browser on fixture cleanup. It did not use normal-profile data or credentials.
 - The user explicitly authorized a read-only existing-session probe. After the initial connection failure, two attempts attached and disconnected but found no matching Workday tab; a bounded diagnostic retry could not establish the native connection. The next gate is exact target/profile selection and native approval-state clarification. No Workday headings or timesheet data were retrieved, and no timesheet write, cookie/profile export, automatic security-setting change or normal-tab mutation was performed. Complete worker/week retrieval and production save semantics remain unproved.
+
+## Saving under the re-read safeguard — 2026-11-24
+- The user chose the re-read safeguard (decision recorded in the concept doc). The engine now accepts a transport declaring `save_safeguard = "reread"` only with `allow_reread`, which the browser `save` command passes only when the account file records the choice. A transport that stops before sending raises `NotDispatched`, which clears the intent and stops cleanly; intents carry the time they were written. The existing atomic path is unchanged.
+- Inspected Workday's entry route read-only, with each form cancelled or discarded and the week confirmed unchanged: Quick Add sets worker, week dates and time type, then In, Out, Out reason and a box per weekday. The time-type list offers a few time-entry codes and an Absence category; saving supports Hours Worked only. Cancel after touching a field raises a Discard Changes prompt.
+- Built the browser `create_draft` on Quick Add with checks at each step and a cancel-and-discard on any problem before OK, a `save` command that refuses unsupported entries before connecting, and `reconcile`, which settles an uncertain save from a fresh read after a ten-minute settling time. Status now comes from each block's label, mapping Approved, Not Submitted and Submitted; the revision is a fingerprint of the calendar, and two live reads of an unchanged week produced identical snapshots.
+- Tests: 10 save-path tests against scripted page states, 17 reader tests, 5 client tests and 33 engine tests pass on Python 3.14 and 3.9. A live read after the changes still matched.
+- Not yet: any live save. It needs real hours the user wants entered; no disposable payroll entries. The Not Submitted label, the In/Out input handling and Workday's overlap refusal are confirmed only by that first save.
 
 ## Browser reader — 2026-11-23
 - Built `setup-workday/scripts/workday_browser.py` and `chrome_session.py`: a standard-library DevTools client and a reader that produces the v1 snapshot from the Enter My Time calendar, Review Time by Week and each block's details, cross-checked and refusing on any disagreement. Playwright 1.63 was tried first and dropped: its attach to the user's everyday Chrome 157 timed out after the user clicked Allow, while a minimal connection was approved within a second. The reader opens, uses and closes only its own background tab and never attaches to the user's tabs.
@@ -82,6 +89,7 @@ The user asked to build the browser route fully and offered browser access. Grou
 - [x] Implement `read-timesheet` and local `preview` first. Return compact normalized output and the human-review diff rather than a series of large accessibility snapshots.
   - 2026-11-23: the browser reader returns the validated v1 snapshot and compact observations; the existing offline `preview` consumes it.
 - [ ] Implement `save-draft` with explicit saved/not-submitted verification and partial-save reconciliation. A save that submits or certifies must refuse this operation.
+  - 2026-11-24: implemented through Quick Add under the user's re-read safeguard, with per-block readback as a draft, clean stops before sending and a `reconcile` command; offline-tested. Stays open until a live save on real work is verified.
 - [ ] Implement `submit-approved` against exact reviewed data and a fresh explicit user authorization. Inspect the certification/range/total, refuse materially changed text or targets, and verify submitted/sent-for-approval. Already-submitted matching data must not be submitted again.
 - [ ] Write the owning setup/use skill instructions, operation examples, native entrypoint, privacy/storage rules, supported runtime/platform matrix and recovery guidance. Keep employer policy in the private consumer skill.
 

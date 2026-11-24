@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline Workday read/preview CLI. No live adapter is installed."""
+"""Offline Workday read/preview CLI; setup-workday's browser commands read and save live weeks."""
 import argparse
 import json
 import sys
@@ -47,7 +47,7 @@ def main():
             plan = load(args.plan)
             verify_plan(plan)
             if args.execute:
-                raise Refusal('TRANSPORT_UNAVAILABLE', 'Draft execution is unavailable until a supported live transport, atomic revision guard and durable reconciliation are verified. No entries were saved.')
+                raise Refusal('TRANSPORT_UNAVAILABLE', 'This CLI does not contact Workday. Save an approved plan with setup-workday/scripts/workday_browser.py save --plan ... --approved-fingerprint .... No entries were saved.')
             result = {'status': 'preview-only', 'source': 'offline-plan', 'plan': plan, 'live_execution_available': False}
         print(json.dumps(result, sort_keys=True, indent=2))
         return 0

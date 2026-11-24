@@ -1,11 +1,11 @@
 ---
 attention: live
-status: reads-working
-implementation: browser-reader
+status: saves-built
+implementation: browser-read-and-save
 reviewed: 2026-11-23
 ---
 # Workday capabilities
-[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is authorized. The offline contract is implemented, and since 2026-11-23 a browser reader reads complete weeks from the user's signed-in Chrome; saving through Workday is not implemented. A separately authorized existing-browser probe and an isolated synthetic attachment check are recorded in the handoff; no Workday timesheet read or write has been established. No installation, authentication, registration or credential creation occurred.
+[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is authorized. The offline contract is implemented; since 2026-11-23 a browser reader reads complete weeks from the user's signed-in Chrome, and since 2026-11-24 a Quick Add save path under the user's chosen re-read safeguard is built and tested offline, with no live save yet. A separately authorized existing-browser probe and an isolated synthetic attachment check are recorded in the handoff; no Workday timesheet read or write has been established. No installation, authentication, registration or credential creation occurred.
 
 ## Implemented boundary
 The [use-workday CLI](../../use-workday/SKILL.md) validates supplied normalized weeks and previews exact allocations locally. Its draft-save engine is exercised only through an in-memory fake service. Live commands fail with a specific transport blocker. Setup owns [transport discovery and remaining gates](../../setup-workday/references/transport.md). Atomic service revision protection and settled recovery must be proved before connecting the write engine; browser preflight alone is insufficient. Submission remains future scope, not part of this implementation.
@@ -20,7 +20,9 @@ Proposed dispositions, for the user's decision:
 3. **Save-guarantee decision, before any write route.** Keep the revision precondition, which leaves writes blocked on every documented route, or explicitly redefine the guarantee for in/out blocks as the service's slot-conflict refusal plus authoritative readback and local single-writer locking. The second changes the current guard and would need live proof on real, separately authorized work.
 4. **Keep the spike active and transport-blocked** until one of these changes the evidence. Offline tests do not justify closing it.
 
-**User direction, 2026-11-23:** API or MCP access is unlikely to be granted soon, so the browser route is the practical path. The save-guarantee choice in option 3 is still open.
+**User direction, 2026-11-23:** API or MCP access is unlikely to be granted soon, so the browser route is the practical path.
+
+**User decision, 2026-11-23:** saves use the re-read safeguard rather than staying blocked. After the residual risk was explained (an edit to the same week in another tab at the moment of saving is detected by the readback afterwards, not prevented), the user chose: one writer at a time, a fresh full read before each block and a last check of the calendar, Workday's own refusal of overlapping times, and a full read after each save. The account file records the choice, and the engine accepts the weaker guard only with it.
 
 ## Goal and scope
 Give an agent a small set of predictable operations for reading a timesheet, previewing exact entries, saving drafts, and submitting an explicitly approved plan. The agent handles intent, missing information, approvals and exceptions; deterministic code handles the known form sequence, calculations and readback. Avoid making the model inspect a full page and choose another field after every input.
