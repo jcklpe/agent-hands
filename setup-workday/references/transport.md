@@ -40,6 +40,8 @@ The reader takes the week from the Enter My Time calendar, Review Time by Week a
 - Workday's time-zone text, such as "GMT-06:00 Central Time (Chicago)", is the zone's fixed label and appears even on daylight-time dates, so it is matched against the user-confirmed IANA zone and never parsed as an offset.
 - A "Time Period End" marker gives the ending period's start and end; a week without one lies inside a single period.
 - Review Time by Week drops its In, Out and Out Reason columns for an empty week.
+- Workday may round the time it counts: a block entered as 9:00 AM–11:10 AM is calculated as 9:00 AM–11:15 AM, 2.25 hours, and the review, details and totals all use the calculated figure. The reader keeps the entered times as the entry, checks that each calculated end lies within a quarter hour of the entered one and that every quantity and total matches the calculated interval, reports the rounding, and marks the week not saveable, because the v1 total must equal the entries' own minutes. Saves accept quarter-hour times only, which Workday has not been seen to round.
+- A week with no timesheet summary and nothing on it, as before employment, reads as status unknown and not saveable rather than failing.
 - Details repeat each label for screen readers, and a background tab can run adjacent texts together, so the reader takes text from individual elements and text nodes rather than rendered lines.
 - Block status comes from the label each calendar block shows, cross-checked against its appointment style: `saved` with Not Submitted, `submitted` with Submitted and `approved` with Approved, all seen live. Any other label reads as unknown, which `use-workday` treats as protected; "Pay date" markers are informational all-day items.
 

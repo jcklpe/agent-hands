@@ -99,7 +99,7 @@ class CreateDraftTests(unittest.TestCase):
             self.assertIn("Cancel", tab.clicked)
 
     def test_unsupported_entries_never_reach_workday(self):
-        for change in ({"time_type": "WCI Day of Injury"}, {"breaks": [{"start": "10:00", "end": "10:30"}]}, {"worktags": {"grant": "x"}}, {"date": "2026-11-02"}):
+        for change in ({"time_type": "Other Code"}, {"breaks": [{"start": "10:00", "end": "10:30"}]}, {"worktags": {"grant": "x"}}, {"date": "2026-11-02"}, {"end": "11:40"}):
             tab = ScriptedTab(self.calendar)
             with self.assertRaises(WB.NotDispatched):
                 session(tab).create_draft(TARGET, ENTRY | change, self.revision)

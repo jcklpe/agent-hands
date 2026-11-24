@@ -303,7 +303,7 @@ def build_snapshot(account, target, calendar, review, details):
     ids = review.get("ids") or []
     if len(ids) != len(rows) or any(by_key[(r["date"], r["start"], r["end"])]["id"] != i for r, i in zip(rows, ids)):
         refuse("VIEWS_DISAGREE", "A review row's block ID differs from the calendar's.")
-    entries, observed_types, classifications, payment, comments = [], set(), {}, {}, []
+    entries, observed_types, classifications, payment, comments, rounded, counted_daily = [], set(), {}, {}, [], [], {}
     for row, detail in zip(rows, details):
         block = by_key[(row["date"], row["start"], row["end"])]
         minutes = minutes_between(block["start"], block["end"])
@@ -316,18 +316,28 @@ def build_snapshot(account, target, calendar, review, details):
             refuse("UNSUPPORTED_ENTRY", "A block ends with a meal, break or other out reason, which the v1 contract cannot represent yet.")
         if row["Worktags"]:
             refuse("UNSUPPORTED_ENTRY", "A block carries worktags; their exact identifiers are not read yet.")
-        if row["Units"] != "Hours" or hours(row["Quantity"]) != minutes or hours(calculated["Calculated Quantity"]) != minutes:
-            refuse("TOTAL_MISMATCH", "A block's hours disagree with its in and out times.")
-        for field, expected in (("In", block["start"]), ("Out", block["end"]), ("Calculated Time In", block["start"]), ("Calculated Time Out", block["end"])):
-            if detail_time(reported.get(field) or calculated.get(field), account["timezone_label"]) != (block["date"], expected):
+        for field, expected in (("In", block["start"]), ("Out", block["end"])):
+            if detail_time(reported[field], account["timezone_label"]) != (block["date"], expected):
                 refuse("VIEWS_DISAGREE", "A block's details show different times from the calendar.")
+        # Workday may round the times it counts; its details give the calculated interval, which must sit within a quarter hour of the entered one and match every quantity shown.
+        (calc_day_in, calc_in), (calc_day_out, calc_out) = (detail_time(calculated[f], account["timezone_label"]) for f in ("Calculated Time In", "Calculated Time Out"))
+        if calc_day_in != block["date"] or calc_day_out != block["date"]:
+            refuse("VIEWS_DISAGREE", "A block's calculated time falls on another day.")
+        if abs(minutes_between(block["start"], calc_in)) >= 15 or abs(minutes_between(block["end"], calc_out)) >= 15:
+            refuse("VIEWS_DISAGREE", "A block's calculated times differ from its entered times by more than rounding.")
+        counted = minutes_between(calc_in, calc_out)
+        if row["Units"] != "Hours" or hours(row["Quantity"]) != counted or hours(calculated["Calculated Quantity"]) != counted:
+            refuse("TOTAL_MISMATCH", "A block's hours disagree with its calculated in and out times.")
+        if counted != minutes:
+            rounded.append({"date": block["date"].isoformat(), "entered": [block["start"], block["end"]], "calculated": [calc_in, calc_out], "calculated_minutes": counted})
+        counted_daily[block["date"].isoformat()] = counted_daily.get(block["date"].isoformat(), 0) + counted
         if block["style"] in STYLE_LABELS and STYLE_LABELS[block["style"]] != block["label"]:
             refuse("VIEWS_DISAGREE", "A block's status label disagrees with its calendar style.")
         status = STATUS_LABELS.get(block["label"], "unknown")
         entries.append({"id": block["id"], "status": status, "entry": {"date": block["date"].isoformat(), "start": block["start"], "end": block["end"], "breaks": [], "time_type": row["Type"], "worktags": {}}})
         observed_types.add(row["Type"])
         tag = calculated["Time Calculation Tag"]
-        classifications[tag] = classifications.get(tag, 0) + minutes
+        classifications[tag] = classifications.get(tag, 0) + counted
         payment[row["Status"]] = payment.get(row["Status"], 0) + 1
         if row["Comment"]:
             comments.append({"date": block["date"].isoformat(), "start": block["start"], "comment": row["Comment"]})
@@ -339,20 +349,26 @@ def build_snapshot(account, target, calendar, review, details):
     if len(shown) != 7:
         refuse("LAYOUT_CHANGED", "The calendar does not show hours for all seven days.")
     for index, text in enumerate(shown):
-        if hours(text, "Hours:") != daily.get((week + timedelta(days=index)).isoformat(), 0):
+        if hours(text, "Hours:") != counted_daily.get((week + timedelta(days=index)).isoformat(), 0):
             refuse("TOTAL_MISMATCH", "A day's hours on the calendar disagree with its blocks.")
-    total = sum(daily.values())
-    if summary_minutes(calendar.get("summary") or [], "Timesheet Total") != total:
+    total, workday_total = sum(daily.values()), sum(counted_daily.values())
+    # A week with no summary at all and nothing on it has no timesheet to read, as before employment; it reads as unknown so nothing can be saved into it.
+    timesheet = bool(calendar.get("summary"))
+    if timesheet and summary_minutes(calendar.get("summary") or [], "Timesheet Total") != workday_total:
         refuse("TOTAL_MISMATCH", "The timesheet total disagrees with the blocks, possibly because of time off or entries this reader cannot see.")
+    if not timesheet and (entries or any(hours(text, "Hours:") for text in shown)):
+        refuse("LAYOUT_CHANGED", "The calendar shows time but no timesheet summary.")
     types = sorted(observed_types | set(account.get("time_types", [])))
     if not types:
         refuse("UNKNOWN_TIME_TYPES", "No time type is visible this week; add the user-confirmed time-entry codes to the account file's time_types.")
     statuses = {r["status"] for r in entries}
-    week_status = "empty" if not entries else statuses.pop() if len(statuses) == 1 else "unknown"
+    week_status = "unknown" if not timesheet else "empty" if not entries else statuses.pop() if len(statuses) == 1 else "unknown"
+    # The v1 contract's total must equal its entries' minutes. Where Workday rounded, the cross-check above used Workday's own figures; the snapshot keeps the entered times and their total, and the week cannot be saved into.
+    saveable = account.get("save_safeguard") in SAVE_SAFEGUARDS and timesheet and not rounded
     snapshot = {
         "schema_version": 1, "target": target, "revision": calendar_revision(calendar), "status": week_status,
         "entries": entries, "allowed_time_types": types, "pay_periods": pay_periods(week, markers),
-        "service_total_minutes": total, "draft_save_supported": account.get("save_safeguard") in SAVE_SAFEGUARDS, "certification": "",
+        "service_total_minutes": total, "draft_save_supported": saveable, "certification": "",
     }
     result = read_timesheet(snapshot, target)
     observations = {
@@ -360,6 +376,7 @@ def build_snapshot(account, target, calendar, review, details):
         "summary": {item.get("label"): item.get("value") for item in calendar.get("summary") or []}, "all_day_items": holidays,
         "pay_period_markers": [[s.isoformat(), e.isoformat()] for s, e in markers], "comments": comments,
         "time_types": {"observed": sorted(observed_types), "from_account": sorted(account.get("time_types", []))},
+        "timesheet_shown": timesheet, "rounded_blocks": rounded, "workday_total_minutes": workday_total,
         "revision_note": "Fingerprint of the calendar as read; Workday offers no service revision through the browser.",
     }
     return snapshot, result, observations
@@ -572,6 +589,8 @@ def check_saveable(entry, week_start):
         refuse("UNSUPPORTED_ENTRY", "Saving a block with breaks is not supported; enter it as separate blocks.")
     if entry.get("worktags"):
         refuse("UNSUPPORTED_ENTRY", "Saving worktags is not supported.")
+    if any(int(value.split(":")[1]) % 15 for value in (entry["start"], entry["end"])):
+        refuse("UNSUPPORTED_ENTRY", "Saving supports quarter-hour times only; Workday rounds other times, so the saved block could not be verified exactly.")
     day = date.fromisoformat(entry["date"])
     if not 0 <= (day - week_start).days <= 6:
         refuse("WEEK_MISMATCH", "An entry falls outside the selected week.")

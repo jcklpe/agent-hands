@@ -169,6 +169,36 @@ class SnapshotTests(unittest.TestCase):
                 build(**changes)
             self.assertEqual(caught.exception.code, code, changes.keys())
 
+    def test_workday_rounding_is_checked_and_blocks_saving(self):
+        rounded = [("10-26", "9-0", "11-10", "Mon, 10/26", "09:00 AM", "11:10 AM", "2.25", "10/26/2026")]
+        cal = calendar(blocks=rounded, hours=("2.25", "0", "0", "0", "0", "0", "0"), total="2.25")
+        det = details(blocks=rounded)
+        det[0]["calculated"] = det[0]["calculated"].replace("11:10 AM", "11:15 AM")
+        snapshot, result, observations = build(account=ACCOUNT | {"save_safeguard": "reread"}, calendar=cal, review=review(blocks=rounded), details=det)
+        self.assertEqual(snapshot["entries"][0]["entry"]["end"], "11:10")
+        self.assertEqual((snapshot["service_total_minutes"], observations["workday_total_minutes"]), (130, 135))
+        self.assertEqual(observations["rounded_blocks"], [{"date": "2026-10-26", "entered": ["09:00", "11:10"], "calculated": ["09:00", "11:15"], "calculated_minutes": 135}])
+        self.assertFalse(snapshot["draft_save_supported"])
+        far = details(blocks=rounded)
+        far[0]["calculated"] = far[0]["calculated"].replace("11:10 AM", "11:30 AM")
+        with self.assertRaises(WB.Refusal) as caught:
+            build(calendar=cal, review=review(blocks=rounded), details=far)
+        self.assertEqual(caught.exception.code, "VIEWS_DISAGREE")
+        unrounded = details(blocks=rounded)
+        with self.assertRaises(WB.Refusal) as caught:
+            build(calendar=cal, review=review(blocks=rounded), details=unrounded)
+        self.assertEqual(caught.exception.code, "TOTAL_MISMATCH")
+
+    def test_a_week_without_a_timesheet_reads_as_unknown(self):
+        cal = calendar(blocks=[], hours=("0",) * 7, total="0")
+        cal["summary"] = []
+        snapshot, _, observations = build(account=ACCOUNT | {"time_types": ["Hours Worked"], "save_safeguard": "reread"}, calendar=cal, review=review(blocks=[]) | {"headers": []}, details=[])
+        self.assertEqual((snapshot["status"], snapshot["draft_save_supported"], observations["timesheet_shown"]), ("unknown", False, False))
+        cal["hours"][1] = "Hours: 3"
+        with self.assertRaises(WB.Refusal) as caught:
+            build(account=ACCOUNT | {"time_types": ["Hours Worked"]}, calendar=cal, review=review(blocks=[]) | {"headers": []}, details=[])
+        self.assertEqual(caught.exception.code, "TOTAL_MISMATCH")
+
     def test_entries_the_contract_cannot_hold_refuse(self):
         overnight = calendar()
         overnight["events"][2]["end"] = "10-28-1-0"
