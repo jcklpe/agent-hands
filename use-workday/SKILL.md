@@ -3,7 +3,7 @@ name: use-workday
 description: "Validate normalized prior/current Workday timesheet snapshots and preview exact weekly allocations offline. Draft-save safeguards are tested with a fake service; live reads and saves remain blocked pending a verified transport."
 ---
 # Use Workday
-Use [setup-workday](../setup-workday/SKILL.md) for transport status, dependencies and private storage. Run from the checkout root or use an absolute path to `scripts/workday`. Python 3.9+ and IANA timezone data are sufficient for offline reads/previews. Do not present this as a connected Workday CLI.
+Use [setup-workday](../setup-workday/SKILL.md) for transport status, dependencies and private storage. Run from the checkout root or use an absolute path to `scripts/workday`. Python 3.9+ and IANA timezone data are sufficient for offline reads/previews. Live weeks come from setup-workday's browser reader, which writes a snapshot this CLI validates; this CLI itself never contacts Workday, and saving to Workday is not implemented.
 
 ```sh
 python3 use-workday/scripts/workday --help

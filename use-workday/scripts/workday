@@ -38,7 +38,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'doctor' or (args.command == 'read-timesheet' and not args.snapshot):
-            raise Refusal('TRANSPORT_UNAVAILABLE', 'No verified Workday API or supported browser attachment is configured. Complete setup-workday transport discovery and an authorized read-only proof; offline snapshots are not live reads.')
+            raise Refusal('TRANSPORT_UNAVAILABLE', 'This CLI does not contact Workday. Read a live week with setup-workday/scripts/workday_browser.py read --target ... --out ..., then pass that snapshot here. Saving to Workday is not implemented.')
         if args.command == 'read-timesheet':
             result = read_timesheet(load(args.snapshot), load(args.target))
         elif args.command == 'preview':

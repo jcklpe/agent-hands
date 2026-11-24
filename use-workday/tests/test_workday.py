@@ -304,7 +304,7 @@ class WorkdayTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(result.stdout, '')
             self.assertIn('TRANSPORT_UNAVAILABLE', result.stderr)
-            self.assertIn('read-only proof', result.stderr)
+            self.assertIn('workday_browser.py read', result.stderr)
 
     def test_cli_preview_and_no_execute(self):
         cli = Path(__file__).resolve().parents[1] / 'scripts/workday'

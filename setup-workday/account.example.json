@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "origin": "https://workday.example.invalid",
+  "tenant": "exampletenant",
+  "worker": "000$000000",
+  "timezone": "America/Chicago",
+  "timezone_label": "GMT-06:00 Central Time (Chicago)",
+  "enter_time_path": "/exampletenant/d/task/0000$00000.htmld",
+  "time_types": ["Hours Worked"]
+}
