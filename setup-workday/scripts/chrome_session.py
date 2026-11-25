@@ -139,9 +139,8 @@ def chrome_executable():
 class Pipe:
     """A Chrome started with its own data directory and driven over --remote-debugging-pipe: NUL-terminated messages on descriptors 3 and 4."""
 
-    def __init__(self, data_dir, headless, url="about:blank", executable=None):
-        command = [executable or chrome_executable(), f"--user-data-dir={data_dir}", "--remote-debugging-pipe", "--no-first-run", "--no-default-browser-check", "--window-size=1400,1000"]
-        command += (["--headless=new"] if headless else []) + [url]
+    def __init__(self, data_dir, url="about:blank", executable=None):
+        command = [executable or chrome_executable(), f"--user-data-dir={data_dir}", "--remote-debugging-pipe", "--no-first-run", "--no-default-browser-check", "--window-size=1400,1000", url]
         child_in, self.out = os.pipe()
         self.into, child_out = os.pipe()
         # Python's own child-error pipe must not land on 3 or 4, so both are kept open here while Chrome starts; the copies passed on sit well above them.
@@ -209,9 +208,9 @@ class Chrome:
         self.ws, self.next_id = socket_, 1
 
     @classmethod
-    def launch(cls, data_dir, headless=True, url="about:blank", executable=None):
+    def launch(cls, data_dir, url="about:blank", executable=None):
         """Start Chrome with the tool's own data directory. A Chrome already using that directory makes the new one exit at once."""
-        browser = cls(Pipe(data_dir, headless, url, executable))
+        browser = cls(Pipe(data_dir, url, executable))
         try:
             browser.call("Browser.getVersion")
         except BrowserError:
@@ -260,6 +259,12 @@ class Chrome:
         target = self.call("Target.createTarget", {"url": url, "background": True, **profile})["targetId"]
         session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
         return Tab(self, target, session)
+
+    def minimize(self):
+        """Put every window away; pages keep working as background tabs do."""
+        for page in self.pages():
+            window = self.call("Browser.getWindowForTarget", {"targetId": page["targetId"]})["windowId"]
+            self.call("Browser.setWindowBounds", {"windowId": window, "bounds": {"windowState": "minimized"}})
 
     def close(self):
         self.ws.close()

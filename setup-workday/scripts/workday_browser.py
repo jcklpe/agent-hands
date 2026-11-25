@@ -45,7 +45,7 @@ REPORTED_LABELS = ["Reported Quantity", "Time Entry Code", "In", "Out", "Out Rea
 CALCULATED_LABELS = ["Calculated Date", "Calculated Time In", "Calculated Time Out", "Calculated Quantity", "Time Calculation Tag"]
 ACCOUNT_REQUIRED = {"schema_version", "origin", "tenant", "worker", "timezone", "timezone_label", "enter_time_path"}
 ACCOUNT_OPTIONAL = {"time_types", "save_safeguard", "browser"}
-# "everyday" connects to the user's running Chrome with an Allow click per connection; "own" starts a separate Chrome with a profile kept for Workday alone, which the user signs in to.
+# "everyday" connects to the user's running Chrome with an Allow click per connection; "own" starts a separate Chrome with a profile kept for Workday alone, in which the user signs in once per session.
 BROWSERS = {"everyday", "own"}
 SIGN_IN_MINUTES = 10
 SIGN_IN_POLL_S = 1
@@ -559,7 +559,7 @@ def open_calendar(tab, account):
 
 def sign_in_remedy(account):
     if account.get("browser") == "own":
-        return "Workday's own Chrome profile is signed out. Run workday_browser.py sign-in so the user can sign in there, then run again."
+        return "Workday has signed this session out. Run session stop, then session start, so the user can sign in again."
     return "Workday asked for sign-in. Sign in to Workday in that Chrome profile yourself, then run again."
 
 
@@ -590,58 +590,26 @@ def own_profile():
         os.close(fd)
 
 
-def sign_in_record():
-    try:
-        return json.loads((state_base() / "sign-in.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def note_sign_in(account, event):
-    """Keep when the own profile was signed in, last worked and was first found signed out, so how long a sign-in lasts is measured rather than guessed."""
-    if account.get("browser") != "own":
-        return
-    record, now = sign_in_record(), datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if event == "signed_in_at":
-        record = {"signed_in_at": now, "last_working_at": now, "previous": {k: v for k, v in record.items() if k != "previous"} or None}
-    elif event == "signed_out_at":
-        record.setdefault("signed_out_at", now)
-    else:
-        record[event] = now
-    with contextlib.suppress(OSError, Refusal):
-        write_private(state_base() / "sign-in.json", record)
-
-
-def sign_in(account, minutes=SIGN_IN_MINUTES, launch=None):
-    """Open the own profile in a visible Chrome at Workday, wait while the user signs in themself, and confirm the account. Until a Workday page has settled it looks only at tab addresses."""
-    if account.get("browser") != "own":
-        refuse("OWN_PROFILE_NOT_CHOSEN", "sign-in is for Workday's own Chrome profile; set \"browser\": \"own\" in the account file when the user chooses it.")
+def wait_for_sign_in(chrome, account, minutes):
+    """Wait while the user signs in themself in the window just opened, then confirm the account. Until a Workday page has settled it looks only at tab addresses."""
     signed_in = f"{account['origin']}/{account['tenant']}/d/"
-    with own_profile() as path:
-        try:
-            chrome = (launch or Chrome.launch)(path, headless=False, url=account["origin"] + account["enter_time_path"])
-        except BrowserError as error:
-            refuse("BROWSER_NOT_STARTED", f"{error}.")
-        try:
-            deadline, since, last = time.monotonic() + minutes * 60, None, None
-            while time.monotonic() < deadline:
-                urls = sorted(p.get("url") or "" for p in chrome.pages())
-                if not urls:
-                    refuse("SIGN_IN_CANCELLED", "The sign-in window was closed before Workday opened; nothing was changed.")
-                current = next((u for u in urls if u.startswith(signed_in)), None)
-                if current != last or current is None:
-                    since, last = time.monotonic(), current
-                elif time.monotonic() - since >= SIGN_IN_STEADY_S:
-                    if confirm_signed_in(chrome, account):
-                        note_sign_in(account, "signed_in_at")
-                        return {"status": "signed-in"}
-                    last = None
-                time.sleep(SIGN_IN_POLL_S)
-        except BrowserError:
-            refuse("SIGN_IN_CANCELLED", "Chrome closed before Workday opened; nothing was changed.")
-        finally:
-            chrome.close()
-    refuse("SIGN_IN_TIMED_OUT", f"Workday did not open within {minutes} minutes; run sign-in again when the user is ready.")
+    deadline, since, last = time.monotonic() + minutes * 60, None, None
+    try:
+        while time.monotonic() < deadline:
+            urls = sorted(p.get("url") or "" for p in chrome.pages())
+            if not urls:
+                refuse("SIGN_IN_CANCELLED", "The sign-in window was closed before Workday opened; nothing was changed.")
+            current = next((u for u in urls if u.startswith(signed_in)), None)
+            if current != last or current is None:
+                since, last = time.monotonic(), current
+            elif time.monotonic() - since >= SIGN_IN_STEADY_S:
+                if confirm_signed_in(chrome, account):
+                    return
+                last = None
+            time.sleep(SIGN_IN_POLL_S)
+    except BrowserError:
+        refuse("SIGN_IN_CANCELLED", "Chrome closed before Workday opened; nothing was changed.")
+    refuse("SIGN_IN_TIMED_OUT", f"Workday did not open within {minutes} minutes; start the session again when the user is ready to sign in.")
 
 
 def confirm_signed_in(chrome, account):
@@ -658,7 +626,7 @@ def confirm_signed_in(chrome, account):
         with contextlib.suppress(BrowserError):
             tab.close()
     if f"selectedItem_{account['worker']}" not in workers:
-        refuse("WORKER_MISMATCH", "Workday is signed in as a different worker; sign out there and sign in to the confirmed account.")
+        refuse("WORKER_MISMATCH", "Workday is signed in as a different worker; start the session again and sign in to the confirmed account.")
     return True
 
 
@@ -880,12 +848,12 @@ class Session:
     save_safeguard = "reread"
     supports_conditional_create = False
 
-    def __init__(self, account):
+    def __init__(self, account, sign_in_minutes=SIGN_IN_MINUTES, announce=lambda value: None):
         self.account, self.tab, self.profile = account, None, contextlib.ExitStack()
         own = account.get("browser") == "own"
         try:
             if own:
-                self.chrome = Chrome.launch(self.profile.enter_context(own_profile()))
+                self.chrome = Chrome.launch(self.profile.enter_context(own_profile()), account["origin"] + account["enter_time_path"])
             else:
                 self.chrome = Chrome.connect(CONNECT_S)
         except BrowserError as error:
@@ -894,7 +862,13 @@ class Session:
                 refuse("BROWSER_NOT_STARTED", f"{error}.")
             refuse("BROWSER_NOT_CONNECTED", f"{error}. Keep Chrome open with remote debugging on at chrome://inspect/#remote-debugging, run again and click Allow when Chrome asks.")
         try:
-            context = None if own else select_context(self.chrome.pages(), account)
+            context = None
+            if own:
+                announce({"status": "waiting-for-sign-in", "minutes": sign_in_minutes, "next_action": "Sign in to Workday in the Chrome window that opened."})
+                wait_for_sign_in(self.chrome, account, sign_in_minutes)
+                self.chrome.minimize()
+            else:
+                context = select_context(self.chrome.pages(), account)
             self.tab = self.chrome.open_tab("about:blank", context)
         except BrowserError as error:
             self.close()
@@ -922,13 +896,7 @@ class Session:
             self.tab.wait_for("() => !window.__agentHandsStale", timeout=STEP_S)
         except BrowserError:
             refuse("BROWSER_STEP_FAILED", "Enter My Time did not load.")
-        try:
-            open_calendar(self.tab, self.account)
-        except Refusal as error:
-            if error.code == "SIGN_IN_REQUIRED":
-                note_sign_in(self.account, "signed_out_at")
-            raise
-        note_sign_in(self.account, "last_working_at")
+        open_calendar(self.tab, self.account)
         go_to_week(self.tab, week)
 
     def read(self, binding):
@@ -1192,7 +1160,8 @@ def reconcile(account, target, session=None):
         return result
 
 
-SESSION_IDLE_MINUTES = 20
+# Signing in again costs the user more than another Allow click, so a session in the own profile waits longer.
+SESSION_IDLE_MINUTES = {"everyday": 20, "own": 60}
 SESSION_REPLY_SECONDS = 1800
 MAX_MESSAGE = 4_000_000
 
@@ -1282,7 +1251,8 @@ def through_session(request):
 def alive(session):
     try:
         session.chrome.call("Browser.getVersion", timeout=5)
-        return True
+        tab = getattr(session, "tab", None)
+        return tab is None or any(p["targetId"] == tab.target for p in session.chrome.pages())
     except BrowserError:
         return False
 
@@ -1308,7 +1278,7 @@ def announce_json(value):
     print(json.dumps(value), flush=True)
 
 
-def serve(account, account_file, idle_minutes=SESSION_IDLE_MINUTES, make_session=None, announce=announce_json):
+def serve(account, account_file, idle_minutes, make_session=None, announce=announce_json):
     """Hold one Chrome connection and answer the bounded commands over an owner-only Unix socket until idle, stopped or disconnected."""
     path = session_path()
     private_directory(path.parent)
@@ -1413,24 +1383,16 @@ def main(argv=None):
     send.add_argument("--plan", required=True)
     send.add_argument("--approved-fingerprint", required=True)
     send.add_argument("--account")
-    enter = sub.add_parser("sign-in", help="Open Workday's own Chrome profile for the user to sign in themself")
-    enter.add_argument("--minutes", type=int, default=SIGN_IN_MINUTES)
-    enter.add_argument("--account")
     hold = sub.add_parser("session", help="Hold one Chrome connection for several commands")
     hold.add_argument("action", choices=["start", "status", "stop"])
-    hold.add_argument("--idle-minutes", type=int, default=SESSION_IDLE_MINUTES)
+    hold.add_argument("--idle-minutes", type=int, help="End after this long without a command; 20 with the everyday Chrome and 60 with the own profile when omitted")
+    hold.add_argument("--sign-in-minutes", type=int, default=SIGN_IN_MINUTES, help="With the own profile, how long to wait for the user to sign in")
     hold.add_argument("--account")
     args = parser.parse_args(argv)
     try:
         account = load_account(account_path(args.account))
         if args.command == "check" and account.get("browser") == "own":
-            print(json.dumps({"status": "ok", "account": "valid", "browser": "own", "profile_exists": profile_path().is_dir(), "sign_in": sign_in_record()}, indent=2))
-            return 0
-        if args.command == "sign-in":
-            if not 1 <= args.minutes <= 60:
-                refuse("INVALID_INPUT", "--minutes must be between 1 and 60.")
-            print(json.dumps({"status": "waiting", "next_action": "Sign in to Workday in the Chrome window that opens."}), flush=True)
-            print(json.dumps(sign_in(account, args.minutes)))
+            print(json.dumps({"status": "ok", "account": "valid", "browser": "own", "profile_exists": profile_path().is_dir()}, indent=2))
             return 0
         if args.command == "check":
             try:
@@ -1443,9 +1405,10 @@ def main(argv=None):
         account_file = str(account_path(args.account).resolve())
         if args.command == "session":
             if args.action == "start":
-                if not 1 <= args.idle_minutes <= 240:
-                    refuse("INVALID_INPUT", "--idle-minutes must be between 1 and 240.")
-                return serve(account, account_file, args.idle_minutes)
+                idle = SESSION_IDLE_MINUTES[account.get("browser", "everyday")] if args.idle_minutes is None else args.idle_minutes
+                if not 1 <= idle <= 240 or not 1 <= args.sign_in_minutes <= 60:
+                    refuse("INVALID_INPUT", "--idle-minutes must be between 1 and 240, and --sign-in-minutes between 1 and 60.")
+                return serve(account, account_file, idle, make_session=lambda a: Session(a, args.sign_in_minutes, announce_json))
             reply = through_session({"command": args.action, "account": account_file})
             print(json.dumps(reply["result"] if reply and reply.get("ok") else {"status": "not-running"} if reply is None else reply, indent=2))
             return 0 if reply is None or reply.get("ok") else 2
@@ -1456,7 +1419,9 @@ def main(argv=None):
         else:
             request = {"command": args.command, "target": chosen_target(account, args)}
         reply = through_session(dict(request, account=account_file))
-        if reply is None:
+        if reply is None and account.get("browser") == "own":
+            refuse("SESSION_REQUIRED", "Workday's own Chrome profile stays signed in only while its Chrome is open. Run session start in the background, have the user sign in there, and run this again once it reports ready.")
+        elif reply is None:
             result, code = perform(account, request)
         elif not reply.get("ok"):
             refuse(reply.get("code", "SESSION_FAILED"), reply.get("remedy", "The running session could not complete the command."))

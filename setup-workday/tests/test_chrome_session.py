@@ -205,15 +205,19 @@ class PipeTests(unittest.TestCase):
         args = json.loads(Path(str(path) + ".args").read_text())
         self.assertIn("--user-data-dir=/private/example/profile", args)
         self.assertIn("--remote-debugging-pipe", args)
-        self.assertIn("--headless=new", args)
+        self.assertEqual(args[-1], "about:blank")
         self.assertFalse([a for a in args if "remote-debugging-port" in a or "no-sandbox" in a or "password-store" in a or "keychain" in a or "user-agent" in a])
 
-    def test_a_visible_chrome_opens_the_given_page(self):
-        path = self.program()
-        CS.Chrome.launch("/private/example/profile", headless=False, url="https://example.invalid/", executable=str(path)).close()
-        args = json.loads(Path(str(path) + ".args").read_text())
-        self.assertEqual(args[-1], "https://example.invalid/")
-        self.assertNotIn("--headless=new", args)
+    def test_windows_are_minimized_by_their_targets(self):
+        sent = []
+
+        class Recorder(CS.Chrome):
+            def call(self, method, params=None, session=None, timeout=30):
+                sent.append((method, params))
+                return {"Target.getTargets": {"targetInfos": [{"type": "page", "targetId": "T"}, {"type": "browser_ui", "targetId": "U"}]}, "Browser.getWindowForTarget": {"windowId": 7}}.get(method, {})
+
+        Recorder(None).minimize()
+        self.assertEqual(sent[1:], [("Browser.getWindowForTarget", {"targetId": "T"}), ("Browser.setWindowBounds", {"windowId": 7, "bounds": {"windowState": "minimized"}})])
 
     def test_a_profile_already_in_use_and_a_missing_program_are_reported(self):
         with self.assertRaisesRegex(CS.BrowserError, "another Chrome"):
