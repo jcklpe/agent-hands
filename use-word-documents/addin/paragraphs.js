@@ -2,14 +2,18 @@
 globalThis.AgentHandsParagraphs = (() => {
   const fail = code => { throw Object.assign(new Error(code), {code}); };
   function validate(spec) {
-    if (!spec || Object.keys(spec).some(k=>!['paragraphs','links','append','resolveComments'].includes(k)) || !Array.isArray(spec.paragraphs) || spec.paragraphs.length>500 || !Array.isArray(spec.links) || spec.links.length>100 || !Array.isArray(spec.append) || spec.append.length>80) fail('invalid_paragraph_spec');
+    if (!spec || Object.keys(spec).some(k=>!['paragraphs','links','append','resolveComments','acceptInsertions','replaceBody'].includes(k)) || !Array.isArray(spec.paragraphs) || spec.paragraphs.length>500 || !Array.isArray(spec.links) || spec.links.length>100 || !Array.isArray(spec.append) || spec.append.length>80) fail('invalid_paragraph_spec');
     if(spec.resolveComments!==undefined && (!Array.isArray(spec.resolveComments)||spec.resolveComments.length>30||new Set(spec.resolveComments.map(c=>c.id)).size!==spec.resolveComments.length||spec.resolveComments.some(c=>!c||Object.keys(c).some(k=>!['id','content','authorName'].includes(k))||['id','content','authorName'].some(k=>typeof c[k]!=='string'||!c[k]||c[k].length>12000))))fail('invalid_comment_resolution');
+    if(spec.acceptInsertions!==undefined && (!Array.isArray(spec.acceptInsertions)||!spec.acceptInsertions.length||spec.acceptInsertions.length>20||spec.acceptInsertions.some(x=>!x||Object.keys(x).some(k=>!['id','author','date','text'].includes(k))||['id','author','date','text'].some(k=>typeof x[k]!=='string')||!x.id||!x.author||!Number.isFinite(Date.parse(x.date))||x.text.length>12000)||new Set(spec.acceptInsertions.map(x=>x.id)).size!==spec.acceptInsertions.length))fail('invalid_insertion_acceptance');
+    if(spec.replaceBody!==undefined && (!Array.isArray(spec.replaceBody)||!spec.replaceBody.length||spec.replaceBody.length>80||spec.replaceBody.some(x=>!x||Object.keys(x).some(k=>!['text','format'].includes(k))||typeof x.text!=='string'||!x.text||x.text.length>12000||/[\x00-\x1f]/.test(x.text))))fail('invalid_body_replacement');
+    if((spec.acceptInsertions||spec.replaceBody)&&(spec.paragraphs.length||spec.links.length||spec.append.length||spec.resolveComments?.length||(spec.acceptInsertions&&spec.replaceBody)))fail('mixed_structural_edit');
     const seen=new Set();
     const style=x=>{
       if (!x || Object.keys(x).some(k=>!['style','size','bold','spaceBefore','spaceAfter','keepWithNext','pageBreakBefore'].includes(k)) || !['Normal','Title','Subtitle','Heading1','Heading2','Heading3','Caption'].includes(x.style)) fail('invalid_paragraph_style');
       for(const k of ['size','spaceBefore','spaceAfter']) if(x[k]!==undefined&&(!Number.isFinite(x[k])||x[k]<0||x[k]>36))fail('invalid_paragraph_style');
       for(const k of ['bold','keepWithNext','pageBreakBefore'])if(x[k]!==undefined&&typeof x[k]!=='boolean')fail('invalid_paragraph_style');
     };
+    for(const x of spec.replaceBody||[])style(x.format);
     for(const p of spec.paragraphs) {
       if(!p || Object.keys(p).some(k=>!['index','before','after','format'].includes(k)) || !Number.isInteger(p.index)||p.index<0||p.index>10000||seen.has(p.index)||typeof p.before!=='string'||(p.after!==undefined&&(typeof p.after!=='string'||p.after.length>12000||/[\x00-\x08\x0b-\x1f]/.test(p.after))))fail('invalid_paragraph_edit');
       seen.add(p.index);if(p.format)style(p.format);
@@ -27,6 +31,12 @@ globalThis.AgentHandsParagraphs = (() => {
       const before=paragraphs.items.map(p=>p.text);
       if(context.document.changeTrackingMode!=='Off')fail('tracking_enabled');
       if(JSON.stringify(before.map(normalize))!==JSON.stringify(job.before.map(normalize)))fail('stale_preview');
+      const accepted=[];
+      if(spec.acceptInsertions?.length){
+        const changes=context.document.body.getTrackedChanges();changes.load('items/author,items/date,items/text,items/type');await context.sync();
+        for(const wanted of spec.acceptInsertions){const matches=changes.items.filter(c=>c.type==='Added'&&c.author===wanted.author&&new Date(c.date).getTime()===Date.parse(wanted.date)&&normalize(c.text)===normalize(wanted.text));if(matches.length!==1)fail('stale_insertion');accepted.push(matches[0]);}
+      }
+      if(spec.replaceBody){const comments=context.document.body.getComments(),changes=context.document.body.getTrackedChanges();comments.load('items/id');changes.load('items/type');await context.sync();if(comments.items.length||changes.items.length)fail('reviewed_body_replacement_refused');}
       const resolved=[];
       if(spec.resolveComments?.length){
         const comments=context.document.body.getComments();comments.load('items/id,items/content,items/authorName,items/resolved');await context.sync();
@@ -84,6 +94,12 @@ globalThis.AgentHandsParagraphs = (() => {
       if(job.action!=='paragraphs-apply')fail('unsupported_operation');
       const format=(p,f)=>{if(!f)return;p.styleBuiltIn=f.style;p.font.name='Aptos';p.font.size=f.size??11;p.font.color='#000000';p.font.bold=f.bold??false;p.font.italic=false;for(const k of ['spaceBefore','spaceAfter','keepWithNext','pageBreakBefore'])if(f[k]!==undefined)p[k]=f[k];};
       dispatched=true;
+      if(spec.replaceBody){
+        const esc=t=>t.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const html=spec.replaceBody.map(x=>{const f=x.format,tag={Title:'h1',Heading1:'h2',Heading2:'h3'}[f.style]||'p';return `<${tag} style="font-family:Aptos;font-size:${f.size??11}pt;color:#000000;font-weight:${f.bold?'bold':'normal'};margin-top:${f.spaceBefore??0}pt;margin-bottom:${f.spaceAfter??6}pt">${esc(x.text)}</${tag}>`;}).join('');
+        context.document.body.insertHtml(html,'Replace');
+      }
+      for(const c of accepted)c.accept();
       for(const r of replacements)r.range.insertText(r.text,'Replace');
       for(const x of targets)format(x.p,x.format);
       for(const l of links)l.range.hyperlink=l.address;

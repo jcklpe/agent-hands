@@ -6,7 +6,11 @@ import {commentEvidence,sameReviewEvidence} from './tail-core.mjs';
 import '../addin/paragraphs.js';
 export const validateParagraphs=globalThis.AgentHandsParagraphs.validate;
 export const normalized=x=>x.replace(/[\r\f\u0005]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ');
+export function insertionText(node){if(typeof node==='string')return node;if(Array.isArray(node))return node.map(insertionText).join('');if(!node||typeof node!=='object')return '';return Object.entries(node).filter(([k])=>!k.startsWith('@_')).map(([k,v])=>k==='t'||k==='#text'?insertionText(v):typeof v==='object'?insertionText(v):'').join('');}
 export function validateResolutionTargets(snapshot,spec){
+  if(spec.replaceBody&&(snapshot.unsafeBody||snapshot.anchors.length||snapshot.review.comments||snapshot.review.insertions.length||Object.keys(snapshot.media).length))fail('unsupported_body_replacement','Reviewed or embedded body content cannot be replaced.');
+  for(const t of spec.acceptInsertions||[]){const matches=snapshot.review.insertions.filter(x=>x['@_id']===t.id&&x['@_author']===t.author&&Date.parse(x['@_date'])===Date.parse(t.date)&&normalized(insertionText(x))===normalized(t.text));if(matches.length!==1)fail('stale_insertion','Saved insertion differs.');}
+
   const raw=snapshot.review?.comments?.comments?.comment,comments=Array.isArray(raw)?raw:raw?[raw]:[];
   const text=node=>typeof node==='string'?node:Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?Object.entries(node).filter(([k])=>!k.startsWith('@_')).map(([k,v])=>(k==='t'||k==='#text')?text(v):typeof v==='object'?text(v):'').join(''):'';
   for(const target of spec.resolveComments||[]){const matches=comments.filter(c=>c['@_id']===target.id&&c['@_author']===target.authorName&&normalized(text(c)).trim()===normalized(target.content).trim());if(matches.length!==1||snapshot.commentStates[target.id])fail('stale_comment','The saved comment differs or is already resolved.');}
@@ -29,24 +33,27 @@ export function paragraphSnapshot(bytes) {
     const states=entries['word/commentsExtended.xml']?(parse('word/commentsExtended.xml').find(x=>x.commentsEx)?.commentsEx||[]):[];
     for(const n of comments.filter(n=>n.comment)){const ps=n.comment.filter(x=>x.p),pid=ps.at(-1)?.[':@']?.['@_paraId'];const state=states.find(x=>x.commentEx&&x[':@']?.['@_paraId']===pid);commentStates[n[':@']['@_id']]=['1','true'].includes(state?.[':@']?.['@_done']);}
   }
-  return {all,direct,anchors,links:links.map(l=>({text:l.text,address:rels[l.id]?.['@_Target']})),media,review:commentEvidence(bytes),commentStates};
+  const unsafeBody=/<(?:\w+:)?(?:sdt|object|drawing|fldChar|fldSimple|del|moveFrom|moveTo)\b/.test(strFromU8(entries['word/document.xml']));
+  return {unsafeBody,all,direct,anchors,links:links.map(l=>({text:l.text,address:rels[l.id]?.['@_Target']})),media,review:commentEvidence(bytes),commentStates};
 }
 export function paragraphMode(snapshot,live) {
   for(const mode of ['direct','all'])if(JSON.stringify(snapshot[mode])===JSON.stringify(live.map(normalized)))return mode;
   fail('cloud_baseline_mismatch','Word and the downloaded document have different paragraph sequences.');
 }
 export function verifyParagraphs(before,after,spec,mode) {
-  const expected=[...before[mode]];
+  let expected=[...before[mode]];
   for(const x of spec.paragraphs)if(x.after!==undefined)expected[x.index]=normalized(x.after);
   expected.push(...spec.append.map(x=>normalized(x.text)));
+  if(spec.replaceBody)expected=spec.replaceBody.map(x=>normalized(x.text));
+  const expectedReview=structuredClone(before.review);expectedReview.insertions=expectedReview.insertions.filter(x=>!(spec.acceptInsertions||[]).some(t=>t.id===x['@_id']));
   const issues=[];
-  if(JSON.stringify(expected)!==JSON.stringify(after[mode]))issues.push('paragraph text differs');
-  if(!sameReviewEvidence(before.review,after.review))issues.push('comment or tracked insertion changed');
+  if(JSON.stringify(spec.replaceBody?expected.filter(x=>x.trim()):expected)!==JSON.stringify(spec.replaceBody?after[mode].filter(x=>x.trim()):after[mode]))issues.push('paragraph text differs');
+  if(!sameReviewEvidence(expectedReview,after.review))issues.push('comment or tracked insertion changed');
   const expectedComments={...before.commentStates};for(const c of spec.resolveComments||[])expectedComments[c.id]=true;
   if(JSON.stringify(expectedComments)!==JSON.stringify(after.commentStates||{}))issues.push('comment resolution differs');
   if(JSON.stringify(before.anchors)!==JSON.stringify(after.anchors))issues.push('comment anchors changed');
   if(JSON.stringify(before.media)!==JSON.stringify(after.media))issues.push('embedded media changed');
-  const links=before.links.map(l=>({...l,address:spec.links.find(x=>x.before===l.address)?.after??l.address}));
+  const links=(spec.replaceBody?[]:before.links).map(l=>({...l,address:spec.links.find(x=>x.before===l.address)?.after??l.address}));
   if(JSON.stringify(links)!==JSON.stringify(after.links))issues.push('hyperlink text or destination differs');
-  return {status:issues.length?'saved_paragraphs_unverified':'saved_paragraphs_verified',issues,commentsPreserved:sameReviewEvidence(before.review,after.review),resolvedComments:issues.length?undefined:(spec.resolveComments||[]).length,visualAcceptanceRequired:true,replayAllowed:false};
+  return {status:issues.length?'saved_paragraphs_unverified':'saved_paragraphs_verified',issues,commentsPreserved:sameReviewEvidence(expectedReview,after.review),resolvedComments:issues.length?undefined:(spec.resolveComments||[]).length,visualAcceptanceRequired:true,replayAllowed:false};
 }

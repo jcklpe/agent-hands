@@ -38,7 +38,7 @@ try {
     const ready=await bridge.command('paragraphs-inspect',{before:read.paragraphs,spec});if(ready.status!=='paragraphs_ready')fail('edit_refused',ready.code||'Paragraph changes are unsupported.');
     if(command==='preview') {
       plan={...makePlan(target,{}),kind:'word-paragraphs-v1',spec,before:read.paragraphs,savedBefore:baseline,mode};const {hash:unused,...content}=plan;plan.hash=hash(content);writeJSON(operationFiles(account,plan.id).plan,plan,true);
-      emit({status:'preview',operation:plan.id,hash:plan.hash,name:target.name,edits:spec.paragraphs.filter(x=>x.after!==undefined),formatCount:spec.paragraphs.filter(x=>x.format).length,links:spec.links,append:spec.append,resolveComments:spec.resolveComments||[],limitation:'Same-paragraph edits can race the final check. Saved verification and visual acceptance remain required.'});
+      emit({status:'preview',operation:plan.id,hash:plan.hash,name:target.name,edits:spec.paragraphs.filter(x=>x.after!==undefined),formatCount:spec.paragraphs.filter(x=>x.format).length,links:spec.links,append:spec.append,resolveComments:spec.resolveComments||[],acceptInsertions:spec.acceptInsertions||[],replaceBody:spec.replaceBody,limitation:'Same-paragraph edits can race the final check. Saved verification and visual acceptance remain required.'});
     } else {
       if(hash(baseline)!==hash(plan.savedBefore)||JSON.stringify(read.paragraphs)!==JSON.stringify(plan.before))fail('stale_preview','Document changed after preview.');
       await browserIdentity(browser.context,target,profile);journal=files.journal;
