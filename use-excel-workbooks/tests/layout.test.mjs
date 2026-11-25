@@ -20,3 +20,19 @@ test('accepted wording can explicitly clear inherited strikethrough',()=>{
   assert.equal(validateLayout(accepted).ranges[0].font.strikethrough,false);
   for(const value of ['false',null,0])assert.throws(()=>validateLayout({...accepted,ranges:[{...accepted.ranges[0],font:{strikethrough:value}}]}));
 });
+
+test('table removals require bounded unique targets and separate row/column operations',()=>{
+ const t={name:'Data',style:'TableStyleLight1',bandedRows:true,removeColumns:['Unused']};
+ assert.equal(validateLayout({...spec,tables:[t]}).tables[0].removeColumns[0],'Unused');
+ for(const bad of [{...t,removeColumns:['Unused','Unused']},{...t,removeRows:[1]},{...t,removeColumns:undefined,removeRows:[-1]}])assert.throws(()=>validateLayout({...spec,tables:[bad]}));
+});
+
+test('refuses a table column deletion that would shift neighboring content',async()=>{
+ let saved=0;const tableRange={values:[['ID','Unused'],['R1','drop']],formulas:[['ID','Unused'],['R1','drop']],cellCount:4,rowIndex:0,columnIndex:0,rowCount:2,columnCount:2,load(){}};
+ const used={values:[['ID','Unused','Neighbor'],['R1','drop','']],formulas:[['ID','Unused','Neighbor'],['R1','drop','']],cellCount:6,rowIndex:0,columnIndex:0,load(){}};
+ const table={name:'Data',style:'TableStyleLight1',showBandedRows:true,getRange:()=>tableRange,worksheet:{getUsedRange:()=>used},load(){}};
+ const context={workbook:{worksheets:{items:[],load(){}},tables:{getItem:()=>table},save(){saved++;}},async sync(){}};
+ const adapter=createLayoutAdapter({run:fn=>fn(context)},{context:{requirements:{isSetSupported:()=>true},document:{mode:'readWrite'}}},async()=>{});
+ const result=await adapter('layout-read',{spec:{sheets:[],ranges:[],cells:[],tables:[{name:'Data',style:'TableStyleLight1',bandedRows:true,removeColumns:['Unused']}]}});
+ assert.equal(result.status,'refused_before_mutation');assert.equal(result.code,'adjacent_cells_would_shift');assert.equal(saved,0);
+});

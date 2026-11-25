@@ -21,7 +21,12 @@ export function validateLayout(spec) {
     if (x.verticalAlignment !== undefined && !['Top','Center','Bottom'].includes(x.verticalAlignment)) fail('invalid_alignment');
     if (x.horizontalAlignment !== undefined && !['Left','Center','Right'].includes(x.horizontalAlignment)) fail('invalid_alignment');
   }
-  for (const x of spec.tables) if (!keys(x,['name','style','bandedRows']) || !/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(x.name) || !/^TableStyle(Light|Medium)[1-9][0-9]?$/.test(x.style) || typeof x.bandedRows !== 'boolean') fail('invalid_table_layout');
+  for (const x of spec.tables) {
+    if (!keys(x,['name','style','bandedRows','removeColumns','removeRows']) || !/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(x.name) || !/^TableStyle(Light|Medium)[1-9][0-9]?$/.test(x.style) || typeof x.bandedRows !== 'boolean') fail('invalid_table_layout');
+    if(x.removeColumns!==undefined && (!Array.isArray(x.removeColumns)||x.removeColumns.length>10||new Set(x.removeColumns).size!==x.removeColumns.length||x.removeColumns.some(c=>typeof c!=='string'||!c||c.length>255)))fail('invalid_column_removal');
+    if(x.removeRows!==undefined && (!Array.isArray(x.removeRows)||x.removeRows.length>100||new Set(x.removeRows).size!==x.removeRows.length||x.removeRows.some(i=>!Number.isInteger(i)||i<0||i>10000)))fail('invalid_row_removal');
+    if(x.removeColumns?.length&&x.removeRows?.length)fail('mixed_table_removal');
+  }
   for (const x of spec.cells) if (!keys(x,['sheet','cell','before','after']) || !name(x.sheet) || !address(x.cell) || x.cell.includes(':') || typeof x.before !== 'string' || typeof x.after !== 'string' || x.after.length > 32767 || /^[=+@]/.test(x.after)) fail('invalid_text_cell');
   return spec;
 }
@@ -32,6 +37,7 @@ export function createLayoutAdapter(Excel,Office,guard) {
       const spec = validateLayout(request.spec);
       await guard();
       if (!Office.context.requirements.isSetSupported('ExcelApi','1.9')) fail('excel_api_1_9_required');
+      if(spec.tables.some(t=>t.removeRows?.length)&&!Office.context.requirements.isSetSupported('ExcelApiOnline','1.1'))fail('excel_online_row_api_required');
       if (!['layout-read','layout-apply'].includes(action)) fail('unsupported_operation');
       if (action === 'layout-apply' && Office.context.document.mode !== 'readWrite') fail('read_only');
       return await Excel.run(async context => {
@@ -39,12 +45,23 @@ export function createLayoutAdapter(Excel,Office,guard) {
         const ranges = spec.ranges.map(x => { const r = all.getItem(x.sheet).getRange(x.range); r.load('values,formulas,cellCount'); return r; });
         const cells = spec.cells.map(x => { const r = all.getItem(x.sheet).getRange(x.cell); r.load('values,formulas'); return r; });
         const tables = spec.tables.map(x => { const t = context.workbook.tables.getItem(x.name); t.load('name,style,showBandedRows'); return t; });
+        const tableRanges=spec.tables.map((x,i)=>{if(!x.removeColumns?.length&&!x.removeRows?.length)return null;const r=tables[i].getRange();r.load('values,formulas,cellCount,rowIndex,columnIndex,rowCount,columnCount');return r;});
+        const usedRanges=tableRanges.map((r,i)=>{if(!r)return null;const u=tables[i].worksheet.getUsedRange();u.load('values,formulas,rowIndex,columnIndex,cellCount');return u;});
         await context.sync();
+        for(let i=0;i<tableRanges.length;i++)if(tableRanges[i]){const r=tableRanges[i],x=spec.tables[i];if(r.cellCount>20000)fail('table_too_large');if(x.removeColumns?.some(c=>!r.values[0].includes(c))||x.removeColumns?.length>=r.values[0].length||(x.removeRows?.length>=r.values.length-1)||x.removeRows?.some(n=>n>=r.values.length-1))fail('missing_table_member');}
+        for(let i=0;i<tableRanges.length;i++)if(tableRanges[i]){
+          const r=tableRanges[i],u=usedRanges[i],x=spec.tables[i];if(u.cellCount>100000)fail('sheet_too_large');
+          for(let row=0;row<u.values.length;row++)for(let col=0;col<u.values[row].length;col++){
+            const ri=u.rowIndex+row,ci=u.columnIndex+col,occupied=u.values[row][col]!==''||String(u.formulas[row][col]).startsWith('=');
+            if(occupied&&((x.removeColumns?.length&&ri>=r.rowIndex&&ri<r.rowIndex+r.rowCount&&ci>=r.columnIndex+r.columnCount)||(x.removeRows?.length&&ci>=r.columnIndex&&ci<r.columnIndex+r.columnCount&&ri>=r.rowIndex+r.rowCount)))fail('adjacent_cells_would_shift');
+          }
+        }
         if (ranges.reduce((n,r) => n+r.cellCount,0) > 100000) fail('layout_too_large');
         for (const x of spec.sheets) if (!all.items.some(s => s.name === x.sheet) || (x.position !== undefined && x.position >= all.items.length)) fail('missing_sheet');
         for (let i=0;i<cells.length;i++) if (cells[i].values[0][0] !== spec.cells[i].before || String(cells[i].formulas[0][0]).startsWith('=')) fail('stale_or_formula_cell');
         const digests=await Promise.all(ranges.map(async r=>{const bytes=new TextEncoder().encode(JSON.stringify({values:r.values,formulas:r.formulas}));const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}));
         const snapshot = {sheets:all.items.map(s => ({name:s.name,position:s.position,tabColor:s.tabColor})),ranges:digests,cells:cells.map(r=>r.values),tables:tables.map(t=>({name:t.name,style:t.style,bandedRows:t.showBandedRows}))};
+        snapshot.tableContents=tableRanges.map(r=>r?{values:r.values,formulas:r.formulas}:null);
         if (action === 'layout-read') return {status:'layout_ready',snapshot};
         if (JSON.stringify(snapshot) !== JSON.stringify(request.expected)) fail('stale_preview');
         await guard(); dispatched=true;
@@ -64,6 +81,11 @@ export function createLayoutAdapter(Excel,Office,guard) {
         }
         for (let i=0;i<tables.length;i++) { tables[i].style=spec.tables[i].style; tables[i].showBandedRows=spec.tables[i].bandedRows; }
         for (let i=0;i<cells.length;i++) cells[i].values=[[spec.cells[i].after]];
+        for(let i=0;i<tables.length;i++){
+          const x=spec.tables[i];
+          for(const col of x.removeColumns||[])tables[i].columns.getItem(col).delete();
+          for(const index of [...(x.removeRows||[])].sort((a,b)=>b-a))tables[i].rows.deleteRowsAt(index,1);
+        }
         await context.sync(); context.workbook.save(Excel.SaveBehavior.save); await context.sync();
         return {status:'layout_save_returned',savedFileVerified:false};
       });

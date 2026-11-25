@@ -58,7 +58,39 @@ def snapshot(file):
 
 
 def verify(before, after, spec):
+    before = copy.deepcopy(before)
     issues = []
+    def coordinates(address):
+        m = re.fullmatch(r'([A-Z]+)([0-9]+)', address)
+        col = 0
+        for letter in m[1]: col = col * 26 + ord(letter) - 64
+        return col, int(m[2])
+    def address(col, row):
+        letters = ''
+        while col:
+            col, rem = divmod(col - 1, 26); letters = chr(65 + rem) + letters
+        return letters + str(row)
+    for change in spec['tables']:
+        if not change.get('removeColumns') and not change.get('removeRows'): continue
+        matches = [(s, s['tables'][change['name']]) for s in before['sheets'].values() if change['name'] in s['tables']]
+        if len(matches) != 1:
+            issues.append('missing structural target'); continue
+        sheet, table = matches[0]
+        c1, r1 = coordinates(table['ref'].split(':')[0]); c2, r2 = coordinates(table['ref'].split(':')[1])
+        columns = table['columns'][3]
+        removed_cols = {c1 + i for i, c in enumerate(columns) if c[1].get('name') in change.get('removeColumns', [])}
+        removed_rows = {r1 + 1 + i for i in change.get('removeRows', [])}
+        moved = {}
+        for cell, value in list(sheet['cells'].items()):
+            c, r = coordinates(cell)
+            if c1 <= c <= c2 and r1 <= r <= r2:
+                del sheet['cells'][cell]
+                if c not in removed_cols and r not in removed_rows:
+                    moved[address(c - sum(x < c for x in removed_cols), r - sum(x < r for x in removed_rows))] = value
+        sheet['cells'].update(moved)
+        table['ref'] = address(c1, r1) + ':' + address(c2 - len(removed_cols), r2 - len(removed_rows))
+        table['columns'][3] = [c for i, c in enumerate(columns) if c1 + i not in removed_cols]
+        table['columns'][1]['count'] = str(len(table['columns'][3]))
     edits = {(x['sheet'], x['cell']): x for x in spec['cells']}
     if set(before['sheets']) != set(after['sheets']): issues.append('sheet identities changed')
     if before['comments'] != after['comments']: issues.append('comment parts changed; inspect independently')
