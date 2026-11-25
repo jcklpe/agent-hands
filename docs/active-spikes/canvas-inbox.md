@@ -1,8 +1,21 @@
 ---
-status: captured
+attention: live
+status: implemented-offline
+reviewed: 2026-11-25
 ---
 # Canvas Inbox CLI coverage
-Captured 2026-11-02 at the user's request as a future scoped spike. This records the extension to pursue; it does not authorize implementation, credential changes or live messaging tests.
+[Tasks](canvas-inbox.todo.md). Slug: `canvas-inbox`. Captured 2026-11-02 at the user's request and promoted on 2026-11-25 when they asked to start it. The request covers implementation; live reads and any reply still need their own exact account, conversation and message.
+
+## What is built
+`inbox`, `conversation` and `reply-conversation` are documented in [the Inbox guide](../../use-canvas/references/inbox.md). Choices made while building:
+
+- **Reading asks Canvas not to mark messages read.** The read endpoint marks a conversation read by default; every read sends `auto_mark_as_read=false`.
+- **Recipients are always named.** Canvas defaults an omitted list to everyone, so the tool sends the exact people previewed, all of whom must already be in the conversation.
+- **The tool supplies what Canvas lacks.** Sending has no duplicate protection. The same text is refused when this account already posted it after the latest message from anyone else, a changed conversation invalidates the review, and an unknown outcome blocks another reply there until it is recorded.
+- **A sent message counts only when it is read back** in the conversation with the same author, text and, when Canvas reports it, the same audience. Canvas may queue a large conversation's message, so the readback looks a few times.
+- **History holds no content:** only IDs, counts, coverage and outcomes.
+
+The API contract was checked on 2026-11-25 against the [Conversations reference](https://developerdocs.instructure.com/services/canvas/resources/conversations) and the public controller source. What the institution's instance does is unverified until a live check.
 
 ## Motivation and current gap
 The current [Canvas capability](../../use-canvas/SKILL.md) and its CLI help cover course retrieval and bounded course-content and learner writes, but no Inbox conversation listing, reading or reply command exists. The [write guide](../../use-canvas/references/writes.md) explicitly excludes messaging. Keep the accepted [Canvas access work](../archive/canvas-access.md) as predecessor history; this is a separate Inbox extension rather than reopening that completed work or changing course-export coverage implicitly.
@@ -23,6 +36,6 @@ Reuse [setup-canvas](../../setup-canvas/SKILL.md) and its origin-bound transport
 
 Default operation history should retain only the identifiers, timestamps, coverage and outcome metadata needed for recovery, with no message bodies, tokens, private contact payloads or access-bearing links. Any explicit content export needs a private destination. Preview output must not expose credentials; transport errors and logs need tested token redaction, and the token must stay out of command arguments and URLs.
 
-When implementation is requested, verify the current official Canvas Conversations API contract before selecting command names and endpoint behavior. Use synthetic fixtures for pagination, identity and audience mismatch, intervening messages, duplicate bodies, sanitization, unread effects, permission errors and uncertain-write recovery. Live read and send checks require their own exact authorized account, conversation and message, with Canvas readback as evidence; fixtures alone do not prove institutional access or notification delivery.
+Use synthetic fixtures for pagination, identity and audience mismatch, intervening messages, duplicate bodies, sanitization, unread effects, permission errors and uncertain-write recovery. Live read and send checks require their own exact authorized account, conversation and message, with Canvas readback as evidence; fixtures alone do not prove institutional access or notification delivery.
 
-New conversations, adding/removing participants, attachments, bulk sends, conversation deletion/archiving, standing automation, notification delivery guarantees, browser/session scraping and a generic API escape hatch are outside this initial extension. Promote this note into the project's paired active spike only when scoped work starts, preserving this context rather than leaving a competing scratch copy.
+New conversations, adding/removing participants, attachments, bulk sends, conversation deletion/archiving, standing automation, notification delivery guarantees, browser/session scraping and a generic API escape hatch are outside this initial extension.

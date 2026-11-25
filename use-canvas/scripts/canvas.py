@@ -62,6 +62,13 @@ def parser():
     add_commands(commands,canvas_id)
     from canvas_smoke import add_commands as smoke_commands
     smoke_commands(commands, canvas_id)
+    from canvas_inbox import add_commands as inbox_commands
+    inbox_commands(commands, canvas_id)
+    command = commands.add_parser("links", help="list the links in a published export without Canvas access")
+    command.add_argument("--export", type=Path, required=True)
+    command.add_argument("--course", type=canvas_id, action="append")
+    command.add_argument("--elsewhere", action="store_true", help="Only links that leave Canvas")
+    command.add_argument("--json", action="store_true")
     return root
 
 
@@ -89,6 +96,11 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
     args = parser().parse_args(argv)
     acct, history = None, None
     try:
+        if args.command == "links":
+            from canvas_links import links, render
+            value = links(args.export, args.course, args.elsewhere)
+            emit(value if args.json else render(value), args.json)
+            return 0
         from canvas_history import History
         auth.load_env()
         acct = auth.account(args.alias)
@@ -152,6 +164,25 @@ def main(argv=None, transport=None, downloader=None, now=None, upload_sender=Non
             if value.get("mode")=="preview" and not args.json:
                 print("No writes sent. To apply this reviewed plan, repeat with --execute --expect "+value["preview_hash"])
             return code
+        from canvas_inbox import COMMANDS as INBOX_COMMANDS
+        if args.command in INBOX_COMMANDS:
+            from canvas_inbox import conversation, inbox, render, run_reply
+            if args.command == "reply-conversation":
+                value, code = run_reply(reader, args, history)
+                if value["mode"] == "preview":
+                    log_read(history, account=acct.alias, command=args.command, kind="write", course_ids=[], preview_hash=value["preview_hash"], outcome="preview", target_ids=[args.conversation])
+                emit(value, args.json)
+                if value["mode"] == "preview" and not args.json:
+                    print("Nothing was sent. To send this reviewed reply, repeat with --execute --expect " + value["preview_hash"])
+                return code
+            if args.command == "inbox":
+                value = inbox(reader, args.scope, args.course, args.limit, args.all)
+                log_read(history, account=acct.alias, command=args.command, kind="read", course_ids=[args.course] if args.course else [], outcome="complete" if value["coverage"]["status"] == "complete" else "limited", counts={"conversations": value["coverage"]["count"]}, coverage=value["coverage"])
+            else:
+                value = conversation(reader, args.conversation)
+                log_read(history, account=acct.alias, command=args.command, kind="read", course_ids=[], outcome=value["coverage"]["status"], target_ids=[args.conversation], counts={"messages": value["coverage"]["messages"]}, coverage=value["coverage"])
+            emit(value if args.json else render(value), args.json)
+            return 0 if value["coverage"]["status"] != "partial" else 1
         ids = []
         if args.command in {"export", "verify"}:
             ids = sorted(set(args.course or acct.courses), key=numeric)
