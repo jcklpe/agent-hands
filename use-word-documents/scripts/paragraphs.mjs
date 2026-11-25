@@ -7,7 +7,7 @@ import {startBridge} from './bridge.mjs';
 import {openBrowser,browserIdentity} from './browser.mjs';
 import {cloudTarget,requireWrite} from './cloud.mjs';
 import {privateTempDir} from './temporary.mjs';
-import {paragraphSnapshot,paragraphMode,verifyParagraphs,validateParagraphs} from './paragraph-core.mjs';
+import {paragraphSnapshot,paragraphMode,verifyParagraphs,validateParagraphs,validateResolutionTargets} from './paragraph-core.mjs';
 const exec=promisify(execFile),emit=x=>process.stdout.write(JSON.stringify(x,null,2)+'\n');
 let browser,bridge,release,journal;
 try {
@@ -34,10 +34,11 @@ try {
     bridge=await startBridge(account,target);browser=await openBrowser(account,target,true,bridge);await browserIdentity(browser.context,target,profile);await bridge.waitReady();
     const read=await bridge.command('read');if(read.status!=='read_ok')fail('read_failed','Word did not return document paragraphs.');
     const baseline=await snapshot(),mode=paragraphMode(baseline,read.paragraphs);
+    validateResolutionTargets(baseline,spec);
     const ready=await bridge.command('paragraphs-inspect',{before:read.paragraphs,spec});if(ready.status!=='paragraphs_ready')fail('edit_refused',ready.code||'Paragraph changes are unsupported.');
     if(command==='preview') {
       plan={...makePlan(target,{}),kind:'word-paragraphs-v1',spec,before:read.paragraphs,savedBefore:baseline,mode};const {hash:unused,...content}=plan;plan.hash=hash(content);writeJSON(operationFiles(account,plan.id).plan,plan,true);
-      emit({status:'preview',operation:plan.id,hash:plan.hash,name:target.name,edits:spec.paragraphs.filter(x=>x.after!==undefined),formatCount:spec.paragraphs.filter(x=>x.format).length,links:spec.links,append:spec.append,limitation:'Same-paragraph edits can race the final check. Saved verification and visual acceptance remain required.'});
+      emit({status:'preview',operation:plan.id,hash:plan.hash,name:target.name,edits:spec.paragraphs.filter(x=>x.after!==undefined),formatCount:spec.paragraphs.filter(x=>x.format).length,links:spec.links,append:spec.append,resolveComments:spec.resolveComments||[],limitation:'Same-paragraph edits can race the final check. Saved verification and visual acceptance remain required.'});
     } else {
       if(hash(baseline)!==hash(plan.savedBefore)||JSON.stringify(read.paragraphs)!==JSON.stringify(plan.before))fail('stale_preview','Document changed after preview.');
       await browserIdentity(browser.context,target,profile);journal=files.journal;

@@ -6,6 +6,11 @@ import {commentEvidence,sameReviewEvidence} from './tail-core.mjs';
 import '../addin/paragraphs.js';
 export const validateParagraphs=globalThis.AgentHandsParagraphs.validate;
 export const normalized=x=>x.replace(/[\r\f\u0005]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ');
+export function validateResolutionTargets(snapshot,spec){
+  const raw=snapshot.review?.comments?.comments?.comment,comments=Array.isArray(raw)?raw:raw?[raw]:[];
+  const text=node=>typeof node==='string'?node:Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?Object.entries(node).filter(([k])=>!k.startsWith('@_')).map(([k,v])=>(k==='t'||k==='#text')?text(v):typeof v==='object'?text(v):'').join(''):'';
+  for(const target of spec.resolveComments||[]){const matches=comments.filter(c=>c['@_id']===target.id&&c['@_author']===target.authorName&&normalized(text(c)).trim()===normalized(target.content).trim());if(matches.length!==1||snapshot.commentStates[target.id])fail('stale_comment','The saved comment differs or is already resolved.');}
+}
 export function paragraphSnapshot(bytes) {
   let size=0;
   const entries=unzipSync(new Uint8Array(bytes),{filter:e=>{size+=e.originalSize;if(size>64000000||e.originalSize<0)fail('oversized_document','DOCX exceeds the readback bound.');return true;}});
@@ -18,7 +23,13 @@ export function paragraphSnapshot(bytes) {
   walk(body,true);
   const rels={};if(entries['word/_rels/document.xml.rels'])for(const n of parse('word/_rels/document.xml.rels').find(x=>x.Relationships)?.Relationships||[])if(n.Relationship)rels[n[':@']['@_Id']]=n[':@'];
   const media={};for(const [p,data] of Object.entries(entries))if(p.startsWith('word/media/'))media[p]=createHash('sha256').update(data).digest('hex');
-  return {all,direct,anchors,links:links.map(l=>({text:l.text,address:rels[l.id]?.['@_Target']})),media,review:commentEvidence(bytes)};
+  const commentStates={};
+  if(entries['word/comments.xml']){
+    const comments=parse('word/comments.xml').find(x=>x.comments)?.comments||[];
+    const states=entries['word/commentsExtended.xml']?(parse('word/commentsExtended.xml').find(x=>x.commentsEx)?.commentsEx||[]):[];
+    for(const n of comments.filter(n=>n.comment)){const ps=n.comment.filter(x=>x.p),pid=ps.at(-1)?.[':@']?.['@_paraId'];const state=states.find(x=>x.commentEx&&x[':@']?.['@_paraId']===pid);commentStates[n[':@']['@_id']]=['1','true'].includes(state?.[':@']?.['@_done']);}
+  }
+  return {all,direct,anchors,links:links.map(l=>({text:l.text,address:rels[l.id]?.['@_Target']})),media,review:commentEvidence(bytes),commentStates};
 }
 export function paragraphMode(snapshot,live) {
   for(const mode of ['direct','all'])if(JSON.stringify(snapshot[mode])===JSON.stringify(live.map(normalized)))return mode;
@@ -31,9 +42,11 @@ export function verifyParagraphs(before,after,spec,mode) {
   const issues=[];
   if(JSON.stringify(expected)!==JSON.stringify(after[mode]))issues.push('paragraph text differs');
   if(!sameReviewEvidence(before.review,after.review))issues.push('comment or tracked insertion changed');
+  const expectedComments={...before.commentStates};for(const c of spec.resolveComments||[])expectedComments[c.id]=true;
+  if(JSON.stringify(expectedComments)!==JSON.stringify(after.commentStates||{}))issues.push('comment resolution differs');
   if(JSON.stringify(before.anchors)!==JSON.stringify(after.anchors))issues.push('comment anchors changed');
   if(JSON.stringify(before.media)!==JSON.stringify(after.media))issues.push('embedded media changed');
   const links=before.links.map(l=>({...l,address:spec.links.find(x=>x.before===l.address)?.after??l.address}));
   if(JSON.stringify(links)!==JSON.stringify(after.links))issues.push('hyperlink text or destination differs');
-  return {status:issues.length?'saved_paragraphs_unverified':'saved_paragraphs_verified',issues,commentsPreserved:sameReviewEvidence(before.review,after.review),visualAcceptanceRequired:true,replayAllowed:false};
+  return {status:issues.length?'saved_paragraphs_unverified':'saved_paragraphs_verified',issues,commentsPreserved:sameReviewEvidence(before.review,after.review),resolvedComments:issues.length?undefined:(spec.resolveComments||[]).length,visualAcceptanceRequired:true,replayAllowed:false};
 }

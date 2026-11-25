@@ -2,7 +2,8 @@
 globalThis.AgentHandsParagraphs = (() => {
   const fail = code => { throw Object.assign(new Error(code), {code}); };
   function validate(spec) {
-    if (!spec || Object.keys(spec).some(k=>!['paragraphs','links','append'].includes(k)) || !Array.isArray(spec.paragraphs) || spec.paragraphs.length>500 || !Array.isArray(spec.links) || spec.links.length>100 || !Array.isArray(spec.append) || spec.append.length>80) fail('invalid_paragraph_spec');
+    if (!spec || Object.keys(spec).some(k=>!['paragraphs','links','append','resolveComments'].includes(k)) || !Array.isArray(spec.paragraphs) || spec.paragraphs.length>500 || !Array.isArray(spec.links) || spec.links.length>100 || !Array.isArray(spec.append) || spec.append.length>80) fail('invalid_paragraph_spec');
+    if(spec.resolveComments!==undefined && (!Array.isArray(spec.resolveComments)||spec.resolveComments.length>30||new Set(spec.resolveComments.map(c=>c.id)).size!==spec.resolveComments.length||spec.resolveComments.some(c=>!c||Object.keys(c).some(k=>!['id','content','authorName'].includes(k))||['id','content','authorName'].some(k=>typeof c[k]!=='string'||!c[k]||c[k].length>12000))))fail('invalid_comment_resolution');
     const seen=new Set();
     const style=x=>{
       if (!x || Object.keys(x).some(k=>!['style','size','bold','spaceBefore','spaceAfter','keepWithNext','pageBreakBefore'].includes(k)) || !['Normal','Title','Subtitle','Heading1','Heading2','Heading3','Caption'].includes(x.style)) fail('invalid_paragraph_style');
@@ -26,6 +27,11 @@ globalThis.AgentHandsParagraphs = (() => {
       const before=paragraphs.items.map(p=>p.text);
       if(context.document.changeTrackingMode!=='Off')fail('tracking_enabled');
       if(JSON.stringify(before.map(normalize))!==JSON.stringify(job.before.map(normalize)))fail('stale_preview');
+      const resolved=[];
+      if(spec.resolveComments?.length){
+        const comments=context.document.body.getComments();comments.load('items/id,items/content,items/authorName,items/resolved');await context.sync();
+        for(const requested of spec.resolveComments){const matches=comments.items.filter(c=>normalize(c.content).replace(/\s/g,'')===normalize(requested.content).replace(/\s/g,'')&&c.authorName===requested.authorName);if(matches.length!==1||matches[0].resolved)fail('stale_comment');resolved.push(matches[0]);}
+      }
       const targets=[], replacements=[];
       for(const edit of spec.paragraphs) {
         const p=paragraphs.items[edit.index];if(!p||normalize(p.text)!==normalize(edit.before))fail('stale_paragraph');
@@ -82,6 +88,7 @@ globalThis.AgentHandsParagraphs = (() => {
       for(const x of targets)format(x.p,x.format);
       for(const l of links)l.range.hyperlink=l.address;
       for(const x of spec.append)format(context.document.body.insertParagraph(x.text,'End'),x.format);
+      for(const c of resolved)c.resolved=true;
       await context.sync();context.document.save();await context.sync();
       return {status:'paragraphs_save_returned'};
     }catch(e){return {status:dispatched?'uncertain_after_dispatch':'refused_before_mutation',code:e.code||'office_error'};}
