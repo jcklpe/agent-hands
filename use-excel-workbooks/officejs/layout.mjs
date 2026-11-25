@@ -15,7 +15,7 @@ export function validateLayout(spec) {
     if (!keys(x,['sheet','range','fill','font','wrapText','rowHeight','columnWidth','verticalAlignment','horizontalAlignment','unmerge','autofitRows']) || !name(x.sheet) || !address(x.range)) fail('invalid_range_layout');
     for(const k of ['unmerge','autofitRows'])if(x[k]!==undefined&&typeof x[k]!=='boolean')fail('invalid_range_layout');
     if (x.fill !== undefined && x.fill !== null && !color(x.fill)) fail('invalid_fill');
-    if (x.font !== undefined && (!keys(x.font,['name','size','bold','italic','color']) || (x.font.color !== undefined && !color(x.font.color)) || (x.font.name !== undefined && !['Arial','Aptos','Calibri'].includes(x.font.name)) || (x.font.size !== undefined && (!Number.isFinite(x.font.size) || x.font.size < 8 || x.font.size > 36)) || ['bold','italic'].some(k => x.font[k] !== undefined && typeof x.font[k] !== 'boolean'))) fail('invalid_font');
+    if (x.font !== undefined && (!keys(x.font,['name','size','bold','italic','color','strikethrough']) || (x.font.color !== undefined && !color(x.font.color)) || (x.font.name !== undefined && !['Arial','Aptos','Calibri'].includes(x.font.name)) || (x.font.size !== undefined && (!Number.isFinite(x.font.size) || x.font.size < 8 || x.font.size > 36)) || ['bold','italic','strikethrough'].some(k => x.font[k] !== undefined && typeof x.font[k] !== 'boolean'))) fail('invalid_font');
     if (x.wrapText !== undefined && typeof x.wrapText !== 'boolean') fail('invalid_wrap');
     for (const k of ['rowHeight','columnWidth']) if (x[k] !== undefined && (!Number.isFinite(x[k]) || x[k] < 8 || x[k] > 600)) fail('invalid_dimension');
     if (x.verticalAlignment !== undefined && !['Top','Center','Bottom'].includes(x.verticalAlignment)) fail('invalid_alignment');

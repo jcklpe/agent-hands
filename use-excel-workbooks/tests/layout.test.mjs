@@ -14,3 +14,9 @@ for(const cause of ['formula','stale','readOnly'])test('refuse before writing '+
   const result=await adapter('layout-apply',{spec,expected:{}});
   assert.equal(result.status,'refused_before_mutation');assert.equal(writes,0);assert.equal(r.values[0][0],'Title');
 });
+
+test('accepted wording can explicitly clear inherited strikethrough',()=>{
+  const accepted={...spec,ranges:[{sheet:'Data',range:'A1',font:{color:'#191A22',strikethrough:false}}]};
+  assert.equal(validateLayout(accepted).ranges[0].font.strikethrough,false);
+  for(const value of ['false',null,0])assert.throws(()=>validateLayout({...accepted,ranges:[{...accepted.ranges[0],font:{strikethrough:value}}]}));
+});
