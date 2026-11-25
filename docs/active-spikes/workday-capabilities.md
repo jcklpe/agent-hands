@@ -1,14 +1,16 @@
 ---
 attention: live
-status: saves-working
-implementation: browser-read-and-save
-reviewed: 2026-11-23
+status: ready-to-close
+implementation: browser-read-save-and-submit
+reviewed: 2026-11-25
 ---
 # Workday capabilities
-[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is authorized. The offline contract is implemented; since 2026-11-23 a browser reader reads complete weeks from the user's signed-in Chrome, and since 2026-11-24 a Quick Add save path under the user's chosen re-read safeguard has saved a week of approved real work live. At the user's request on 2026-11-24, submission was added as its own preview-and-approve command. A separately authorized existing-browser probe and an isolated synthetic attachment check are recorded in the handoff; no Workday timesheet read or write has been established. No installation, authentication, registration or credential creation occurred.
+[Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is authorized. The offline contract is implemented; since 2026-11-23 a browser reader reads complete weeks from the user's signed-in Chrome, and since 2026-11-24 a Quick Add save path under the user's chosen re-read safeguard has saved a week of approved real work live. At the user's request on 2026-11-24, submission was added as its own preview-and-approve command. Before closing, the user also approved global skill links, starting a week from an earlier one, a multi-week overview and a separate Chrome with its own profile, all built by 2026-11-25. They decided on 2026-11-24 to close without waiting for a first submission through the tool, opening a new spike if that fails.
 
 ## Implemented boundary
-The [use-workday CLI](../../use-workday/SKILL.md) validates supplied normalized weeks and previews exact allocations locally. Its draft-save engine is exercised only through an in-memory fake service. Live commands fail with a specific transport blocker. Setup owns [transport discovery and remaining gates](../../setup-workday/references/transport.md). Atomic service revision protection and settled recovery must be proved before connecting the write engine; browser preflight alone is insufficient. Submission remains future scope, not part of this implementation.
+The [use-workday CLI](../../use-workday/SKILL.md) validates week snapshots, proposes a week from an earlier one and previews exact allocations offline. [setup-workday](../../setup-workday/SKILL.md) owns the browser: it lists several weeks, reads complete weeks, saves approved unsubmitted blocks under the re-read safeguard, submits approved weeks and settles uncertain operations. The account file holds the user's choice between their everyday Chrome and a separate one they sign in to once per session.
+
+Reads, the overview and saves are proven live on real work; submission is proven live only as a preview, and reconciliation, sign-out partway through a session and Workday's overlap refusal only offline. Saving and submission have not run through the separate Chrome. The [transport reference](../../setup-workday/references/transport.md) owns the current limits.
 
 ## Transport proof and dispositions — 2026-11-23
 The [transport reference](../../setup-workday/references/transport.md#interface-inventory-and-save-guarantees--2026-11-23) records the rechecked interfaces. In short: Time Tracking REST v7, Agent-Ready MCP and the new beta Sana from Workday connector all need a client or agent registered and granted by the tenant's administrators, and the selected account had no such grant and no self-service registration. The REST block read omits incomplete blocks, time off and overtime requests, so it is not a complete week on its own. No documented interface offers a revision precondition on time-block writes; the REST service refuses in/out times that overlap existing entries, which guards one slot, not the week. The browser route is unchanged since 2026-11-21: it needs the user's current profile and tab selection and native connection approval, and the UI has no save precondition either. No read proof was possible this session without those, and no Workday data was retrieved.
@@ -51,7 +53,7 @@ An interactive browser-control session has demonstrated the workflow mechanics. 
 First deliverable when implementation is requested: a read-only proof from the intended runtime that binds one authorized tenant/account/week, reuses the intended session where supported, and returns a compact normalized timesheet. No writes or credential setup are necessary to validate offline parsing and contracts.
 
 ## Proposed operation contract
-This table preserves the original proposed live surface. The implemented offline subset and exact command behavior are documented in [use-workday](../../use-workday/SKILL.md); `submit-approved` remains unimplemented.
+This table preserves the original proposed live surface. The implemented offline subset and exact command behavior are documented in [use-workday](../../use-workday/SKILL.md); `submit-approved` became `submit-preview` and `submit` in setup-workday.
 
 | Operation | Inputs | Result and boundary |
 | --- | --- | --- |
@@ -83,4 +85,4 @@ Compare the existing model-directed browser loop with deterministic execution on
 If API-equivalent costing is useful and token usage is available, use the actual model and service tier's current [API rates](https://developers.openai.com/api/docs/pricing): `(uncached_input * input_rate + cached_input * cached_rate + output * output_rate) / 1_000_000`, plus applicable tool charges. Do not double-count cached input or reasoning already included in output. [OpenAI's reasoning documentation](https://developers.openai.com/api/docs/guides/reasoning) describes output-token usage; [ChatGPT usage controls](https://learn.chatgpt.com/docs/enterprise/usage-limits) are distinct from API billing. An API-equivalent calculation is not a ChatGPT subscription charge or quota measurement.
 
 ## Handoff boundary
-The next live work is runtime/interface discovery and an authorized read-only proof. This active pair is the reasoning and task handoff; it does not select a client, install a provider, create credentials, grant access, or authorize recurring time entry. The 2026-11-16 promotion preserves the original reasoning and broader backlog while recording the offline implementation separately.
+The maintained guidance is in the two skills and the transport reference; this pair keeps the reasoning and history. Nothing here authorizes recurring time entry: every save and submission needs approval of its exact plan for real work.

@@ -1,11 +1,11 @@
 ---
 attention: live
-status: saves-working
-implementation: browser-read-and-save
-reviewed: 2026-11-24
+status: ready-to-close
+implementation: browser-read-save-and-submit
+reviewed: 2026-11-25
 ---
 # Workday capabilities — investigation and implementation handoff
-[Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Actual time entry remains outside this implementation scope; the separately authorized read-only browser probe is recorded below.
+[Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Each save and submission of real time needs its own approval; the dated sections below are newest first.
 
 ## Next implementation handoff - 2026-11-23
 Workday follows the Penpot scope. The immediate deliverable is a transport decision supported by an exact read-only proof, not more fake executor features. Read `setup-workday/SKILL.md`, `use-workday/SKILL.md` and `setup-workday/references/transport.md` first; the existing thirty-test offline implementation remains useful and is not a production adapter.
@@ -97,41 +97,59 @@ The user asked to build the browser route fully and offered browser access. Grou
 
 ## Remaining acceptance backlog (original item wording preserved)
 ### 1. Prove the transport and session boundary
-- [ ] Inventory current supported Workday interfaces and maintained integrations against vendor documentation; record date/version, authorization prerequisites, relevant time-entry coverage and a reasoned reuse/custom decision. Verify official MCP availability and administrative prerequisites before stating them as facts.
+- [x] Inventory current supported Workday interfaces and maintained integrations against vendor documentation; record date/version, authorization prerequisites, relevant time-entry coverage and a reasoned reuse/custom decision. Verify official MCP availability and administrative prerequisites before stating them as facts.
   - 2026-11-23: interfaces, prerequisites and coverage recorded with dates in the transport reference; reuse the official REST or MCP route if the tenant grants it, with no custom API wrapper. The decision stays open until the user chooses a disposition and the access gate changes.
+  - 2026-11-25: decided. No API or MCP access is granted or expected, so the user directed the browser route; the recorded interfaces remain the preferred alternative if a tenant ever grants one.
 - [x] Inspect the selected desktop/browser host's documented integration surface and prove a read-only connection from the intended Agent Hands runtime. Test the existing-session preference first. Do not assume Playwright attachment, copy a browser profile, extract cookies or enable debugging as a shortcut.
   - 2026-11-23: Chrome's own consent flow with the user turning on remote debugging and clicking Allow; a standard-library client after Playwright's attach stalled; complete weeks read live. No profile copy, cookie access or automatic setting change.
-- [ ] Record who owns the session/profile/tab, exact tenant/account checks, concurrent-user behavior, native login/MFA handoff, expiry, cancellation, reconnect and supported platforms. If only an interactive REPL can execute, report that limit and evaluate whether a bounded batch adapter is supported.
-- [ ] Choose and document the transport only after the proof. Keep a dedicated persistent profile as an explicit alternative; do not introduce it silently or make all providers depend on it.
+- [x] Record who owns the session/profile/tab, exact tenant/account checks, concurrent-user behavior, native login/MFA handoff, expiry, cancellation, reconnect and supported platforms. If only an interactive REPL can execute, report that limit and evaluate whether a bounded batch adapter is supported.
+  - 2026-11-25: recorded in the setup skill and transport reference for both browsers: the everyday Chrome through its own consent, or a separate Chrome the user signs in to once per session, with one writer per week, refusals on sign-in and cancellation, and a fresh session to reconnect. Sign-out partway through a session has not been seen live. macOS only; Linux is untested and Windows unsupported.
+- [x] Choose and document the transport only after the proof. Keep a dedicated persistent profile as an explicit alternative; do not introduce it silently or make all providers depend on it.
+  - 2026-11-25: both browsers are documented, and which one an account uses is the user's explicit choice in its file. No other provider depends on either.
 
 ### 2. Implement the common contract offline
-- [ ] Define versioned structured inputs and allowlisted results for `read-timesheet`, `preview`, `save-draft` and `submit-approved`; names remain provisional. No arbitrary script, endpoint, selector, shell command or generic API escape hatch supplied by the agent.
-- [ ] Validate exact target/date/timezone, time blocks, explicit breaks, types/worktags, overlaps, totals, pay-period crossings and supported overnight/DST behavior. Reject missing actual work data; never invent hours or infer final approval from a template.
-- [ ] Normalize service statuses so blank/zero, saved draft, submitted, sent for approval, approved, denied and unknown remain distinguishable. Keep user authorization separate from manager approval.
-- [ ] Add plan/service-state fingerprints, exact-match skips, conflicting-entry refusal, target/week serialization, preflight re-reads and postcondition readback. Make uncertain effects block retries until reconciliation.
-- [ ] Design private, minimal recovery records with exact stage/completed effects/pending effects and redacted evidence. Keep credentials and full page trees out of returned values and project fixtures.
+- [x] Define versioned structured inputs and allowlisted results for `read-timesheet`, `preview`, `save-draft` and `submit-approved`; names remain provisional. No arbitrary script, endpoint, selector, shell command or generic API escape hatch supplied by the agent.
+  - 2026-11-25: done as `read`, `preview`, `save`, `submit-preview` and `submit`, with `overview`, `propose` and `reconcile` beside them; `submit-approved` became the last pair.
+- [x] Validate exact target/date/timezone, time blocks, explicit breaks, types/worktags, overlaps, totals, pay-period crossings and supported overnight/DST behavior. Reject missing actual work data; never invent hours or infer final approval from a template.
+  - 2026-11-25: done in the v1 contract. Overnight and daylight-saving blocks refuse rather than being supported, and saves take quarter-hour times only.
+- [x] Normalize service statuses so blank/zero, saved draft, submitted, sent for approval, approved, denied and unknown remain distinguishable. Keep user authorization separate from manager approval.
+  - 2026-11-25: approved, not submitted and submitted were seen live and map to their statuses; any other label, such as a week sent back, reads as unknown and is protected.
+- [x] Add plan/service-state fingerprints, exact-match skips, conflicting-entry refusal, target/week serialization, preflight re-reads and postcondition readback. Make uncertain effects block retries until reconciliation.
+  - 2026-11-25: done; the user chose the re-read safeguard because no Workday interface offers a revision precondition.
+- [x] Design private, minimal recovery records with exact stage/completed effects/pending effects and redacted evidence. Keep credentials and full page trees out of returned values and project fixtures.
+  - 2026-11-25: done in the private per-week journal.
 
 ### 3. Build the bounded executor
-- [ ] Implement known deterministic form sequences behind the chosen supported transport. Use semantic controls and explicit state checks; stop on layout drift, ambiguous targets, missing controls, authentication or validation warnings.
+- [x] Implement known deterministic form sequences behind the chosen supported transport. Use semantic controls and explicit state checks; stop on layout drift, ambiguous targets, missing controls, authentication or validation warnings.
+  - 2026-11-25: done through Quick Add, Review Time by Week and Submit Time, stopping on anything unexpected.
 - [x] Implement `read-timesheet` and local `preview` first. Return compact normalized output and the human-review diff rather than a series of large accessibility snapshots.
   - 2026-11-23: the browser reader returns the validated v1 snapshot and compact observations; the existing offline `preview` consumes it.
-- [ ] Implement `save-draft` with explicit saved/not-submitted verification and partial-save reconciliation. A save that submits or certifies must refuse this operation.
+- [x] Implement `save-draft` with explicit saved/not-submitted verification and partial-save reconciliation. A save that submits or certifies must refuse this operation.
   - 2026-11-24: implemented through Quick Add under the user's re-read safeguard, with per-block readback as a draft, clean stops before sending and a `reconcile` command; offline-tested. Stays open until a live save on real work is verified.
   - 2026-11-24, live: a week of approved real work saved and read back as Not Submitted drafts. Partial-save reconciliation is built and offline-tested but has not been needed live.
+  - 2026-11-25: done; three complete weeks and one partial week saved live on 2026-11-24. Reconciling a partial save has run offline only.
 - [ ] Implement `submit-approved` against exact reviewed data and a fresh explicit user authorization. Inspect the certification/range/total, refuse materially changed text or targets, and verify submitted/sent-for-approval. Already-submitted matching data must not be submitted again.
   - 2026-11-24: implemented as `submit-preview` and `submit` with the checks above; a live preview passed. Stays open until a submission through the tool is verified on real, approved work.
-- [ ] Write the owning setup/use skill instructions, operation examples, native entrypoint, privacy/storage rules, supported runtime/platform matrix and recovery guidance. Keep employer policy in the private consumer skill.
+  - 2026-11-25: built, with a live preview. The user decided to close without waiting for a first submission through the tool and to open a new spike if it fails, so this stays unticked at closure.
+- [x] Write the owning setup/use skill instructions, operation examples, native entrypoint, privacy/storage rules, supported runtime/platform matrix and recovery guidance. Keep employer policy in the private consumer skill.
+  - 2026-11-25: done, with global links for Claude Code and Codex. The README's Workday section is corrected at closure.
 
 ### 4. Fixtures, measurement and later live QA
-- [ ] Test synthetic empty/populated weeks, exact duplicates, conflicts, mixed statuses, rejected validation, stale plans, concurrent changes, wrong tenant/worker/week and cross-pay-period blocks.
-- [ ] Test partial saves, uncertain save/submit responses, interrupted sessions, native/MFA cancellation, changed markup and unexpected certification. Verify read-before-retry and that no cleanup mutation occurs automatically.
+- [x] Test synthetic empty/populated weeks, exact duplicates, conflicts, mixed statuses, rejected validation, stale plans, concurrent changes, wrong tenant/worker/week and cross-pay-period blocks.
+  - 2026-11-25: done across the Workday test suites.
+- [x] Test partial saves, uncertain save/submit responses, interrupted sessions, native/MFA cancellation, changed markup and unexpected certification. Verify read-before-retry and that no cleanup mutation occurs automatically.
+  - 2026-11-25: done offline; none has happened live.
 - [ ] Benchmark the same synthetic workload under the model-directed loop and deterministic executor. Record phase boundaries, model/tool/UI calls, retries, result bytes, available token/cache/reasoning counters, runtime/model and correctness. Keep missing counters null; no private-log workaround or elapsed-time token estimate.
+  - 2026-11-25: not done, and no saving in tokens or cost is claimed. Left for a later decision.
 - [ ] Report measured changes with uncertainty and startup/reconnect cost separated. Use current exact-model API rates only for an explicitly labeled API-equivalent calculation; never equate it with subscription consumption.
+  - 2026-11-25: not done; it depends on the benchmark.
 - [ ] With separately authorized live scope, prove read and preview first, then exact draft persistence, and only then explicitly approved submission. Capture private readback/status evidence; do not create disposable payroll data merely to test.
+  - 2026-11-25: reads, previews and saves are proven live; submission is proven only as a preview.
 - [ ] Obtain human QA for session reuse, native login/reconnect/cancel, readable previews and recovery on the selected desktop host. Record other platforms as unverified until tested.
+  - 2026-11-25: the user approved connections, signed in to the own profile, and reviewed previews before three saved weeks. Reconnecting and recovery have had no human check.
 
 ## Ready for human review
-- Offline contract/preview behavior is ready for review. Runtime attachment, authorized integration client, production draft execution and live QA remain blocked. Do not ask the user to test live saves with this build.
+- Closure. The first submission through the tool is left to a new spike if it fails.
 
 ## Done
 - [x] 2026-11-02: expanded the existing generic capture into this scratch concept/task pair at the user's request, preserving reuse-first discovery and the setup/use and public/private boundaries.
