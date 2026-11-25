@@ -50,7 +50,9 @@ def verify(before, after, items):
         if old['tables']!=new.get('tables') or old['merges']!=new.get('merges'):issues.append(name+' tables or merges changed')
         expected_links=dict(old['links'])
         for (sheet,address),x in targets.items():
-            if sheet==name and x['newAddress'] is not None:expected_links[address]=x['newAddress']
+            if sheet==name:
+                if x.get('citation'): expected_links.pop(address,None)
+                elif x['newAddress'] is not None: expected_links[address]=x['newAddress']
         if new.get('links')!=expected_links:issues.append(name+' hyperlink mismatch')
         for address,a in old['cells'].items():
             b=new.get('cells',{}).get(address);x=targets.get((name,address))

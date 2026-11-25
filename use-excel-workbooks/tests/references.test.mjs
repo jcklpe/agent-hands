@@ -14,3 +14,12 @@ base=n('font',children=[n('strike'),n('color',{'rgb':'FFC00000'})]);green=n('rPr
 `;
  execFileSync('python3',['-c',code]);
 });
+
+test('citation removes only the hyperlink while retaining explicit character fonts',async()=>{
+ const h=host(),citation=[{...items[0],newAddress:null,citation:true,replacements:[{before:'Old New',after:'Readable source.'}]}];let cleared;
+ h.r.clear=x=>{cleared=x;};const read=await h.run('references-read',{items:citation});assert.equal(read.status,'references_ready');
+ const base={name:'Calibri',size:11,color:'#000000',bold:false,italic:false,strikethrough:false,underline:'None',subscript:false,superscript:false};
+ const result=await h.run('references-apply',{items:citation,expected:read.expected,restoration:[{base,runs:[{text:'Readable source.',font:base}]}]});
+ assert.equal(result.status,'references_save_returned');assert.equal(cleared,'RemoveHyperlinks');assert.equal(h.getWritten()[0][0].textRuns[0].text,'Readable source.');
+ assert.throws(()=>validateReferences([{...citation[0],newAddress:'https://example.test/new'}]));
+});

@@ -71,13 +71,18 @@ def verify(before, after, spec):
             col, rem = divmod(col - 1, 26); letters = chr(65 + rem) + letters
         return letters + str(row)
     for change in spec['tables']:
-        if not change.get('removeColumns') and not change.get('removeRows'): continue
+        if not change.get('removeColumns') and not change.get('removeRows') and not change.get('renameColumns'): continue
         matches = [(s, s['tables'][change['name']]) for s in before['sheets'].values() if change['name'] in s['tables']]
         if len(matches) != 1:
             issues.append('missing structural target'); continue
         sheet, table = matches[0]
         c1, r1 = coordinates(table['ref'].split(':')[0]); c2, r2 = coordinates(table['ref'].split(':')[1])
         columns = table['columns'][3]
+        for rename in change.get('renameColumns', []):
+            for i, column in enumerate(columns):
+                if column[1].get('name') == rename['before']:
+                    column[1]['name'] = rename['after']
+                    sheet['cells'][address(c1+i,r1)]['value'] = rename['after']
         removed_cols = {c1 + i for i, c in enumerate(columns) if c[1].get('name') in change.get('removeColumns', [])}
         removed_rows = {r1 + 1 + i for i in change.get('removeRows', [])}
         moved = {}

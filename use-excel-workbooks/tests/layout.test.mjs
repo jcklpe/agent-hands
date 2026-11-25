@@ -36,3 +36,8 @@ test('refuses a table column deletion that would shift neighboring content',asyn
  const result=await adapter('layout-read',{spec:{sheets:[],ranges:[],cells:[],tables:[{name:'Data',style:'TableStyleLight1',bandedRows:true,removeColumns:['Unused']}]}});
  assert.equal(result.status,'refused_before_mutation');assert.equal(result.code,'adjacent_cells_would_shift');assert.equal(saved,0);
 });
+
+test('column renames require distinct literal source and destination names',()=>{
+ const rename={name:'Data',style:'TableStyleLight1',bandedRows:true,renameColumns:[{before:'Old',after:'Current'}]};assert.equal(validateLayout({...spec,tables:[rename]}).tables[0].renameColumns[0].after,'Current');
+ assert.throws(()=>validateLayout({...spec,tables:[{...rename,renameColumns:[...rename.renameColumns,...rename.renameColumns]}]}));
+});

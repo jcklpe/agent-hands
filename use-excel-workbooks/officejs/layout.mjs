@@ -22,7 +22,8 @@ export function validateLayout(spec) {
     if (x.horizontalAlignment !== undefined && !['Left','Center','Right'].includes(x.horizontalAlignment)) fail('invalid_alignment');
   }
   for (const x of spec.tables) {
-    if (!keys(x,['name','style','bandedRows','removeColumns','removeRows']) || !/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(x.name) || !/^TableStyle(Light|Medium)[1-9][0-9]?$/.test(x.style) || typeof x.bandedRows !== 'boolean') fail('invalid_table_layout');
+    if (!keys(x,['name','style','bandedRows','removeColumns','removeRows','renameColumns']) || !/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(x.name) || !/^TableStyle(Light|Medium)[1-9][0-9]?$/.test(x.style) || typeof x.bandedRows !== 'boolean') fail('invalid_table_layout');
+    if(x.renameColumns!==undefined&&(!Array.isArray(x.renameColumns)||x.renameColumns.length>10||x.renameColumns.some(c=>!c||Object.keys(c).some(k=>!['before','after'].includes(k))||['before','after'].some(k=>typeof c[k]!=='string'||!c[k]||c[k].length>255))||new Set(x.renameColumns.map(c=>c.before)).size!==x.renameColumns.length||new Set(x.renameColumns.map(c=>c.after)).size!==x.renameColumns.length))fail('invalid_column_rename');
     if(x.removeColumns!==undefined && (!Array.isArray(x.removeColumns)||x.removeColumns.length>10||new Set(x.removeColumns).size!==x.removeColumns.length||x.removeColumns.some(c=>typeof c!=='string'||!c||c.length>255)))fail('invalid_column_removal');
     if(x.removeRows!==undefined && (!Array.isArray(x.removeRows)||x.removeRows.length>100||new Set(x.removeRows).size!==x.removeRows.length||x.removeRows.some(i=>!Number.isInteger(i)||i<0||i>10000)))fail('invalid_row_removal');
     if(x.removeColumns?.length&&x.removeRows?.length)fail('mixed_table_removal');
@@ -45,10 +46,10 @@ export function createLayoutAdapter(Excel,Office,guard) {
         const ranges = spec.ranges.map(x => { const r = all.getItem(x.sheet).getRange(x.range); r.load('values,formulas,cellCount'); return r; });
         const cells = spec.cells.map(x => { const r = all.getItem(x.sheet).getRange(x.cell); r.load('values,formulas'); return r; });
         const tables = spec.tables.map(x => { const t = context.workbook.tables.getItem(x.name); t.load('name,style,showBandedRows'); return t; });
-        const tableRanges=spec.tables.map((x,i)=>{if(!x.removeColumns?.length&&!x.removeRows?.length)return null;const r=tables[i].getRange();r.load('values,formulas,cellCount,rowIndex,columnIndex,rowCount,columnCount');return r;});
+        const tableRanges=spec.tables.map((x,i)=>{if(!x.removeColumns?.length&&!x.removeRows?.length&&!x.renameColumns?.length)return null;const r=tables[i].getRange();r.load('values,formulas,cellCount,rowIndex,columnIndex,rowCount,columnCount');return r;});
         const usedRanges=tableRanges.map((r,i)=>{if(!r)return null;const u=tables[i].worksheet.getUsedRange();u.load('values,formulas,rowIndex,columnIndex,cellCount');return u;});
         await context.sync();
-        for(let i=0;i<tableRanges.length;i++)if(tableRanges[i]){const r=tableRanges[i],x=spec.tables[i];if(r.cellCount>20000)fail('table_too_large');if(x.removeColumns?.some(c=>!r.values[0].includes(c))||x.removeColumns?.length>=r.values[0].length||(x.removeRows?.length>=r.values.length-1)||x.removeRows?.some(n=>n>=r.values.length-1))fail('missing_table_member');}
+        for(let i=0;i<tableRanges.length;i++)if(tableRanges[i]){const r=tableRanges[i],x=spec.tables[i];if(r.cellCount>20000)fail('table_too_large');if(x.renameColumns?.some(c=>!r.values[0].includes(c.before)||r.values[0].includes(c.after)))fail('invalid_column_rename');if(x.removeColumns?.some(c=>!r.values[0].includes(c))||x.removeColumns?.length>=r.values[0].length||(x.removeRows?.length>=r.values.length-1)||x.removeRows?.some(n=>n>=r.values.length-1))fail('missing_table_member');}
         for(let i=0;i<tableRanges.length;i++)if(tableRanges[i]){
           const r=tableRanges[i],u=usedRanges[i],x=spec.tables[i];if(u.cellCount>100000)fail('sheet_too_large');
           for(let row=0;row<u.values.length;row++)for(let col=0;col<u.values[row].length;col++){
@@ -83,6 +84,7 @@ export function createLayoutAdapter(Excel,Office,guard) {
         for (let i=0;i<cells.length;i++) cells[i].values=[[spec.cells[i].after]];
         for(let i=0;i<tables.length;i++){
           const x=spec.tables[i];
+          for(const c of x.renameColumns||[])tables[i].columns.getItem(c.before).name=c.after;
           for(const col of x.removeColumns||[])tables[i].columns.getItem(col).delete();
           for(const index of [...(x.removeRows||[])].sort((a,b)=>b-a))tables[i].rows.deleteRowsAt(index,1);
         }

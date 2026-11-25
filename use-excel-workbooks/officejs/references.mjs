@@ -3,10 +3,11 @@ const fail=code=>{throw Object.assign(new Error(code),{code});};
 export function validateReferences(items) {
   if(!Array.isArray(items)||!items.length||items.length>200)fail('invalid_reference_count');const seen=new Set();
   for(const x of items) {
-    if(!x||Object.keys(x).some(k=>!['sheet','cell','before','oldAddress','newAddress','replacements','allowStrikeRemoval'].includes(k))||typeof x.sheet!=='string'||!x.sheet||x.sheet.length>31||!/^[A-Z]{1,3}[1-9][0-9]{0,6}$/.test(x.cell)||typeof x.before!=='string'||x.before.length>32767||!Array.isArray(x.replacements)||x.replacements.length>8||(x.allowStrikeRemoval!==undefined&&typeof x.allowStrikeRemoval!=='boolean'))fail('invalid_reference');
+    if(!x||Object.keys(x).some(k=>!['sheet','cell','before','oldAddress','newAddress','replacements','allowStrikeRemoval','citation'].includes(k))||typeof x.sheet!=='string'||!x.sheet||x.sheet.length>31||!/^[A-Z]{1,3}[1-9][0-9]{0,6}$/.test(x.cell)||typeof x.before!=='string'||x.before.length>32767||!Array.isArray(x.replacements)||x.replacements.length>8||(x.allowStrikeRemoval!==undefined&&typeof x.allowStrikeRemoval!=='boolean'))fail('invalid_reference');
     const urlpair=(a,b)=>{try{a=new URL(a);b=new URL(b);if(a.protocol!=='https:'||b.protocol!=='https:'||a.origin!==b.origin||a.username||a.password||b.username||b.password)fail('invalid_url');}catch{fail('invalid_url');}};
-    if(x.oldAddress!==null||x.newAddress!==null)urlpair(x.oldAddress??x.newAddress,x.newAddress);
-    for(const r of x.replacements){if(!r||Object.keys(r).some(k=>!['before','after'].includes(k)))fail('invalid_replacement');urlpair(r.before,r.after);if(x.before.split(r.before).length!==2)fail('ambiguous_reference');}
+    if(x.citation!==undefined&&x.citation!==true)fail('invalid_citation');
+    if(x.citation){if(x.newAddress!==null)fail('citation_link_refused');if(x.oldAddress!==null)urlpair(x.oldAddress,x.oldAddress);}else if(x.oldAddress!==null||x.newAddress!==null)urlpair(x.oldAddress??x.newAddress,x.newAddress);
+    for(const r of x.replacements){if(!r||Object.keys(r).some(k=>!['before','after'].includes(k)))fail('invalid_replacement');if(x.citation){if(typeof r.before!=='string'||!r.before||typeof r.after!=='string'||r.after.length>32767||/[\x00-\x08]/.test(r.after))fail('invalid_citation_text');}else urlpair(r.before,r.after);if(x.before.split(r.before).length!==2)fail('ambiguous_reference');}
     const key=x.sheet+'!'+x.cell;if(seen.has(key))fail('duplicate_reference');seen.add(key);
   }
   return items;
@@ -37,6 +38,7 @@ export function createReferencesAdapter(Excel,Office,guard) {return async(action
       if(action==='references-read')return {status:'references_ready',expected,after};
       if(JSON.stringify(expected)!==JSON.stringify(request.expected))fail('stale_formatting');
       await guard();dispatched=true;
+      for(let i=0;i<items.length;i++)if(!request.restoreOnly&&items[i].citation&&items[i].oldAddress!==null)ranges[i].clear('RemoveHyperlinks');
       for(let i=0;i<items.length;i++)if(!request.restoreOnly&&items[i].newAddress!==null)ranges[i].hyperlink={address:items[i].newAddress,textToDisplay:after[i].map(r=>r.text).join('')};
       await context.sync();
       for(let i=0;i<items.length;i++){ranges[i].format.font.set(Object.fromEntries(Object.entries(request.restoration[i].base).filter(([k])=>!['subscript','superscript'].includes(k))));ranges[i].setCellProperties([[{textRuns:request.restoration[i].runs}]]);}
