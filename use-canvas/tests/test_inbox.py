@@ -133,6 +133,7 @@ class InboxTest(unittest.TestCase):
         plan = self.preview()
         self.assertEqual((plan["body"], plan["audience"], [r["name"] for r in plan["recipients"]]), ("Thank you.\n\nExample reply.", "everyone else in the conversation", ["Example Teacher", "Example Assistant"]))
         self.assertEqual(plan["target"]["latest_message"]["id"], "502")
+        self.assertEqual(plan["warnings"], [])
         self.assertEqual((self.fixture.posts, self.fixture.conversation["workflow_state"]), ([], "unread"))
         self.assertNotIn("Example reply", self.history())
         self.assertEqual(self.preview()["preview_hash"], plan["preview_hash"])
@@ -140,6 +141,19 @@ class InboxTest(unittest.TestCase):
         self.assertIn("1 of 2", one["audience"])
         self.assertTrue(one["warnings"])
         self.assertNotEqual(one["preview_hash"], plan["preview_hash"])
+
+    def test_recipients_who_missed_the_latest_message_are_named(self):
+        self.fixture.messages[0]["participating_user_ids"] = [1001, 2002]
+        plan = self.preview()
+        self.assertEqual([p["id"] for p in plan["target"]["latest_message"]["reached"]], ["1001", "2002"])
+        self.assertEqual(plan["warnings"], ["These recipients did not receive the latest message: Example Assistant"])
+        self.assertNotIn("did not receive", " ".join(self.preview(to=("--to", "2002"))["warnings"]))
+        self.fixture.messages[0]["participating_user_ids"] = [1001, 2002, 3003]
+        self.assertEqual(self.preview()["warnings"], [])
+
+    def test_the_readable_list_shows_this_accounts_own_later_message(self):
+        self.fixture.conversation["last_authored_message_at"] = "2026-10-05T09:00:00Z"
+        self.assertIn("2026-10-05T09:00:00Z", self.run_cli("inbox", "example")[1])
 
     def test_a_reviewed_reply_is_sent_once_and_read_back(self):
         code, value, error = self.execute(self.preview())

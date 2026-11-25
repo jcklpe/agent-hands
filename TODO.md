@@ -2,7 +2,7 @@
 Use this file as a short map; detailed reasoning and task state belong in the relevant spike pair.
 
 ## Active
-- Canvas Inbox (slug `canvas-inbox`, opened 2026-11-25): list and read Inbox conversations without marking them read, and reply in one after review. Built with synthetic tests; live read and reply remain. [Scope](docs/active-spikes/canvas-inbox.md); [tasks](docs/active-spikes/canvas-inbox.todo.md).
+- Canvas Inbox (slug `canvas-inbox`, opened 2026-11-25): list and read Inbox conversations without marking them read, and reply in one after review. Built and tested; listing and reading checked live, unread handling and a live reply remain. [Scope](docs/active-spikes/canvas-inbox.md); [tasks](docs/active-spikes/canvas-inbox.todo.md).
 - Canvas linked readings (slug `canvas-linked-readings`, opened 2026-11-25): offline list of an export's links, separating Canvas files from readings elsewhere. Built with synthetic tests and run on existing exports; the user's check remains. [Scope](docs/active-spikes/canvas-linked-readings.md); [tasks](docs/active-spikes/canvas-linked-readings.todo.md).
 - Spreadsheet text runs: Office.js adapter, Nextcloud Office local prototype and GridCraft preservation evaluation. [Tasks](docs/active-spikes/spreadsheet-text-runs.todo.md).
 - Microsoft Forms authoring and Word tail separation (2026-11-24): bounded owned-browser CLI implementation and authorized live verification. [Forms](docs/active-spikes/microsoft-forms.todo.md); [Word](docs/active-spikes/word-tail-separation.todo.md).

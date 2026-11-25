@@ -10,12 +10,13 @@ reviewed: 2026-11-25
 `inbox`, `conversation` and `reply-conversation` are documented in [the Inbox guide](../../use-canvas/references/inbox.md). Choices made while building:
 
 - **Reading asks Canvas not to mark messages read.** The read endpoint marks a conversation read by default; every read sends `auto_mark_as_read=false`.
+- **The latest message's own audience is shown.** Messages in a group conversation can reach only some of it, so replying to everyone can widen a private aside. The preview names any recipient who did not receive the latest message.
 - **Recipients are always named.** Canvas defaults an omitted list to everyone, so the tool sends the exact people previewed, all of whom must already be in the conversation.
 - **The tool supplies what Canvas lacks.** Sending has no duplicate protection. The same text is refused when this account already posted it after the latest message from anyone else, a changed conversation invalidates the review, and an unknown outcome blocks another reply there until it is recorded.
 - **A sent message counts only when it is read back** in the conversation with the same author, text and, when Canvas reports it, the same audience. Canvas may queue a large conversation's message, so the readback looks a few times.
 - **History holds no content:** only IDs, counts, coverage and outcomes.
 
-The API contract was checked on 2026-11-25 against the [Conversations reference](https://developerdocs.instructure.com/services/canvas/resources/conversations) and the public controller source. What the institution's instance does is unverified until a live check.
+The API contract was checked on 2026-11-25 against the [Conversations reference](https://developerdocs.instructure.com/services/canvas/resources/conversations) and the public controller source. A live read-only check the same day confirmed listing, reading and per-message audiences; keeping a message unread and sending a reply are unverified live.
 
 ## Motivation and current gap
 The current [Canvas capability](../../use-canvas/SKILL.md) and its CLI help cover course retrieval and bounded course-content and learner writes, but no Inbox conversation listing, reading or reply command exists. The [write guide](../../use-canvas/references/writes.md) explicitly excludes messaging. Keep the accepted [Canvas access work](../archive/canvas-access.md) as predecessor history; this is a separate Inbox extension rather than reopening that completed work or changing course-export coverage implicitly.

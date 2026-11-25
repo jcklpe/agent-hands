@@ -57,7 +57,7 @@ def summary(reader, raw):
     count = raw.get("message_count")
     if isinstance(count, bool) or not isinstance(count, int) or count < 0:
         raise CanvasError("malformed", "Canvas returned an invalid message count")
-    row = {key: text(raw, key) for key in ("subject", "workflow_state", "last_message", "last_message_at", "context_name")}
+    row = {key: text(raw, key) for key in ("subject", "workflow_state", "last_message", "last_message_at", "last_authored_message_at", "context_name")}
     people = [{"id": id_string(p.get("id")), "name": text(p, "full_name") or text(p, "name")} for p in records(raw.get("participants"), "participants")]
     row.update(id=cid, message_count=count, private=raw.get("private"), cannot_reply=raw.get("cannot_reply"), participants=sorted(people, key=lambda p: (len(p["id"]), p["id"])), audience=sorted(ids(raw.get("audience"), "audience"), key=lambda i: (len(i), i)) if raw.get("audience") is not None else None, html_url=f"{reader.origin}/conversations/{cid}")
     return row
@@ -178,14 +178,17 @@ class Reply:
         self.fields = [("body", self.body), ("recipients[]", chosen)]
         latest = found["messages"][-1] if found["messages"] else None
         everyone = set(chosen) == set(others)
+        # A message inside a group conversation can be addressed to only some of it.
+        reached = None if latest is None or latest["participant_ids"] is None else set(latest["participant_ids"])
+        added = [] if reached is None else [i for i in chosen if i not in reached]
         self.plan = {
             "command": "reply-conversation", "account": self.client.account.alias, "author_id": self.me, "context": {"type": "inbox"},
-            "target": {"conversation_id": found["id"], "subject": found["subject"], "context_name": found["context_name"], "html_url": found["html_url"], "latest_message": {k: latest[k] for k in ("id", "author_id", "author_name", "created_at", "body")} if latest else None},
+            "target": {"conversation_id": found["id"], "subject": found["subject"], "context_name": found["context_name"], "html_url": found["html_url"], "latest_message": {**{k: latest[k] for k in ("id", "author_id", "author_name", "created_at", "body")}, "reached": None if reached is None else [{"id": i, "name": names.get(i)} for i in latest["participant_ids"]]} if latest else None},
             "recipients": [{"id": i, "name": names[i]} for i in chosen],
             "audience": "everyone else in the conversation" if everyone else f"{len(chosen)} of {len(others)} other people in the conversation",
             "body": self.body,
             "effects": ["Canvas posts the message immediately and notifies the recipients by their own settings; it cannot be unsent through this tool"],
-            "warnings": (["This account posted the same text earlier in this conversation"] if mine else []) + ([] if everyone else ["People in the conversation who are not listed will not see this message"]),
+            "warnings": (["This account posted the same text earlier in this conversation"] if mine else []) + (["These recipients did not receive the latest message: " + ", ".join(names[i] or i for i in added)] if added else []) + ([] if everyone else ["People in the conversation who are not listed will not see this message"]),
             "steps": [{"method": "POST", "path": f"{PATH}/{found['id']}/add_message", "recipients": chosen}],
             # Read state, stars and similar flags can change without changing what is being answered.
             "dependencies": digest({"messages": [[m["id"], m["author_id"], m["body"]] for m in found["messages"]], "audience": others, "subject": found["subject"], "private": found["private"], "context": found["context_name"]}),
@@ -276,7 +279,7 @@ def render(value):
         lines = [f"# Inbox: {value['scope']}", f"Coverage: {value['coverage']['status']}, {value['coverage']['count']} conversations", ""]
         for row in value["conversations"]:
             names = ", ".join(p["name"] or p["id"] for p in row["participants"])
-            lines += [f"- {row['id']} · {row['last_message_at'] or 'date not returned'} · {row['workflow_state']} · {row['subject'] or '(no subject)'} · {row['context_name'] or 'no course'} · {row['message_count']} messages · {names}"]
+            lines += [f"- {row['id']} · {max(filter(None, (row['last_message_at'], row['last_authored_message_at'])), default='date not returned')} · {row['workflow_state']} · {row['subject'] or '(no subject)'} · {row['context_name'] or 'no course'} · {row['message_count']} messages · {names}"]
         return "\n".join(lines) + "\n"
     lines = [f"# {value['subject'] or '(no subject)'}", value["html_url"], f"Conversation {value['id']} · {value['context_name'] or 'no course'} · {value['workflow_state']}", "People: " + ", ".join(f"{p['name'] or 'unnamed'} ({p['id']})" for p in value["participants"]), f"Coverage: {value['coverage']['status']}, {value['coverage']['messages']} of {value['coverage']['message_count']} messages", ""]
     for row in value["messages"]:
