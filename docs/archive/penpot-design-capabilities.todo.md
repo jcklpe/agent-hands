@@ -1,10 +1,14 @@
 ---
-attention: live
+attention: historical
+status: closed
 ---
 # Penpot design capabilities tasks
+Historical record. Closed 2026-11-25 under D4. Stable slug: `penpot-design-capabilities`. Current operation, recovery and observed quirks belong to [use-penpot](../../use-penpot/SKILL.md) and its [quirks reference](../../use-penpot/references/quirks.md); setup belongs to [setup-penpot](../../setup-penpot/SKILL.md). Task states and instructions below are as they stood at closure. No successor spike is open.
+
 ## To Do
 - Run one hosted replacement and its restore on disposable material, comparing every shape both times and checking that an open editor shows the result without a reload. Needs the user's itemized consent: it deletes the replaced board's old shapes and adds two locked versions to the file's history.
   - 2026-11-23, live, with the user's itemized approval: on the user's wireframe file, the earlier test copy on the temporary page was replaced with a fresh copy of its Workshop board and then restored. Each step saved and locked its named version first; Penpot listed both as user-created and locked. Both writes read back exactly, field by field, with no concurrent changes, and the journal records ended as restored and verified, owner-only. Compared with a capture taken beforehand, the restored board had the same shape IDs, order and fields, and the page the same object count. The file went from revision 28 to 30 and keeps the two new locked versions; the test page, both versions and both records remain for the user. Remaining: the open-editor check, which needs the file connected through MCP.
+  - 2026-11-25: the user closed the spike with the open-editor check unverified; current guidance says to reload after a replacement. With their separate itemized approval the test page was deleted, revision 30 to 31, with every other page read back unchanged; both locked versions and both private records remain.
 
 ## Next implementation handoff - 2026-11-23
 This is the first selected coding workstream after runtime-state and Morris closure. Continue the existing copier and capability map; do not rebuild the connector or start another aggregate tool. Read `use-penpot/SKILL.md`, `use-penpot/references/quirks.md` and the copier/tests before editing. Refresh dated API assumptions against the actual supported endpoint before relying on them.

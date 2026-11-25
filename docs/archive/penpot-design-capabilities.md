@@ -1,7 +1,10 @@
 ---
-attention: live
+attention: historical
+status: closed
 ---
 # Penpot design capabilities
+Historical record. Closed 2026-11-25 under D4. Stable slug: `penpot-design-capabilities`. Current operation, recovery and observed quirks belong to [use-penpot](../../use-penpot/SKILL.md) and its [quirks reference](../../use-penpot/references/quirks.md); setup belongs to [setup-penpot](../../setup-penpot/SKILL.md). Task states and instructions below are as they stood at closure. No successor spike is open.
+
 Make `use-penpot` cover what design-workflow collections such as [Wireframe Workflows](https://github.com/jcklpe/wireframe-workflows) need from Penpot, beyond the MCP connector itself. Wireframe Workflows names the capabilities and stays tool-agnostic; `use-penpot` explains how Penpot provides each one, under the same names, and owns any tooling that fills a gap.
 
 ## Positions the user has adopted
