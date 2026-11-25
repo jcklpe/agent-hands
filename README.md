@@ -31,9 +31,6 @@ bash use-trello/scripts/trello --help
 
 Cloning does not install skills into an agent client automatically. The setup dialogue offers optional global discovery for selected services in Codex and Claude Code. Each service setup owns its `scripts/link-skills.py` entrypoint: preview first, then apply the authorized selection with `--execute`. See [global link choices and conflict-safe repair](setup-agent-hands/references/global-skill-links.md). Direct use of a `SKILL.md` remains available without links. If distributing only selected skills, retain their declared dependencies and sibling folder layout; optional link entrypoints also require the shared `setup-agent-hands/scripts/skill_links.py` primitive. A project can also adopt this repository as an `agent-hands/` Git submodule and pin a reviewed revision.
 
-## Workday implementation in progress
-[use-workday](use-workday/SKILL.md) provides offline normalized timesheet reads and allocation previews. [setup-workday](setup-workday/SKILL.md) records the unresolved live transport requirements. Draft execution is fake-tested internally but unavailable against Workday; no submission command exists. This capability is not globally installed or connected.
-
 ## Available capabilities
 The names below group related reads, writes, and comments where implemented. A `use-*` skill is a bounded interface, not a promise of the service's full API.
 
@@ -61,6 +58,7 @@ The names below group related reads, writes, and comments where implemented. A `
 | Slack | [use-slack-lists](use-slack-lists/SKILL.md) | Read schemas/items, create/update typed fields, read/add item comments, and export selected Lists. |
 | Canvas | [use-canvas](use-canvas/SKILL.md) | Read/export selected courses with coverage, download files/images, query private history, and preview/execute fifteen bounded course-content and learner write commands. Reads/exports, opt-in credential renewal and ordinary page/assignment/module/file cycles passed live checks. Announcement/revert/learner tests and separately approved Test Student reset cleanup passed in an isolated test course, restoring the original active baseline; historical attachment storage is not proven purged. |
 | Trello | [use-trello](use-trello/SKILL.md) | Read boards/lists/labels, create/edit cards and checklists, comment, adjust labels, link cards, and export boards. No card archive/delete operation. |
+| Workday | [use-workday](use-workday/SKILL.md) | List several weeks, read and preview one exact week, propose a week from an earlier one, save approved unsubmitted blocks and submit approved weeks through Chrome on macOS. Reads and saves are proven live; submission only as a preview. |
 | Odoo | [use-odoo-projects](use-odoo-projects/SKILL.md) | Read projects/stages/tasks/comments, create/update tasks, and add comments. No delete/archive or generic model interface. |
 | Penpot | [use-penpot](use-penpot/SKILL.md) | Inspect and edit a connected file through Penpot's MCP tools and export images for visual checks. MCP writes act immediately. Also export design-token JSON from a local archive using a project-owned manifest, with preview and guarded execution; this offline command needs no credentials. With a personal access token, resolve a project's `design-files.json` page roles, reorder pages and copy boards between pages through Penpot's backend API, with preview, revision-bound execution and readback. |
 
@@ -86,6 +84,7 @@ Keep each selected use skill alongside its provider's setup skill. Setup owns in
 | Slack | [setup-slack](setup-slack/SKILL.md) |
 | Canvas | [setup-canvas](setup-canvas/SKILL.md), including the packaged setup/use skill installer |
 | Trello | [setup-trello](setup-trello/SKILL.md) |
+| Workday | [setup-workday](setup-workday/SKILL.md) |
 | Odoo | [setup-odoo](setup-odoo/SKILL.md) |
 | Penpot | [setup-penpot](setup-penpot/SKILL.md) |
 
