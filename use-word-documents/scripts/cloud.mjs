@@ -57,7 +57,7 @@ export function docxStartup(bytes, addinId) {
   const panes = array(documents['word/webextensions/taskpanes.xml']?.taskpanes?.taskpane);
   return roots.length === 1 && references.length === 1 && panes.filter(p => p.webextensionref?.['@_id'] === references[0]['@_Id']).length === 1;
 }
-export function docxParagraphs(bytes) {
+export function docxParagraphs(bytes, {allowPreservedInsertions = false} = {}) {
   const entries = parts(bytes, name => ['word/document.xml', 'word/settings.xml'].includes(name));
   if (!entries['word/document.xml']) fail('invalid_docx', 'DOCX has no document body.');
   const xml = strFromU8(entries['word/document.xml']);
@@ -65,7 +65,7 @@ export function docxParagraphs(bytes) {
   const parser = new XMLParser({preserveOrder: true, removeNSPrefix: true, ignoreAttributes: false, trimValues: false, parseTagValue: false});
   const parsed = parser.parse(xml);
   const has = (nodes, names) => nodes.some(n => Object.entries(n).some(([key, value]) => names.includes(key) || Array.isArray(value) && has(value, names)));
-  if (has(parsed, ['ins', 'del', 'moveFrom', 'moveTo'])) fail('unsupported_document', 'Documents with tracked revisions require a separate workflow.');
+  if (has(parsed, [...(allowPreservedInsertions ? [] : ['ins']), 'del', 'moveFrom', 'moveTo', 'rPrChange', 'pPrChange'])) fail('unsupported_document', 'Documents with tracked revisions require a separate workflow.');
   if (entries['word/settings.xml']) {
     const settingsXML = strFromU8(entries['word/settings.xml']);
     if (/<!DOCTYPE|<!ENTITY/i.test(settingsXML) || XMLValidator.validate(settingsXML) !== true) fail('invalid_docx', 'Document settings are not supported.');

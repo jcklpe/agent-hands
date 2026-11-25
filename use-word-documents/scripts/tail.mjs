@@ -9,14 +9,15 @@ import {startBridge} from './bridge.mjs';
 import {openBrowser,browserIdentity} from './browser.mjs';
 import {cloudTarget,requireWrite} from './cloud.mjs';
 import {privateTempDir} from './temporary.mjs';
-import {bodySnapshot,tailEdit,sameParagraphs} from './tail-core.mjs';
+import {bodySnapshot,tailEdit,sameParagraphs,commentEvidence,sameReviewEvidence} from './tail-core.mjs';
 const exec=promisify(execFile), emit=value=>process.stdout.write(JSON.stringify(value,null,2)+'\n');
-async function snapshot(target){
+let lastComments;
+async function snapshot(target,allowed=[]){
  const dir=privateTempDir('agent-hands-word-readback-');
  try{
   const file=path.join(dir,'body.docx');
   await exec('bash',[path.join(ROOT,'use-microsoft-files/scripts/files'),'download',target.alias,target.item,'--drive',target.drive,'--out',file],{maxBuffer:1_000_000,timeout:120000});
-  return bodySnapshot(fs.readFileSync(file));
+  const bytes=fs.readFileSync(file);const paragraphs=bodySnapshot(bytes,allowed);lastComments=commentEvidence(bytes);return paragraphs;
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 }
 function checkPlan(plan,expected){
@@ -46,7 +47,7 @@ try{
    ({target,profile}=await cloudTarget(alias,plan.target.drive,plan.target.item));
    for(const key of ['origin','guid','pathname','canonicalPath'])if(target[key]!==plan.target[key])fail('target_mismatch','The document identity changed after preview.');
    if(command==='verify'){
-    const current=await snapshot(target),status=sameParagraphs(current,plan.edit.after)?'cloud_text_verified':sameParagraphs(current,plan.edit.before)?'original_text_observed':'cloud_conflict_or_unverified';
+    const current=await snapshot(target,plan.commentParagraphs||[]),status=sameParagraphs(current,plan.edit.after)&&sameReviewEvidence(lastComments,plan.commentEvidence)?'cloud_text_verified':sameParagraphs(current,plan.edit.before)?'original_text_observed':'cloud_conflict_or_unverified';
     emit({status,operation:plan.id,replayAllowed:false});if(status!=='cloud_text_verified')process.exitCode=1;
    }
    if(command==='apply'&&(!values.execute||fs.existsSync(files.journal)))fail(fs.existsSync(files.journal)?'already_dispatched':'execute_required','Apply requires --execute and an operation that has never been dispatched. Use verify after uncertainty.');
@@ -57,10 +58,16 @@ try{
    await browserIdentity(browser.context,target,profile);await bridge.waitReady();
    const read=await bridge.command('read');
    if(read.status!=='read_ok')fail('read_failed','Word did not return document paragraphs.');
-   const cloud=await snapshot(target);
+   const spec=command==='preview'?readJSON(values.spec):null;
+   const anchor=command==='preview'?spec.anchor:plan.edit.anchor;
+   const prefix=read.paragraphs.slice(0,read.paragraphs.indexOf(anchor)).filter(p=>p.trim());
+   const replacements=command==='preview'?(spec.replacements||[]):plan.edit.replacements;
+   const allowed=command==='preview'?prefix.filter(p=>!replacements.some(r=>r.before===p)):plan.commentParagraphs||[];
+   const cloud=await snapshot(target,allowed);
+   if(command==='apply' && !sameReviewEvidence(lastComments,plan.commentEvidence))fail('stale_comments','Document comments changed since preview; no mutation sent.');
    if(!sameParagraphs(read.paragraphs,cloud))fail('cloud_baseline_mismatch','The complete Word body and cloud body differ. Wait for coauthoring synchronization and preview again.');
    if(command==='preview'){
-    const spec=readJSON(values.spec),edit=tailEdit(read.paragraphs,spec);plan=makePlan(target,edit);writeJSON(operationFiles(account,plan.id).plan,plan,true);
+    const edit=tailEdit(read.paragraphs,spec);plan=makePlan(target,edit);plan.commentParagraphs=allowed;plan.commentEvidence=lastComments;{const {hash:oldHash,...payload}=plan;plan.hash=hash(payload);}writeJSON(operationFiles(account,plan.id).plan,plan,true);
     emit({status:'tail_preview',operation:plan.id,hash:plan.hash,name:target.name,removeFrom:edit.anchor,removedParagraphCount:edit.before.length-edit.after.length+1,replacements:edit.replacements,link:{label:edit.label,url:edit.url},after:edit.after});
    }else{
     if(!sameParagraphs(read.paragraphs,plan.edit.before))fail('stale_preview','Document text changed since preview; no mutation was sent.');
@@ -68,7 +75,7 @@ try{
     const result=await bridge.command('replace-tail',{edit:plan.edit},()=>markDispatch(files.journal,plan));
     writeJSON(files.journal,{operation:plan.id,hash:plan.hash,status:result.status,time:new Date().toISOString()});
     let verified=false;
-    if(result.status!=='refused_before_mutation')for(let i=0;i<6;i++){if(sameParagraphs(await snapshot(target),plan.edit.after)){verified=true;break;}await sleep(2000);}
+    if(result.status!=='refused_before_mutation')for(let i=0;i<6;i++){if(sameParagraphs(await snapshot(target,plan.commentParagraphs||[]),plan.edit.after)&&sameReviewEvidence(lastComments,plan.commentEvidence)){verified=true;break;}await sleep(2000);}
     const final={status:verified?'cloud_text_verified':result.status==='refused_before_mutation'?result.status:'uncertain_after_dispatch',operation:plan.id,sessionStatus:result.status,code:result.code,replayAllowed:false};writeJSON(files.journal,final);emit(final);if(!verified)process.exitCode=1;
    }
   }

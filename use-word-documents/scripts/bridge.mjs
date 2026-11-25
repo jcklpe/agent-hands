@@ -56,7 +56,7 @@ export async function startBridge(account, target) {
   const origin = `https://localhost:${account.port}`, prefix = `/word/${account.secret}/`, token = randomBytes(32).toString('hex');
   let ready = null, pending = null, closed = false;
   const html = `<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Agent Hands Word</title><h1>Agent Hands Word</h1><p>Only commands from the private Agent Hands browser can run here.</p><pre id="status">Connecting to Word…</pre><script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script><script src="./addin.js"></script>`;
-  const script = fs.readFileSync(path.join(ROOT, 'use-word-documents/addin/app.js'), 'utf8');
+  const script = fs.readFileSync(path.join(ROOT, 'use-word-documents/addin/paragraphs.js'), 'utf8')+'\n'+fs.readFileSync(path.join(ROOT, 'use-word-documents/addin/app.js'), 'utf8');
   const icons = new Map([16, 32, 80].map(size => [`icon-${size}.png`, png(size)]));
   const authenticated = request => {
     const supplied = request.headers['x-agent-hands'];

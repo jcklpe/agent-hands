@@ -3,24 +3,26 @@ import {XMLParser,XMLValidator} from 'fast-xml-parser';
 import {docxParagraphs} from './cloud.mjs';
 import {fail,MAX_TEXT} from './core.mjs';
 
-export const normalizeParagraphs = paragraphs => paragraphs.map(v=>v.replace(/[\r\f]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ')).filter(v=>v.trim());
-export function bodySnapshot(bytes) {
-  docxParagraphs(bytes);
+export const normalizeParagraphs = paragraphs => paragraphs.map(v=>v.replace(/[\r\f\u0005]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ')).filter(v=>v.trim());
+export function bodySnapshot(bytes, allowedCommentParagraphs = []) {
+  allowedCommentParagraphs = normalizeParagraphs(allowedCommentParagraphs);
+  docxParagraphs(bytes, {allowPreservedInsertions: allowedCommentParagraphs.length > 0});
   let size=0;
   const entries=unzipSync(new Uint8Array(bytes),{filter:e=>{
     size+=e.originalSize;
     if(size>64_000_000 || e.originalSize<0)fail('document_too_large','DOCX expansion exceeds the readback bound.');
     return e.name==='word/document.xml' || /^word\/comments[^/]*\.xml$/.test(e.name);
   }});
-  for(const [name,value] of Object.entries(entries)) if(name!=='word/document.xml' && /<(?:\w+:)?comment\b/.test(strFromU8(value)))fail('unsupported_document','Tail replacement refuses documents containing comments. Preserve and handle those comments separately.');
+  for(const [name,value] of Object.entries(entries)) if(!allowedCommentParagraphs.length && name!=='word/document.xml' && /<(?:\w+:)?comment\b/.test(strFromU8(value)))fail('unsupported_document','Tail replacement refuses documents containing comments. Preserve and handle those comments separately.');
   const xml=strFromU8(entries['word/document.xml']);
   if(XMLValidator.validate(xml)!==true || /<!DOCTYPE|<!ENTITY/.test(xml))fail('invalid_docx','Invalid body XML.');
   const parsed=new XMLParser({preserveOrder:true,removeNSPrefix:true,ignoreAttributes:false,trimValues:false,parseTagValue:false}).parse(xml);
   const body=parsed.find(n=>n.document)?.document.find(n=>n.body)?.body;
   if(!body || body.some(n=>!n.p && !n.sectPr))fail('unsupported_document','Tail replacement supports paragraph-only document bodies.');
   const has=(nodes,names)=>nodes.some(n=>Object.entries(n).some(([key,value])=>names.includes(key) || Array.isArray(value)&&has(value,names)));
-  if(has(body,['sdt','object','drawing','fldChar','fldSimple','commentRangeStart','commentRangeEnd','commentReference']))fail('unsupported_document','Body controls, objects, fields and comments require a separate workflow.');
+  if(has(body,['sdt','object','drawing','fldChar','fldSimple',...(!allowedCommentParagraphs.length?['commentRangeStart','commentRangeEnd','commentReference']:[])]))fail('unsupported_document','Body controls, objects, fields and comments require a separate workflow.');
   const content=nodes=>nodes.map(n=>n.t?n.t.map(t=>t['#text']??'').join(''):n.tab?'\t':n.br?'\n':Object.entries(n).filter(([k,v])=>k!==':@'&&Array.isArray(v)).map(([,v])=>content(v)).join('')).join('');
+  for(const node of body.filter(n=>n.p)) if(has(node.p,['commentRangeStart','commentRangeEnd','commentReference','ins']) && !allowedCommentParagraphs.includes(normalizeParagraphs([content(node.p)])[0]))fail('comment_in_changed_range','A comment or insertion touches a paragraph outside the preserved prefix: '+normalizeParagraphs([content(node.p)])[0]);
   const paragraphs=normalizeParagraphs(body.filter(n=>n.p).map(n=>content(n.p)));
   if(paragraphs.join('').length>MAX_TEXT)fail('document_too_large','Body exceeds the text bound.');
   return paragraphs;
@@ -45,3 +47,19 @@ export function tailEdit(paragraphs,spec) {
   return {kind:'replace-tail',...structuredClone(spec),before,after:[...prefix,spec.label]};
 }
 export function sameParagraphs(a,b){return JSON.stringify(normalizeParagraphs(a))===JSON.stringify(normalizeParagraphs(b));}
+
+export function commentEvidence(bytes) {
+ const entries=unzipSync(new Uint8Array(bytes));
+ const parser=new XMLParser({ignoreAttributes:false,removeNSPrefix:true,trimValues:false,parseTagValue:false});
+ const xml=entries['word/comments.xml'];
+ const body = parser.parse(strFromU8(entries['word/document.xml']));
+ const insertions=[];
+ function collect(node){if(!node||typeof node!=='object')return;for(const [key,value] of Object.entries(node)){if(key==='ins')insertions.push(value);else if(typeof value==='object')collect(value);}}
+ collect(body);
+ return {comments:xml?parser.parse(strFromU8(xml)):null,insertions};
+}
+
+export function sameReviewEvidence(a,b){
+ const normalize=value=>{if(Array.isArray(value))return value.map(normalize);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([k])=>k!=='@_id'&&!k.startsWith('@_rsid')).map(([k,v])=>[k,normalize(v)]));return value;};
+ return JSON.stringify(a?.comments)===JSON.stringify(b?.comments) && JSON.stringify(normalize(a?.insertions))===JSON.stringify(normalize(b?.insertions));
+}

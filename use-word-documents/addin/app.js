@@ -35,6 +35,10 @@
         if (text.join('').length > cfg.maxText) refuse('document_too_large');
         if (job.action === 'read') return {status: 'read_ok', paragraphs: text};
         if (Office.context.document.mode !== Office.DocumentMode.ReadWrite) refuse('read_only');
+        if (['paragraphs-inspect','paragraphs-apply'].includes(job.action)) {
+          if (!Office.context.requirements.isSetSupported('WordApi','1.6')) refuse('word_api_1_6_required');
+          return globalThis.AgentHandsParagraphs.run(context,job,Word,checkTarget);
+        }
         if (job.action === 'enable-startup') {
           if (!Office.context.requirements.isSetSupported('AddinCommands', '1.1')) refuse('commands_unavailable');
           Office.context.document.settings.set('Office.AutoShowTaskpaneWithDocument', true);
@@ -46,7 +50,7 @@
         }
         if (job.action === 'replace-tail') {
           const edit=job.edit;
-          const normalized=values=>values.map(v=>v.replace(/[\r\f]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ')).filter(v=>v.trim());
+          const normalized=values=>values.map(v=>v.replace(/[\r\f\u0005]/g,'').replace(/\v/g,'\n').replace(/\u00a0/g,' ')).filter(v=>v.trim());
           const same=(a,b)=>JSON.stringify(normalized(a))===JSON.stringify(normalized(b));
           if(!edit || edit.kind!=='replace-tail' || !Array.isArray(edit.before) || !Array.isArray(edit.after) || !Array.isArray(edit.replacements) || edit.replacements.length>5 || typeof edit.anchor!=='string' || !edit.anchor || typeof edit.label!=='string' || !edit.label)refuse('unsupported_edit');
           let url;try{url=new URL(edit.url);}catch{refuse('unsupported_edit');}
