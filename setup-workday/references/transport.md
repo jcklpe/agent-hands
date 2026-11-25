@@ -71,9 +71,10 @@ Use one shared private journal directory, `~/.agent-hands/workday/journal/` or b
 
 `workday_browser.py reconcile --target` settles an uncertain save under the same lock from a fresh read: the entry present as a draft means it landed, absence counts as not applied only ten minutes after the attempt, because a lost request could still finish, and an entry present but not a draft stays for the user to inspect. Only landed and not-applied outcomes retire the intent; then preview again. Partial saves never authorize deleting records as rollback.
 
-## Remaining acceptance gates
-- Verify a supported authorized transport from the actual CLI runtime and record exact source/version, scopes, session ownership and platform.
-- Proved 2026-11-23 for the browser reader: complete read-only retrieval of an authorized week with identity, time zone, classification, periods, totals and the approved status. The Not Submitted and Submitted statuses were observed on 2026-11-24; a denied or sent-back week has not been.
-- Verified 2026-11-24 on approved real work: draft-only persistence through Quick Add and authoritative readback, with the Not Submitted label and Workday's reading of the entered times. Still unexercised live: a submission through the tool, an uncertain save or submission and its reconciliation, Workday's overlap refusal and session expiry. Do not create disposable payroll data to test them.
-- Verify client installation/discovery separately. Current commands are repository-relative only; no global links or PATH installation were performed.
-- Human QA and Linux/WSL/native Windows remain outstanding. The current executor journal uses Unix `fcntl`; Windows requires a separately tested lock implementation. No token/cost reduction is measured.
+## Verification limits
+- Proven live on macOS on real work: complete weeks with identity, time zone, classification, pay periods and totals; the Approved, Submitted and Not Submitted statuses; saving through Quick Add from the everyday Chrome with authoritative readback; the multi-week overview; and reads through the own profile.
+- Proven live only as a preview: submission. Its first real run still has to be verified.
+- Not exercised live: saving and submission through the own profile, an uncertain save or submission and its reconciliation, Workday's overlap refusal, sign-out partway through a session, and a week sent back or denied, whose label reads as unknown. Do not create disposable payroll data to test them.
+- Not supported: changing or deleting saved blocks, time off, meal or break entries, worktags, overnight blocks, and saving or submitting a week with rounded times.
+- Linux is untested. Windows needs a separately tested lock and pipe implementation, since both use Unix interfaces. No reduction in tokens or cost has been measured.
+- An API or MCP client the tenant grants would still be preferred; verify its scopes, caller identity and save semantics before using one.
