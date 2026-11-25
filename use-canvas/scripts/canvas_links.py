@@ -79,7 +79,11 @@ def course_links(data, origin):
         category = MODULE_ITEMS.get(item["type"])
         if category:
             source = {"kind": "module_item", "identity": item["identity"], "title": item["title"], "url": item["html_url"], "modules": [modules.get(item["module_id"]) or item["module_id"]]}
-            add(item["title"], item.get("external_url") or item["html_url"], category, item.get("content_id") if category == "canvas_file" else None, source)
+            file_id = item.get("content_id") if category == "canvas_file" else None
+            # A module's web link can point back into Canvas.
+            if item["type"] == "ExternalUrl" and item.get("external_url"):
+                category, file_id = classify(item["external_url"], origin)
+            add(item["title"], item.get("external_url") or item["html_url"], category, file_id, source)
     return links
 
 

@@ -18,6 +18,7 @@ class LinksTest(unittest.TestCase):
         test_cli.CliTest.setUp(self)
         self.fixture.data["pages"][0]["body"] = BODY
         self.fixture.data["items"].append({"id": "199", "type": "ExternalUrl", "title": "Example publisher", "external_url": "https://publisher.example/chapter", "position": 9})
+        self.fixture.data["items"].append({"id": "200", "type": "ExternalUrl", "title": "Week 2 readings", "external_url": f"{ORIGIN}/courses/123/pages/readings#week2", "position": 10})
         self.export = self.root / "snapshot"
         code, _, error = self.run_cli("export", "example", "--output", str(self.export))
         self.assertEqual(code, 0, error)
@@ -43,6 +44,8 @@ class LinksTest(unittest.TestCase):
         self.assertEqual({r["category"] for r in course["links"]}, {"external", "external_tool"})
         module = next(r for r in course["links"] if r["title"] == "Example publisher")
         self.assertEqual((module["url"], module["source"]["kind"], module["source"]["modules"]), ("https://publisher.example/chapter", "module_item", ["Week 1"]))
+        self.assertNotIn("Week 2 readings", {r["title"] for r in course["links"]})
+        self.assertEqual(next(r["category"] for r in self.links()["links"] if r["title"] == "Week 2 readings"), "canvas_page")
         self.assertGreater(course["counts"]["canvas_file"], 0)
         self.assertEqual(course["coverage"]["pages"], "complete")
 
