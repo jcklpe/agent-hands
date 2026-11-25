@@ -1,6 +1,6 @@
 ---
 attention: live
-status: implemented-offline
+status: ready-to-close
 reviewed: 2026-11-25
 ---
 # Canvas Inbox CLI coverage

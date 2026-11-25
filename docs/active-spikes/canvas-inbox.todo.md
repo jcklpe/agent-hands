@@ -1,5 +1,6 @@
 ---
 attention: live
+status: ready-to-close
 reviewed: 2026-11-25
 ---
 # Canvas Inbox tasks
@@ -7,7 +8,9 @@ reviewed: 2026-11-25
 
 ## To Do
 - [ ] Read one unread conversation live and check that it stays unread in Canvas. On 2026-11-25 the authorized account had none.
+  - 2026-11-25: the user chose to skip this and close without it; it is an open check in the Inbox guide, with a new spike if it fails.
 - [ ] Reply live: one real reply the user wants to send, with its exact text and recipients approved, verified in Canvas.
+  - 2026-11-25: left to the first real reply the user wants to send, under the same terms.
 - [ ] Update the README's Canvas row at closure.
 
 ## Done
