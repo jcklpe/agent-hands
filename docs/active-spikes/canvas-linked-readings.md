@@ -4,7 +4,7 @@ status: implemented-offline
 reviewed: 2026-11-25
 ---
 # Canvas linked-reading discovery and handoff
-[Tasks](canvas-linked-readings.todo.md). Slug: `canvas-linked-readings`. Captured 2026-11-02 at the user's request and promoted on 2026-11-25 when they asked to start it. [Canvas Inbox](canvas-inbox.md) is separate.
+[Tasks](canvas-linked-readings.todo.md). Slug: `canvas-linked-readings`. Captured 2026-11-02 at the user's request and promoted on 2026-11-25 when they asked to start it. [Canvas Inbox](../archive/canvas-inbox.md) is separate.
 
 ## What is built
 `links` lists every link in the pages, syllabus, assignments, announcements, discussions, calendar events and modules of an export that already exists, and says which are Canvas files, which are other Canvas content and which leave Canvas. It reads the export only, so export format and determinism are untouched and no account, token or network is needed. `--elsewhere` keeps the links that leave Canvas, which are the readings an export cannot hold. [Use Canvas](../../use-canvas/SKILL.md#links-in-an-export) documents it.

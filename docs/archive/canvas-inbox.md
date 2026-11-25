@@ -1,9 +1,11 @@
 ---
-attention: live
-status: ready-to-close
+attention: historical
+status: closed
 reviewed: 2026-11-25
 ---
 # Canvas Inbox CLI coverage
+Historical record. Closed 2026-11-25 under D6. Stable slug: `canvas-inbox`. Current operation and open checks belong to [use-canvas](../../use-canvas/SKILL.md) and its [Inbox guide](../../use-canvas/references/inbox.md). Task states and instructions below are as they stood at closure. No successor spike is open; a new one opens if either open check fails.
+
 [Tasks](canvas-inbox.todo.md). Slug: `canvas-inbox`. Captured 2026-11-02 at the user's request and promoted on 2026-11-25 when they asked to start it. The request covers implementation; live reads and any reply still need their own exact account, conversation and message.
 
 ## What is built
@@ -19,7 +21,7 @@ reviewed: 2026-11-25
 The API contract was checked on 2026-11-25 against the [Conversations reference](https://developerdocs.instructure.com/services/canvas/resources/conversations) and the public controller source. A live read-only check the same day confirmed listing, reading and per-message audiences; keeping a message unread and sending a reply are unverified live.
 
 ## Motivation and current gap
-The current [Canvas capability](../../use-canvas/SKILL.md) and its CLI help cover course retrieval and bounded course-content and learner writes, but no Inbox conversation listing, reading or reply command exists. The [write guide](../../use-canvas/references/writes.md) explicitly excludes messaging. Keep the accepted [Canvas access work](../archive/canvas-access.md) as predecessor history; this is a separate Inbox extension rather than reopening that completed work or changing course-export coverage implicitly.
+The current [Canvas capability](../../use-canvas/SKILL.md) and its CLI help cover course retrieval and bounded course-content and learner writes, but no Inbox conversation listing, reading or reply command exists. The [write guide](../../use-canvas/references/writes.md) explicitly excludes messaging. Keep the accepted [Canvas access work](canvas-access.md) as predecessor history; this is a separate Inbox extension rather than reopening that completed work or changing course-export coverage implicitly.
 
 A real email-to-Canvas reply attempt bounced because the sending address was not a confirmed Canvas communication address. Successful submission to an email service did not establish that a reply appeared in Canvas. A direct, bounded Inbox capability would let a caller inspect the current conversation and verify an approved reply in Canvas without changing email confirmation settings. Private addresses, participant identities, message text, conversation identifiers and bounce payloads are intentionally omitted from this portable record.
 
