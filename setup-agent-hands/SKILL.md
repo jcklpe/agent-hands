@@ -26,7 +26,7 @@ For Canvas, use [setup-canvas](../setup-canvas/SKILL.md) with [use-canvas](../us
 
 For Trello, use [setup-trello](../setup-trello/SKILL.md). Bash/curl/jq support is separate from Python; mutation previews also require `shasum`. Writes require `--execute`, and no live mutation is part of a routine setup check.
 
-For Workday time entry, use [setup-workday](../setup-workday/SKILL.md) with [use-workday](../use-workday/SKILL.md). It needs Python 3.9+, Google Chrome on macOS and no packages. The user chooses between a separate Chrome kept for Workday, in which they sign in once per session, and their everyday Chrome with an Allow click per connection. Saves and submissions each need approval of an exact plan for real work; never create test entries.
+For Workday time entry, use [setup-workday](../setup-workday/SKILL.md) with [use-workday](../use-workday/SKILL.md). It needs Python 3.9+, Google Chrome on macOS and no packages. The user chooses between a separate Chrome kept for Workday, which runs without a window and keeps their sign-in until Workday or the identity provider ends it, and their everyday Chrome with an Allow click per connection. Saves and submissions each need approval of an exact plan for real work; never create test entries.
 
 For GitHub, use [setup-github](../setup-github/SKILL.md). Select only the needed domains and setup-github provider support. Bash/gh/jq handle requests; rendering uses the selected domain’s uv environment. No all-provider dependency is installed.
 

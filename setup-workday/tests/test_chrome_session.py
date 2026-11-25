@@ -204,20 +204,28 @@ class PipeTests(unittest.TestCase):
         self.assertLessEqual(len(os.listdir("/dev/fd")), before)
         args = json.loads(Path(str(path) + ".args").read_text())
         self.assertIn("--user-data-dir=/private/example/profile", args)
-        self.assertIn("--remote-debugging-pipe", args)
+        for flag in ("--remote-debugging-pipe", "--restore-last-session", "--headless=new"):
+            self.assertIn(flag, args)
         self.assertEqual(args[-1], "about:blank")
         self.assertFalse([a for a in args if "remote-debugging-port" in a or "no-sandbox" in a or "password-store" in a or "keychain" in a or "user-agent" in a])
 
-    def test_windows_are_minimized_by_their_targets(self):
+    def test_a_visible_chrome_opens_the_given_page(self):
+        path = self.program()
+        CS.Chrome.launch("/private/example/profile", "https://example.invalid/", visible=True, executable=str(path)).close()
+        args = json.loads(Path(str(path) + ".args").read_text())
+        self.assertEqual(args[-1], "https://example.invalid/")
+        self.assertNotIn("--headless=new", args)
+
+    def test_only_the_kept_tab_stays(self):
         sent = []
 
         class Recorder(CS.Chrome):
             def call(self, method, params=None, session=None, timeout=30):
                 sent.append((method, params))
-                return {"Target.getTargets": {"targetInfos": [{"type": "page", "targetId": "T"}, {"type": "browser_ui", "targetId": "U"}]}, "Browser.getWindowForTarget": {"windowId": 7}}.get(method, {})
+                return {"targetInfos": [{"type": "page", "targetId": "A"}, {"type": "page", "targetId": "B"}, {"type": "browser_ui", "targetId": "U"}]}
 
-        Recorder(None).minimize()
-        self.assertEqual(sent[1:], [("Browser.getWindowForTarget", {"targetId": "T"}), ("Browser.setWindowBounds", {"windowId": 7, "bounds": {"windowState": "minimized"}})])
+        Recorder(None).close_pages(keep="B")
+        self.assertEqual(sent, [("Target.getTargets", None), ("Target.closeTarget", {"targetId": "A"})])
 
     def test_a_profile_already_in_use_and_a_missing_program_are_reported(self):
         with self.assertRaisesRegex(CS.BrowserError, "another Chrome"):

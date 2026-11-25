@@ -1,4 +1,4 @@
-"""Workday's own Chrome profile and its sign-in wait, with a stand-in for Chrome; no browser, network, credentials or real timesheets."""
+"""Workday's own Chrome profile and its sign-in step, with a stand-in for Chrome; no browser, network, credentials or real timesheets."""
 
 import io
 import json
@@ -44,17 +44,19 @@ class FakeChrome:
     """Shows the given addresses one poll at a time; signed_in and worker are what a confirming tab finds."""
 
     def __init__(self, polls, signed_in=True, worker=ACCOUNT["worker"]):
-        self.polls, self.signed_in, self.worker, self.closed, self.tabs, self.launched, self.minimized = list(polls), signed_in, worker, False, [], None, False
+        self.polls, self.signed_in, self.worker, self.closed, self.tabs, self.launched, self.restored = list(polls), signed_in, worker, False, [], None, ["restored"]
 
-    def launch(self, path, url="about:blank"):
-        self.launched = (path, url)
+    def launch(self, path, url="about:blank", visible=False):
+        self.launched = (path, url, visible)
         return self
 
     def call(self, method, params=None, session=None, timeout=30):
         return {}
 
-    def minimize(self):
-        self.minimized = True
+    def close_pages(self, keep=None):
+        self.restored = []
+        for tab in self.tabs:
+            tab.closed = tab.closed or tab.target != keep
 
     def pages(self):
         now = self.polls.pop(0) if len(self.polls) > 1 else self.polls[0]
@@ -75,7 +77,6 @@ class ProfileTests(unittest.TestCase):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.root = Path(os.path.realpath(folder.name)) / "state"
-        self.announced = []
         for stub in (patch.dict(os.environ, {WB.STATE_ENV: str(self.root)}), patch.object(WB, "SIGN_IN_POLL_S", 0), patch.object(WB, "SIGN_IN_STEADY_S", 0), patch.object(WB.time, "sleep", lambda seconds: None)):
             stub.start()
             self.addCleanup(stub.stop)
@@ -101,87 +102,118 @@ class ProfileTests(unittest.TestCase):
         (self.root / ".git").mkdir()
         self.assertEqual(self.refusal(WB.own_profile().__enter__).code, "PRIVATE_STORAGE_REQUIRED")
 
-    def start(self, chrome, minutes=10, account=OWN):
-        with patch.object(WB.Chrome, "launch", side_effect=chrome.launch), patch.object(WB.Chrome, "connect", side_effect=AssertionError("must not connect to the everyday Chrome")):
-            return WB.Session(account, minutes, self.announced.append)
+    def sign_in(self, chrome, minutes=10):
+        with patch.object(WB.Chrome, "launch", side_effect=chrome.launch):
+            return WB.sign_in(OWN, minutes)
 
-    def test_a_session_waits_for_a_settled_workday_page_confirms_the_worker_and_keeps_that_chrome(self):
+    def session(self, chrome):
+        with patch.object(WB.Chrome, "launch", side_effect=chrome.launch), patch.object(WB.Chrome, "connect", side_effect=AssertionError("must not connect to the everyday Chrome")):
+            return WB.Session(OWN)
+
+    def test_sign_in_waits_for_a_settled_workday_page_confirms_the_worker_and_closes(self):
         chrome = FakeChrome([[PAGE], [LOGIN], [LOGIN], [PAGE], [PAGE]])
-        session = self.start(chrome)
-        self.assertEqual(chrome.launched, (WB.profile_path(), PAGE))
-        self.assertEqual([v["status"] for v in self.announced], ["waiting-for-sign-in"])
-        self.assertTrue(chrome.minimized and not chrome.closed)
-        self.assertEqual([t.closed for t in chrome.tabs], [True, False])
-        self.assertIs(session.tab, chrome.tabs[1])
-        self.assertTrue(WB.alive(session))
-        with patch.object(WB.Chrome, "launch", side_effect=AssertionError("one Chrome at a time")):
-            self.assertEqual(self.refusal(WB.Session, OWN).code, "PROFILE_IN_USE")
-        session.close()
-        self.assertTrue(chrome.closed)
+        self.assertEqual(self.sign_in(chrome), {"status": "signed-in"})
+        self.assertEqual(chrome.launched, (WB.profile_path(), PAGE, True))
+        self.assertTrue(chrome.closed and all(t.closed for t in chrome.tabs))
+        record = WB.sign_in_record()
+        self.assertEqual(record["signed_in_at"], record["last_working_at"])
+        self.assertEqual(stat.S_IMODE((self.root / "workday" / "sign-in.json").stat().st_mode), 0o600)
         with WB.own_profile():
             pass
 
-    def test_a_closed_window_ends_the_session(self):
-        chrome = FakeChrome([[PAGE]])
-        session = self.start(chrome)
-        chrome.tabs[-1].closed = True
-        self.assertFalse(WB.alive(session))
-        session.close()
-
     def test_nothing_is_attached_while_the_sign_in_page_shows(self):
         chrome = FakeChrome([[LOGIN]])
-        self.assertEqual(self.refusal(self.start, chrome, 0.001).code, "SIGN_IN_TIMED_OUT")
+        self.assertEqual(self.refusal(self.sign_in, chrome, 0.001).code, "SIGN_IN_TIMED_OUT")
         self.assertEqual(chrome.tabs, [])
         self.assertTrue(chrome.closed)
 
     def test_a_workday_address_that_still_wants_a_sign_in_keeps_waiting(self):
         chrome = FakeChrome([[PAGE]], signed_in=False)
-        self.assertEqual(self.refusal(self.start, chrome, 0.001).code, "SIGN_IN_TIMED_OUT")
+        self.assertEqual(self.refusal(self.sign_in, chrome, 0.001).code, "SIGN_IN_TIMED_OUT")
         self.assertTrue(chrome.tabs and all(t.closed for t in chrome.tabs))
+        self.assertEqual(WB.sign_in_record(), {})
 
-    def test_another_worker_a_closed_window_or_a_failed_start_release_everything(self):
+    def test_another_worker_a_closed_window_and_the_wrong_mode_are_refused(self):
         wrong = FakeChrome([[PAGE]], worker="000$000009")
-        self.assertEqual(self.refusal(self.start, wrong).code, "WORKER_MISMATCH")
+        self.assertEqual(self.refusal(self.sign_in, wrong).code, "WORKER_MISMATCH")
         self.assertTrue(wrong.closed)
         for polls in ([[]], [[LOGIN], None]):
             gone = FakeChrome(polls)
-            self.assertEqual(self.refusal(self.start, gone).code, "SIGN_IN_CANCELLED")
+            self.assertEqual(self.refusal(self.sign_in, gone).code, "SIGN_IN_CANCELLED")
             self.assertTrue(gone.closed)
+        self.assertEqual(self.refusal(WB.sign_in, ACCOUNT).code, "OWN_PROFILE_NOT_CHOSEN")
+        self.assertEqual(WB.sign_in_record(), {})
+
+    def test_commands_run_without_a_window_close_restored_tabs_and_release_the_profile(self):
+        chrome = FakeChrome([[PAGE]])
+        session = self.session(chrome)
+        self.assertEqual(chrome.launched, (WB.profile_path(), "about:blank", False))
+        self.assertEqual((chrome.restored, session.tab.closed), ([], False))
+        self.assertTrue(WB.alive(session))
+        with patch.object(WB.Chrome, "launch", side_effect=AssertionError("one Chrome at a time")):
+            self.assertEqual(self.refusal(WB.Session, OWN).code, "PROFILE_IN_USE")
+        session.close()
+        self.assertTrue(chrome.closed)
         with patch.object(WB.Chrome, "launch", side_effect=WB.BrowserError("no")):
             self.assertEqual(self.refusal(WB.Session, OWN).code, "BROWSER_NOT_STARTED")
         with WB.own_profile():
             pass
 
-    def test_a_signed_out_session_says_to_start_again(self):
+    def test_a_lost_tab_ends_the_session(self):
+        chrome = FakeChrome([[PAGE]])
+        session = self.session(chrome)
+        chrome.tabs[-1].closed = True
+        self.assertFalse(WB.alive(session))
+        session.close()
+
+    def test_the_record_measures_how_long_a_sign_in_lasted(self):
+        self.root.mkdir(mode=0o700)
+        (self.root / "workday").mkdir(mode=0o700)
+        WB.note_sign_in(ACCOUNT, "signed_in_at")
+        self.assertEqual(WB.sign_in_record(), {})
+        for event in ("signed_in_at", "last_working_at", "signed_out_at"):
+            WB.note_sign_in(OWN, event)
+        first = WB.sign_in_record()
+        self.assertTrue({"signed_in_at", "last_working_at", "signed_out_at"} <= set(first))
+        WB.note_sign_in(OWN, "signed_out_at")
+        self.assertEqual(WB.sign_in_record()["signed_out_at"], first["signed_out_at"])
+        WB.note_sign_in(OWN, "signed_in_at")
+        again = WB.sign_in_record()
+        self.assertNotIn("signed_out_at", again)
+        self.assertEqual(again["previous"]["signed_out_at"], first["signed_out_at"])
+        self.assertNotIn("previous", again["previous"])
+
+    def test_reading_records_whether_the_sign_in_still_worked(self):
+        for signed_in, key in ((True, "last_working_at"), (False, "signed_out_at")):
+            chrome = FakeChrome([[PAGE]], signed_in=signed_in)
+            session = self.session(chrome)
+            session.tab.navigate = lambda url: None
+            # The first wait is for the freshly loaded document; only the calendar wait depends on the sign-in.
+            waits, real = [], session.tab.wait_for
+            session.tab.wait_for = lambda script, arg=None, timeout=30: waits.append(script) or (True if len(waits) == 1 else real(script, arg, timeout))
+            with patch.object(WB, "go_to_week"):
+                if signed_in:
+                    session.show_week(None)
+                else:
+                    self.assertEqual(self.refusal(session.show_week, None).code, "SIGN_IN_REQUIRED")
+            self.assertIn(key, WB.sign_in_record())
+            session.close()
+
+    def test_a_signed_out_profile_names_the_sign_in_command(self):
         error = self.refusal(WB.open_calendar, FakeTab(FakeChrome([[LOGIN]], signed_in=False)), OWN)
         self.assertEqual(error.code, "SIGN_IN_REQUIRED")
-        self.assertIn("session start", error.remedy)
+        self.assertIn("sign-in", error.remedy)
 
-    def cli(self, *args):
-        self.root.mkdir(mode=0o700, exist_ok=True)
+    def test_check_reports_the_profile_without_starting_chrome(self):
         account = self.root / "account.json"
+        self.root.mkdir(mode=0o700)
         account.write_text(json.dumps(OWN), encoding="utf-8")
         account.chmod(0o600)
         out, err = io.StringIO(), io.StringIO()
-        with redirect_stdout(out), redirect_stderr(err), patch.object(WB.Chrome, "launch", side_effect=AssertionError("no launch")), patch.object(WB.Chrome, "connect", side_effect=AssertionError("no connection")):
-            code = WB.main([*args, "--account", str(account)])
-        return code, out.getvalue(), err.getvalue()
-
-    def test_commands_need_a_session_and_start_no_chrome_themselves(self):
-        code, out, err = self.cli("overview", "--from", "2026-10-26", "--to", "2026-11-09")
-        self.assertEqual((code, out, json.loads(err)["code"]), (2, "", "SESSION_REQUIRED"))
-
-    def test_check_reports_the_profile_without_starting_chrome(self):
-        code, out, err = self.cli("check")
-        self.assertEqual((code, err, json.loads(out)), (0, "", {"status": "ok", "account": "valid", "browser": "own", "profile_exists": False}))
-
-    def test_the_command_line_holds_longer_for_the_own_profile(self):
-        seen = []
-        with patch.object(WB, "serve", lambda account, file, idle, make_session=None: seen.append(idle) or 0):
-            self.assertEqual(self.cli("session", "start")[0], 0)
-            self.assertEqual(self.cli("session", "start", "--idle-minutes", "5")[0], 0)
-            self.assertEqual(self.cli("session", "start", "--sign-in-minutes", "90")[0], 2)
-        self.assertEqual(seen, [60, 5])
+        with redirect_stdout(out), redirect_stderr(err), patch.object(WB.Chrome, "launch", side_effect=AssertionError("no launch")):
+            code = WB.main(["check", "--account", str(account)])
+        self.assertEqual((code, err.getvalue()), (0, ""))
+        self.assertEqual(json.loads(out.getvalue()), {"status": "ok", "account": "valid", "browser": "own", "profile_exists": False, "sign_in": {}})
 
 
 if __name__ == "__main__":
