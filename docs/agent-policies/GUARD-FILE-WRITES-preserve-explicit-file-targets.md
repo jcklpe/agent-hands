@@ -3,8 +3,8 @@ id: GUARD-FILE-WRITES
 type: operational
 scope: "Agent use or maintenance of Microsoft Files transfers, folders and bounded organization."
 status: adopted
-authority: "User's Agent Hands policy-pilot approval, 2026-11-02; explicit approval of bounded organization and separate itemized recycle-bin consent, 2026-11-17."
-revised: "2026-11-17"
+authority: "User's Agent Hands policy-pilot approval, 2026-11-02; explicit approval of bounded organization and separate itemized recycle-bin consent, 2026-11-17; explicit request to extend CLI folder renaming, 2026-11-24."
+revised: "2026-11-24"
 depends_on: ["BOUND-MICROSOFT-ACCESS"]
 related_to: ["REJECT-GUESSES"]
 ---
@@ -15,7 +15,7 @@ Uploads and folder creation must refuse an existing name rather than overwrite. 
 
 Use the delegated access boundary in [BOUND-MICROSOFT-ACCESS](BOUND-MICROSOFT-ACCESS-limit-delegated-service-access.md). Files.ReadWrite.All is broader than the native commands, and access remains limited by the signed-in user and selected surface. Each selected account needs its own approved authorization; changing requested scopes is separate setup work.
 
-Same-drive moves/renames and recycle-bin deletion require an exact stored preview, execution opt-in, current identity and ETag checks, conflict refusal and a durable single-dispatch record. Scope organization to ordinary files with bounded content, caller-visible sharing and version checks. Report an acknowledged write with failed readback as applied or uncertain, never as proof that nothing happened, and do not replay it automatically. Moving can change inherited visibility; expose the destination and available permissions before execution. A partial permission view is not proof of the full audience, and recycle-bin retention is not guaranteed recovery. Cross-drive moves, folder organization, lock bypass, permanent deletion, sharing and permission changes remain outside this file surface.
+Same-drive moves/renames and recycle-bin deletion require an exact stored preview, execution opt-in, current identity and ETag checks, conflict refusal and a durable single-dispatch record. Scope organization to ordinary files with bounded content, caller-visible sharing and version checks, plus same-parent folder renames guarded by bounded descendant metadata and visible folder-permission checks. Folder rename sends only the new name; descendant verification is not a byte or version-history check. Report an acknowledged write with failed readback as applied or uncertain, never as proof that nothing happened, and do not replay it automatically. Moving can change inherited visibility; expose the destination and available permissions before execution. A partial permission view is not proof of the full audience, and recycle-bin retention is not guaranteed recovery. Cross-drive moves, folder moves/deletion, lock bypass, permanent deletion, sharing and permission changes remain outside this file surface.
 
 Recycle-bin deletion additionally requires explicit, isolated human consent after every proposed file is itemized with its exact identity, recognizable name/location and a concise explanation of why it should be deleted. Request deletion consent separately from moves, edits and other actions. General cleanup permission, implementation approval, write opt-in or approval of this policy does not authorize deletion. Consent covers only the reviewed files and reasons; changed targets require a fresh review.
 

@@ -119,13 +119,37 @@ def content_hash(client, drive, item, size):
             return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def snapshot(client, drive, item):
+def descendants(client, drive, item):
+    # Folder rename changes paths, so compare stable identities, names, parents and content tags rather than URLs. This is a bounded observation, not a transaction or byte verification.
+    queue, seen, rows = [(item, 0)], {item}, []
+    while queue:
+        parent, depth = queue.pop(0)
+        if depth >= 12: raise ValueError("Folder exceeds the 12-level verification bound")
+        for child in complete(client, drive, parent, "children"):
+            ordinary(child)
+            child_id = identifier(child.get("id"))
+            if child_id in seen: raise ValueError("Repeated descendant identity; folder snapshot is unstable")
+            if child.get("parentReference", {}).get("id") != parent or child.get("parentReference", {}).get("driveId") != drive:
+                raise ValueError("Descendant parent/drive mismatch")
+            if not child.get("eTag") or not ("file" in child or "folder" in child): raise ValueError("Descendant lacks ordinary type or ETag")
+            seen.add(child_id)
+            rows.append({"id": child_id, "name": child.get("name"), "parent": parent, "type": "folder" if "folder" in child else "file", "eTag": child.get("eTag"), "cTag": child.get("cTag"), "size": child.get("size"), "hashes": child.get("file", {}).get("hashes", {})})
+            if len(rows) > 2000: raise ValueError("Folder exceeds the 2,000-descendant verification bound")
+            if "folder" in child: queue.append((child_id, depth + 1))
+    return sorted(rows, key=lambda row: row["id"])
+
+
+def snapshot(client, drive, item, allow_folder=False):
     value = metadata(client, drive, item); ordinary(value)
     if not value.get("eTag") or "file" not in value and "folder" not in value:
         raise ValueError("Missing ETag or ordinary file/folder type; no unguarded write is permitted")
     if "folder" in value:
-        # A folder ETag does not change for descendant-derived properties; an empty-folder check cannot safely guard recursive side effects.
-        raise ValueError("Only ordinary files can be organized; folder ETags do not guard descendant changes. Select individual files.")
+        if not allow_folder: raise ValueError("Folders support rename only; folder moves and deletion remain unsupported")
+        children = descendants(client, drive, item)
+        permissions = complete(client, drive, item, "permissions")
+        latest = metadata(client, drive, item)
+        if latest.get("eTag") != value["eTag"]: raise ValueError("Folder changed during verification; make a fresh preview")
+        return {"meta": value, "descendants": children, "permissions": permissions}
     content = content_hash(client, drive, item, value.get("size"))
     versions = complete(client, drive, item, "versions")
     permissions = complete(client, drive, item, "permissions")
@@ -152,17 +176,18 @@ def recycle_reason(reason):
 def preview(client, store, action, drive, item, name=None, parent=None, reason=None):
     if action not in ("move", "rename", "recycle"): raise ValueError("Unsupported organization action")
     reason = recycle_reason(reason) if action == "recycle" else None
-    identity = client.identity(); before = snapshot(client, drive, item)
+    identity = client.identity(); before = snapshot(client, drive, item, allow_folder=action == "rename")
     current = before["meta"]
     name = safe_name(name if name is not None else current["name"])
     parent = parent or current.get("parentReference", {}).get("id")
     if not parent: raise ValueError("Missing parent identity")
+    if action == "rename" and parent != current["parentReference"]["id"]: raise ValueError("Rename must retain the existing parent")
     dest = destination(client, drive, parent, name, item) if action != "recycle" else None
     if action != "recycle" and dest["id"] == current["parentReference"]["id"] and name == current["name"]:
         raise ValueError("No name or parent change was selected")
     review = {"files": [{"name": current["name"], "drive": drive, "item": item, "parent": current["parentReference"]["id"], "reason": reason}], "consent": "Obtain explicit consent for this itemized deletion separately from other actions; general cleanup approval is insufficient."} if action == "recycle" else None
     plan = store.plan({"kind": "file-organization-v1", "alias": client.alias, "action": action, "drive": drive, "item": item, "identity": identity, "before": before, "destination": dest, "name": name, "deletionReview": review})
-    return {"status": "preview", **plan, "limits": "Same-drive ordinary files only. Moving can change inherited access; visible permissions and version history are not a complete audience or recovery guarantee. Recycle uses Graph's recycle-bin deletion, never purge. Folder mutations are refused because their ETags do not guard descendant changes."}
+    return {"status": "preview", **plan, "limits": "Same-drive files and same-parent folder renames only. Moving can change inherited access; visible permissions and version history are not a complete audience or recovery guarantee. Recycle uses Graph's recycle-bin deletion, never purge. Folder rename retains its parent and checks descendant identities/content metadata; it does not verify descendant bytes or provide a transaction. Folder moves/deletion remain refused."}
 
 
 def verify(client, plan):
@@ -171,8 +196,11 @@ def verify(client, plan):
         parent = plan["before"]["meta"]["parentReference"]["id"]
         found = any(v["id"] == item for v in complete(client, drive, parent, "children"))
         return {"status": "still_in_parent" if found else "absent_from_original_parent", "recovery": "Recycle-bin retention/restorability was not independently verified; inspect the service recycle bin."}
-    after = snapshot(client, drive, item)
+    after = snapshot(client, drive, item, allow_folder=plan["action"] == "rename")
     meta = after["meta"]
+    if "folder" in plan["before"]["meta"]:
+        checks = {"identity": meta["id"] == item, "name": meta["name"] == plan["name"], "parent": meta["parentReference"]["id"] == plan["before"]["meta"]["parentReference"]["id"], "descendantMetadata": after.get("descendants") == plan["before"]["descendants"], "visibleSharing": after["permissions"] == plan["before"]["permissions"]}
+        return {"status": "verified" if all(checks.values()) else "applied_review_required", "checks": checks, "coverage": "Folder identity/name/parent, descendant identities and content metadata, and caller-visible folder grants checked. Descendant bytes, version history and full audience were not independently verified."}
     versions = {v["id"] for v in after["versions"]}
     checks = {"identity": meta["id"] == item and meta["parentReference"]["driveId"] == drive, "name": meta["name"] == plan["name"], "parent": meta["parentReference"]["id"] == plan["destination"]["id"], "content": after["sha256"] == plan["before"]["sha256"], "versionLineage": all(v["id"] in versions for v in plan["before"]["versions"]), "visibleSharing": after["permissions"] == plan["before"]["permissions"]}
     return {"status": "verified" if all(checks.values()) else "applied_review_required", "checks": checks, "sharingAfter": after["permissions"], "coverage": "Compared caller-visible grants and retained version IDs; this does not prove all access or historical byte equivalence."}
@@ -195,7 +223,7 @@ def apply(client, store, operation, expected_hash, execute, allow_recycle=False)
         raise ValueError("--allow-recycle applies only to a separately approved recycle preview")
     if store.dispatched(operation): raise ValueError("Already dispatched; use organization-status or organization-verify. Never replay.")
     client.require_write()
-    if client.identity() != plan["identity"] or snapshot(client, plan["drive"], plan["item"]) != plan["before"]:
+    if client.identity() != plan["identity"] or snapshot(client, plan["drive"], plan["item"], allow_folder=plan["action"] == "rename") != plan["before"]:
         raise ValueError("Account or source changed after preview; no write sent")
     if plan["destination"] and destination(client, plan["drive"], plan["destination"]["id"], plan["name"], plan["item"]) != plan["destination"]:
         raise ValueError("Destination sharing changed after preview; no write sent")

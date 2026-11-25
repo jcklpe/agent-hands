@@ -46,7 +46,7 @@ class Drive:
         if kind == "content": Path(output).write_bytes(b"content"); return {}
         if kind == "children":
             if self.paging: return self.paging(path)
-            return {"value": [copy.deepcopy(v) for v in self.items.values() if v["parentReference"]["id"] == item]}
+            return {"value": [copy.deepcopy(v) for v in self.items.values() if v["parentReference"].get("id") == item]}
         if kind == "permissions":
             values = copy.deepcopy(self.permission)
             if self.writes and self.changed_sharing: values[0]["roles"] = ["read"]
@@ -112,8 +112,38 @@ class Organization(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already exists"): self.plan()
         self.client.items.pop("collision"); self.client.items["source"]["package"] = {"type": "oneNote"}
         with self.assertRaisesRegex(ValueError, "unsupported"): self.plan()
-        for folder in ("old", "new"):
-            with self.assertRaisesRegex(ValueError, "folder ETags"): mod.preview(self.client, self.store, "rename", "drive", folder, "Renamed")
+        for action in ("move", "recycle"):
+            with self.assertRaisesRegex(ValueError, "rename only"): mod.preview(self.client, self.store, action, "drive", "old", "Renamed", "new", reason="Test cleanup" if action == "recycle" else None)
+        self.assertEqual(self.client.writes, [])
+
+    def folder_plan(self):
+        self.client.items["root-id"] = {"id": "root-id", "name": "Root", "root": {}, "folder": {}, "eTag": '"root"', "parentReference": {"driveId": "drive"}}
+        return mod.preview(self.client, self.store, "rename", "drive", "old", "renamed")
+
+    def test_folder_rename_preserves_children_and_parent(self):
+        p = self.folder_plan()
+        r = self.apply(p)
+        self.assertEqual(r["status"], "verified")
+        self.assertEqual(self.client.writes[0][2], {"name": "renamed"})
+        self.assertEqual(self.client.items["source"]["parentReference"]["id"], "old")
+        with self.assertRaisesRegex(ValueError, "Already dispatched"): self.apply(p)
+
+    def test_folder_child_added_without_folder_etag_change_refuses_write(self):
+        p = self.folder_plan()
+        self.client.items["another"] = {**copy.deepcopy(self.client.items["source"]), "id": "another", "name": "new.txt"}
+        with self.assertRaisesRegex(ValueError, "changed"): self.apply(p)
+        self.assertEqual(self.client.writes, [])
+
+    def test_folder_child_content_etag_change_refuses_write(self):
+        p = self.folder_plan()
+        self.client.items["source"]["eTag"] = '"edited"'
+        with self.assertRaisesRegex(ValueError, "changed"): self.apply(p)
+        self.assertEqual(self.client.writes, [])
+
+    def test_folder_rename_refuses_parent_change_and_root(self):
+        self.folder_plan()
+        with self.assertRaisesRegex(ValueError, "retain"): mod.preview(self.client, self.store, "rename", "drive", "old", "renamed", "new")
+        with self.assertRaisesRegex(ValueError, "root"): mod.preview(self.client, self.store, "rename", "drive", "root-id", "renamed")
         self.assertEqual(self.client.writes, [])
 
     def test_failed_readback_and_lost_ack_remain_uncertain_without_retry(self):
