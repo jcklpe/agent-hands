@@ -60,6 +60,18 @@ print(json.dumps({'id':'synthetic','name':'ok','mail':'me@example.com'}))
             with patch.object(c, "_call") as call, self.assertRaises(ValueError): c.request(method, path, body)
             call.assert_not_called()
 
+    def test_only_guarded_file_attachment_additions_are_allowed(self):
+        client = mod.Client("example", "mail")
+        payload = {"@odata.type": "#microsoft.graph.fileAttachment", "name": "paper.pdf", "contentType": "application/pdf", "isInline": False, "contentBytes": "eA=="}
+        with patch.object(client, "_call", return_value={}) as call:
+            client.request("POST", "/me/messages/id/attachments", payload, {"If-Match": "version"})
+            client.request("GET", "/me/messages/id/attachments/attachment")
+            self.assertEqual(call.call_count, 2); call.reset_mock()
+            for body, headers in ((payload, {}), ({**payload, "isInline": True}, {"If-Match": "version"}), ({**payload, "@odata.type": "#microsoft.graph.itemAttachment"}, {"If-Match": "version"})):
+                with self.assertRaises(ValueError): client.request("POST", "/me/messages/id/attachments", body, headers)
+            with self.assertRaises(ValueError): client.request("DELETE", "/me/messages/id/attachments/attachment", headers={"If-Match": "version"})
+            call.assert_not_called()
+
     def test_provider_diagnostics_are_not_reemitted(self):
         result = subprocess.CompletedProcess([], 1, "SECRET RESPONSE", "SECRET URL")
         with patch.object(mod.subprocess, "run", return_value=result):
@@ -72,7 +84,7 @@ print(json.dumps({'id':'synthetic','name':'ok','mail':'me@example.com'}))
             client.request("GET", "/me/messages/id/attachments?$select=id,name,contentType,size,isInline&$top=100")
             self.assertEqual(call.call_count, 1)
             call.reset_mock()
-            for path in ("/me/messages/id/attachments", "/me/messages/id/attachments?$select=contentBytes", "/me/messages/id/attachments/attachment"):
+            for path in ("/me/messages/id/attachments", "/me/messages/id/attachments?$select=contentBytes", "/me/messages/id/attachments/attachment?$select=contentBytes"):
                 with self.assertRaises(ValueError): client.request("GET", path)
             with self.assertRaises(ValueError): client.request("PATCH", "/me/messages/id", {"toRecipients": []}, {"If-Match": "version"})
             call.assert_not_called()

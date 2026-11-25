@@ -91,8 +91,17 @@ fi
         else:
             resource = re.fullmatch(r"/me/messages/" + segment, parsed.path)
             attachment_metadata = re.fullmatch(r"/me/messages/" + segment + r"/attachments", parsed.path) and parsed.query == "$select=id,name,contentType,size,isInline&$top=100"
-            allowed = method == "GET" and (resource or attachment_metadata) or method == "PATCH" and resource and not parsed.query or method == "POST" and re.fullmatch(r"/me/messages/" + segment + r"/createReply(?:All)?", parsed.path) and not parsed.query
-            if method == "POST" and body != {}: raise ValueError("Reply creation starts from the provider-generated draft")
+            attachment_content = re.fullmatch(r"/me/messages/" + segment + r"/attachments/" + segment, parsed.path) and not parsed.query
+            attachment_add = method == "POST" and re.fullmatch(r"/me/messages/" + segment + r"/attachments", parsed.path) and not parsed.query
+            new_draft = method == "POST" and path == "/me/messages"
+            allowed = method == "GET" and (resource or attachment_metadata or attachment_content) or method == "PATCH" and resource and not parsed.query or method == "POST" and re.fullmatch(r"/me/messages/" + segment + r"/createReply(?:All)?", parsed.path) and not parsed.query or attachment_add or new_draft
+            if new_draft:
+                if not isinstance(body, dict) or set(body) != {"subject", "body", "toRecipients", "ccRecipients"} or not isinstance(body["body"], dict) or set(body["body"]) != {"contentType", "content"} or body["body"]["contentType"] != "HTML":
+                    raise ValueError("Only an explicit unsent draft body, subject and recipients are supported")
+            elif attachment_add:
+                if not isinstance(body, dict) or set(body) != {"@odata.type", "name", "contentType", "isInline", "contentBytes"} or body["@odata.type"] != "#microsoft.graph.fileAttachment" or body["isInline"] is not False or not isinstance(body["contentBytes"], str) or len(body["contentBytes"]) >= 4_000_000 or not (headers or {}).get("If-Match"):
+                    raise ValueError("Only bounded non-inline file attachments on guarded drafts are supported")
+            elif method == "POST" and body != {}: raise ValueError("Reply creation starts from the provider-generated draft")
             if method == "PATCH" and (not isinstance(body, dict) or set(body) != {"body"} or set(body["body"]) != {"contentType", "content"} or body["body"]["contentType"] != "HTML"):
                 raise ValueError("Only a guarded draft-body update is supported")
         if not profile and not allowed: raise ValueError("Request is outside the selected capability")

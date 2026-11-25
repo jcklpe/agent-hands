@@ -1,5 +1,8 @@
-"""Native Outlook reply drafts and guarded saved-draft body edits; never sends."""
+"""Native unsent Outlook drafts, bounded file attachments and guarded body edits; never sends."""
 import argparse
+import base64
+import hashlib
+import mimetypes
 from decimal import Decimal
 import html
 from html.parser import HTMLParser
@@ -20,6 +23,8 @@ ATTACHMENT_SELECT = "id,name,contentType,size,isInline"
 EDIT_KIND = "outlook-draft-body-edit-v1"
 SIGNATURE_EDIT_KIND = "outlook-draft-signature-style-v1"
 FRAGMENT_EDIT_KIND = "outlook-draft-fragment-edit-v1"
+ATTACH_KIND = "outlook-draft-attachments-v1"
+NEW_KIND = "outlook-new-draft-v1"
 EDIT_PRESERVED = ("id", "subject", "from", "sender", "replyTo", "toRecipients", "ccRecipients", "bccRecipients", "conversationId", "internetMessageId", "hasAttachments")
 
 
@@ -295,6 +300,57 @@ def preview(client, store, message, text, to, cc, signature_data=None, no_signat
     return {"status": "preview", **plan, "attachments": "No new attachments; provider-generated quoted inline attachments may remain", "quote": "The provider-generated reply history will be retained and verified after creation. No signature setting is read or changed.", "manualSendOnly": True}
 
 
+def preview_new(client, store, subject, text, to, cc, signature_data=None, no_signature=False):
+    if not subject.strip() or len(subject) > 255 or any(ord(c) < 32 for c in subject):
+        raise ValueError("Supply a nonempty subject of at most 255 characters without control characters")
+    identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+    target = {"to": [address(v) for v in to], "cc": [address(v) for v in cc], "bcc": []}
+    all_recipients = target["to"] + target["cc"]
+    if not target["to"] or len(all_recipients) > 50 or len(set(all_recipients)) != len(all_recipients):
+        raise ValueError("Supply one to fifty unique explicit recipients")
+    if (signature_data is None) == (not no_signature):
+        raise ValueError("Supply one verified account signature or explicitly choose --no-signature")
+    reply_html = paragraphs(text)
+    sig = signature(signature_data, account) if signature_data is not None else ""
+    if sig and any(line in lines(reply_html) for line in lines(sig)):
+        raise ValueError("New text duplicates a signature line; keep the supplied signature separate")
+    plan = store.plan({"kind": NEW_KIND, "alias": client.alias, "identity": identity, "account": account, "subject": subject, "audience": target, "bodyHTML": reply_html + sig})
+    return {"status": "preview", **plan, "manualSendOnly": True}
+
+
+def verify_new(client, plan, draft_id):
+    saved = read_message(client, draft_id); check_edit_target(saved, plan["account"])
+    if saved["id"] != draft_id or saved.get("subject") != plan["subject"]:
+        raise ValueError("New draft identity or subject changed")
+    for field, key in (("toRecipients", "to"), ("ccRecipients", "cc"), ("bccRecipients", "bcc")):
+        if recipients(saved.get(field, [])) != sorted(plan["audience"][key]):
+            raise ValueError("New draft recipients differ from the preview")
+    if lines(saved["body"]["content"]) != lines(plan["bodyHTML"]) or resource_links(saved["body"]["content"]) != resource_links(plan["bodyHTML"]):
+        raise ValueError("New draft content differs from the preview")
+    verify_styles(saved["body"]["content"], plan["bodyHTML"])
+    return {"status": "draft_verified", "draft": draft_id, "manualSendOnly": True, "webLink": safe_link(saved.get("webLink"))}
+
+
+def apply_new(client, store, operation, plan):
+    if store.dispatched(operation):
+        raise ValueError("Already dispatched; inspect draft-status/draft-verify. Never recreate automatically.")
+    client.require_write()
+    if client.identity() != plan["identity"]: raise ValueError("Mailbox identity changed")
+    payload = {"subject": plan["subject"], "body": {"contentType": "HTML", "content": plan["bodyHTML"]}, "toRecipients": [{"emailAddress": {"address": value}} for value in plan["audience"]["to"]], "ccRecipients": [{"emailAddress": {"address": value}} for value in plan["audience"]["cc"]]}
+    store.dispatch(operation, {"status": "uncertain_after_dispatch", "hash": plan["hash"]})
+    result = {"operation": operation, "status": "uncertain_after_dispatch", "manualSendOnly": True, "replayAllowed": False}
+    try:
+        response = client.request("POST", "/me/messages", payload, PREFER)
+        draft_id = identifier(response.get("id"))
+        store.receipt(operation, {"draft": draft_id}, ".created.json")
+        result["draft"] = draft_id
+        result.update(verify_new(client, plan, draft_id))
+    except Exception:
+        result["detail"] = "A draft may exist. Inspect draft-status and Outlook Drafts; never recreate automatically."
+    store.receipt(operation, result)
+    return result
+
+
 def check_draft(value, plan):
     if value.get("isDraft") is not True or value.get("conversationId") != plan["source"]["conversationId"] or value.get("bccRecipients"):
         raise ValueError("The returned message is not the expected unsent conversation draft")
@@ -377,6 +433,114 @@ def edit_snapshot(client, message, account):
     if fresh != value:
         raise ValueError("Draft changed while reading; preview again after editing stops")
     return {"message": value, "attachments": attachments}
+
+
+def local_attachment(filename):
+    path = Path(filename).expanduser().resolve(strict=True)
+    if not path.is_file() or path.stat().st_size >= 3_000_000:
+        raise ValueError("Select a regular local file smaller than 3 MB")
+    if any(ord(c) < 32 for c in path.name) or path.name in ("", ".", ".."):
+        raise ValueError("Use a file with a safe attachment name")
+    with path.open("rb") as source:
+        content = source.read(3_000_000)
+    if len(content) >= 3_000_000:
+        raise ValueError("Attachment grew beyond the 3 MB limit")
+    info = {"path": str(path), "name": path.name, "size": len(content), "sha256": hashlib.sha256(content).hexdigest(), "contentType": mimetypes.guess_type(path.name)[0] or "application/octet-stream"}
+    return info, content
+
+
+def preview_attachments(client, store, message, filenames):
+    if not 1 <= len(filenames) <= 10:
+        raise ValueError("Select one to ten local files")
+    files = [local_attachment(name)[0] for name in filenames]
+    if sum(f["size"] for f in files) > 10_000_000 or len({f["name"].casefold() for f in files}) != len(files):
+        raise ValueError("Attachment names must be unique and combined size at most 10 MB")
+    identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
+    current = edit_snapshot(client, message, account)
+    if len(current["attachments"]) + len(files) > 100 or {f["name"].casefold() for f in files} & {a["name"].casefold() for a in current["attachments"]}:
+        raise ValueError("An attachment name already exists or the inventory would exceed 100; inspect the draft")
+    plan = store.plan({"kind": ATTACH_KIND, "alias": client.alias, "identity": identity, "account": account, "current": current, "currentHash": digest(current), "files": files})
+    return {"status": "preview", **plan, "manualSendOnly": True, "limits": "Files are added sequentially. A partial or uncertain upload is never automatically retried. Keep this draft closed until verification finishes."}
+
+
+def verify_attachments(client, plan, files=None):
+    before = plan["current"]
+    saved = edit_snapshot(client, before["message"]["id"], plan["account"])
+    for field in (*EDIT_PRESERVED, "body"):
+        if field != "hasAttachments" and saved["message"].get(field) != before["message"].get(field):
+            raise ValueError("Draft body or metadata changed during attachment upload")
+    existing = {a["id"]: a for a in before["attachments"]}
+    actual = {a["id"]: a for a in saved["attachments"]}
+    if any(actual.get(key) != value for key, value in existing.items()):
+        raise ValueError("An existing attachment changed")
+    added = [a for a in saved["attachments"] if a["id"] not in existing]
+    expected = plan["files"] if files is None else files
+    if len(added) != len(expected):
+        raise ValueError("Attachment inventory is incomplete or has unexpected additions; inspect before any further upload")
+    for item in expected:
+        matches = [a for a in added if a["name"] == item["name"] and a["isInline"] is False]
+        if len(matches) != 1:
+            raise ValueError("Uploaded attachment name is missing or ambiguous")
+        # contentBytes belongs to fileAttachment, not the base attachment type; Graph rejects it in a base-resource $select. Read the exact created attachment and verify its derived type before decoding.
+        attachment = client.request("GET", message_path(before["message"]["id"]) + "/attachments/" + quote(matches[0]["id"], safe=""), headers=PREFER)
+        if attachment.get("id") != matches[0]["id"] or attachment.get("@odata.type") != "#microsoft.graph.fileAttachment":
+            raise ValueError("Uploaded attachment identity/type differs")
+        content = base64.b64decode(attachment.get("contentBytes", ""), validate=True)
+        if len(content) != item["size"] or hashlib.sha256(content).hexdigest() != item["sha256"]:
+            raise ValueError("Uploaded attachment bytes differ from the preview")
+    if read_message(client, before["message"]["id"]) != saved["message"]:
+        raise ValueError("Draft changed during attachment verification")
+    return saved
+
+
+def attachment_result(saved):
+    return {"status": "draft_attachments_verified", "draft": saved["message"]["id"], "manualSendOnly": True, "webLink": safe_link(saved["message"].get("webLink")), "attachments": saved["attachments"]}
+
+
+def reconcile_attachments(client, plan):
+    existing = {a["id"] for a in plan["current"]["attachments"]}
+    actual = attachment_state(client, plan["current"]["message"]["id"])
+    names = {a["name"] for a in actual if a["id"] not in existing}
+    present = [f for f in plan["files"] if f["name"] in names]
+    saved = verify_attachments(client, plan, present)
+    result = attachment_result(saved)
+    missing = [f["name"] for f in plan["files"] if f["name"] not in names]
+    if missing:
+        result.update(status="draft_attachments_partial", missing=missing, replayAllowed=False)
+    return result
+
+
+def apply_attachments(client, store, operation, plan):
+    if store.dispatched(operation):
+        raise ValueError("Already dispatched; use draft-status/draft-verify and inspect partial uploads. Never replay automatically.")
+    client.require_write()
+    if client.identity() != plan["identity"]:
+        raise ValueError("Mailbox identity changed")
+    payloads = []
+    for item in plan["files"]:
+        fresh, content = local_attachment(item["path"])
+        if fresh != item:
+            raise ValueError("Local attachment changed since preview; no files were uploaded")
+        payloads.append({"@odata.type": "#microsoft.graph.fileAttachment", "name": item["name"], "contentType": item["contentType"], "isInline": False, "contentBytes": base64.b64encode(content).decode("ascii")})
+    current = edit_snapshot(client, plan["current"]["message"]["id"], plan["account"])
+    if digest(current) != plan["currentHash"]:
+        raise ValueError("Draft changed since preview; preserve the newer draft and preview again")
+    draft_id = current["message"]["id"]
+    store.dispatch(operation, {"status": "uncertain_after_dispatch", "draft": draft_id, "hash": plan["hash"]})
+    result = {"operation": operation, "status": "uncertain_after_dispatch", "draft": draft_id, "manualSendOnly": True, "replayAllowed": False}
+    try:
+        for index, payload in enumerate(payloads):
+            if edit_snapshot(client, draft_id, plan["account"]) != current:
+                raise ValueError("Draft changed before upload")
+            store.receipt(operation, {"name": payload["name"], "status": "dispatching"}, f".attachment-{index}.dispatch.json")
+            response = client.request("POST", message_path(draft_id) + "/attachments", payload, {**PREFER, "If-Match": draft_etag(current["message"])})
+            store.receipt(operation, {"name": payload["name"], "id": identifier(response.get("id"))}, f".attachment-{index}.created.json")
+            current = verify_attachments(client, plan, plan["files"][:index + 1])
+        result.update(attachment_result(current))
+    except Exception:
+        result["detail"] = "Some files may already be attached. Inspect draft-status/draft-verify and the draft; never repeat this upload automatically."
+    store.receipt(operation, result)
+    return result
 
 
 def preview_edit(client, store, message, text):
@@ -471,6 +635,10 @@ def apply_edit(client, store, operation, plan):
 def apply(client, store, operation, expected_hash, execute, allow_draft):
     if not execute or not allow_draft: raise ValueError("Require --execute and --allow-draft for this authorized manual-send draft")
     plan = store.load(operation, expected_hash)
+    if plan.get("kind") == NEW_KIND and plan.get("alias") == client.alias:
+        return apply_new(client, store, operation, plan)
+    if plan.get("kind") == ATTACH_KIND and plan.get("alias") == client.alias:
+        return apply_attachments(client, store, operation, plan)
     if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND, FRAGMENT_EDIT_KIND) and plan.get("alias") == client.alias:
         return apply_edit(client, store, operation, plan)
     if plan.get("kind") != "outlook-reply-draft-v1" or plan.get("alias") != client.alias: raise ValueError("Wrong operation/account")
@@ -517,8 +685,12 @@ def main(argv=None):
     p = subs.add_parser("reply-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
     p.add_argument("--to", action="append", required=True); p.add_argument("--cc", action="append", default=[]); p.add_argument("--reply-all", action="store_true")
     signatures = p.add_mutually_exclusive_group(required=True); signatures.add_argument("--signature-file"); signatures.add_argument("--no-signature", action="store_true")
+    p = subs.add_parser("new-draft"); p.add_argument("alias"); p.add_argument("--subject", required=True); p.add_argument("--body-file", required=True)
+    p.add_argument("--to", action="append", required=True); p.add_argument("--cc", action="append", default=[])
+    signatures = p.add_mutually_exclusive_group(required=True); signatures.add_argument("--signature-file"); signatures.add_argument("--no-signature", action="store_true")
     p = subs.add_parser("edit-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--body-file", required=True)
     p = subs.add_parser("read-draft"); p.add_argument("alias"); p.add_argument("--message", required=True)
+    p = subs.add_parser("attach-draft"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--file", action="append", required=True)
     p = subs.add_parser("style-draft-signature"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--match-html-file", required=True); p.add_argument("--signature-file", required=True)
     p = subs.add_parser("replace-draft-fragment"); p.add_argument("alias"); p.add_argument("--message", required=True); p.add_argument("--match-html-file", required=True)
     replacement = p.add_mutually_exclusive_group(required=True); replacement.add_argument("--body-file"); replacement.add_argument("--body-html-file")
@@ -529,7 +701,11 @@ def main(argv=None):
     if args.command == "reply-draft":
         data = json.loads(Path(args.signature_file).read_text()) if args.signature_file else None
         result = preview(client, store, args.message, Path(args.body_file).read_text(), args.to, args.cc, data, args.no_signature, args.reply_all)
+    elif args.command == "new-draft":
+        data = json.loads(Path(args.signature_file).read_text()) if args.signature_file else None
+        result = preview_new(client, store, args.subject, Path(args.body_file).read_text(encoding="utf-8"), args.to, args.cc, data, args.no_signature)
     elif args.command == "edit-draft": result = preview_edit(client, store, args.message, Path(args.body_file).read_text(encoding="utf-8"))
+    elif args.command == "attach-draft": result = preview_attachments(client, store, args.message, args.file)
     elif args.command == "read-draft":
         identity = client.identity(); account = address(identity.get("mail") or identity["userPrincipalName"])
         result = {"status": "draft_read", "account": account, **edit_snapshot(client, args.message, account)}
@@ -543,7 +719,11 @@ def main(argv=None):
     else:
         plan = store.load(args.plan)
         if plan.get("alias") != args.alias or client.identity() != plan["identity"]: raise ValueError("Mailbox mismatch")
-        if plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND, FRAGMENT_EDIT_KIND):
+        if plan.get("kind") == NEW_KIND:
+            result = verify_new(client, plan, store.read(store.path(args.plan, ".created.json"))["draft"])
+        elif plan.get("kind") == ATTACH_KIND:
+            result = reconcile_attachments(client, plan)
+        elif plan.get("kind") in (EDIT_KIND, SIGNATURE_EDIT_KIND, FRAGMENT_EDIT_KIND):
             result = verify_edit(client, plan)
         else:
             created = store.read(store.path(args.plan, ".quote.json"))

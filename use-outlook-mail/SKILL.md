@@ -1,6 +1,6 @@
 ---
 name: use-outlook-mail
-description: "Read, search and export Outlook mail; create reply drafts, replace selected draft passages, edit plain draft bodies or signature styling, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
+description: "Read, search and export Outlook mail; create unsent messages and reply drafts, attach local files, replace selected draft passages, edit plain draft bodies or signature styling, save attachments or make bounded folder/category/rule changes. Use for explicit mail targets with account opt-in and verification."
 ---
 
 # Use Outlook Mail
@@ -44,9 +44,26 @@ Preview resolves the exact source and sending account, verifies explicit To/CC a
 
 The generated quotation is retained while new paragraphs and the supplied account-specific signature are prefixed. HTML signatures support bounded inline colors, top/bottom borders and spacing under the [signature input contract](references/reply-drafts.md#inputs-and-signature). Existing draft changes or missing ETags stop population and preserve the created draft for inspection. Independent readback checks unsent state, identity, sender, explicit recipients, conversation, subject, visible paragraph boundaries, supplied signature styles and signature/quote content/resource references. It does not certify every HTML style, visual rendering or recipient-side threading. A signature inside quoted history does not satisfy the new-reply signature requirement. Native signature settings are not read or changed.
 
-A durable dispatch record prevents duplicate creation, including after failed acknowledgment or readback. Returned draft identity is saved before later work. `uncertain_after_dispatch` can leave a blank or partly populated reply draft; inspect status, the saved draft and Outlook Drafts before doing anything else. Never automatically recreate, overwrite user changes, delete or send it. Saved draft body edits have the separate bounded surface below. New-message creation, forwarding and new attachments remain unavailable.
+A durable dispatch record prevents duplicate creation, including after failed acknowledgment or readback. Returned draft identity is saved before later work. `uncertain_after_dispatch` can leave a blank or partly populated reply draft; inspect status, the saved draft and Outlook Drafts before doing anything else. Never automatically recreate, overwrite user changes, delete or send it. Saved draft body edits have the separate bounded surface below. New messages and local file attachments use the separate bounded commands below. Forwarding remains unavailable.
 
 Stateful draft tests cover plain and styled signatures, CSS rejection, quote preservation, stripped-style refusal and no-replay recovery; shared provider-boundary tests also pass. An authorized macOS test with existing Graph PowerShell access created one native reply, verified its unsent state and preserved source, and confirmed that server-side stale-ETag rejection retained a newer draft edit. The temporary test edit was conditionally restored and independently verified. Stored paragraphs, Unicode, supplied synthetic signature and native quotation passed readback; the user confirmed the draft looked correct in Outlook. This live evidence establishes the tested plain-text reply case, not styled-signature rendering, live reply-all behavior, recipient-side threading or broader tenant/platform acceptance. Nothing was sent.
+
+## New unsent messages and local attachments
+```sh
+bash scripts/mail new-draft example --subject 'Review materials' --body-file /private/message.txt --to reader@example.com --signature-file /private/signature.json
+bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute --allow-draft
+bash scripts/mail attach-draft example --message DRAFT_ID --file /private/paper.pdf --file /private/resume.pdf
+bash scripts/mail draft-apply example --plan OPERATION_ID --hash PREVIEW_SHA256 --execute --allow-draft
+```
+`new-draft` creates one unsent message with explicit subject, To/CC and the same verified signature contract as replies. Use native `reply-draft` for an existing conversation. Both commands preserve the manual-send boundary and durable no-replay receipts.
+
+`attach-draft` adds one to ten selected regular local files to an exact unsent draft. Each file must be smaller than 3 MB; the combined limit is 10 MB. Names must be unique, including against existing attachments. Preview binds the mailbox, draft revision, complete attachment inventory and each file's resolved path, size, media type and SHA-256. Files changed after preview are refused before upload. No file bytes appear in preview output or plans.
+
+Apply rechecks identity, write opt-in, unchanged draft and file hashes, then adds files sequentially. Each dispatch and returned attachment ID is recorded before continuing. Readback verifies attachment bytes against their preview hashes, preserves the earlier attachment inventory, and checks the unsent body, audience, subject and conversation. A partial or uncertain result stops without replay, deletion or rollback. Use `draft-status`, read-only `draft-verify` and the saved draft to reconcile it before deliberately planning only the missing files. Verification reports `draft_attachments_partial` with the missing filenames after checking the bytes already present; it never resumes the upload. Keep the draft closed until verification finishes: the preflight, attachment POST and readback are separate operations, and sending If-Match does not establish that every tenant enforces it on attachment creation. No claim of atomic protection against a concurrent send is made.
+
+Inline images, item/reference attachments, upload sessions, attachment replacement/removal and sending are outside these commands. Existing setup and Mail.ReadWrite access are reused without consent expansion. See Microsoft's [attachment creation](https://learn.microsoft.com/en-us/graph/api/message-post-attachments?view=graph-rest-1.0) and [draft creation](https://learn.microsoft.com/en-us/graph/api/user-post-messages?view=graph-rest-1.0) APIs.
+
+Stateful tests cover exact new-draft content, lost creation responses, file changes after preview, duplicate names, oversized files, partial inventories, partial upload recovery, byte mismatches and intervening draft edits. Authorized macOS Graph PowerShell use verified native new-message creation and PDF attachment bytes without sending. Visual mail-client rendering, concurrent-send protection and broader tenant/platform behavior remain unverified.
 
 ## Edit a saved draft
 ```sh

@@ -228,6 +228,124 @@ class EditMailbox(Mailbox):
         return result
 
 
+class NewDrafts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.store = mod.Store(Path(self.tmp.name) / "state", "example"); self.client = EditMailbox()
+        self.lose = False
+        request = self.client.request
+        def create(method, path, body=None, headers=None, output=None):
+            if method == "POST" and path == "/me/messages":
+                self.client.writes.append((method, path, copy.deepcopy(body), headers))
+                self.client.draft.update(body); self.client.draft['bccRecipients'] = []
+                if self.lose: raise RuntimeError("lost response")
+                return {"id": "draft"}
+            return request(method, path, body, headers, output)
+        self.client.request = create
+
+    def plan(self): return mod.preview_new(self.client, self.store, "Application materials", "Hi reader,\n\nAttached are my materials.", ["reader@example.com"], [], no_signature=True)
+
+    def test_new_unsent_draft_has_exact_content_and_explicit_recipients(self):
+        plan = self.plan(); self.assertEqual(self.client.writes, [])
+        result = mod.apply(self.client, self.store, plan["operation"], plan["hash"], True, True)
+        self.assertEqual(result["status"], "draft_verified")
+        self.assertTrue(self.client.draft["isDraft"])
+        self.assertEqual(self.client.draft["subject"], "Application materials")
+        self.assertEqual(self.client.draft["ccRecipients"], [])
+
+    def test_unknown_outcome_never_recreates_and_invalid_audience_refuses(self):
+        with self.assertRaises(ValueError): mod.preview_new(self.client, self.store, "Subject", "Body", ["reader@example.com"]*2, [], no_signature=True)
+        self.assertEqual(self.client.writes, [])
+        plan = self.plan(); self.lose = True
+        self.assertEqual(mod.apply(self.client, self.store, plan["operation"], plan["hash"], True, True)["status"], "uncertain_after_dispatch")
+        with self.assertRaisesRegex(ValueError, "Already dispatched"): mod.apply(self.client, self.store, plan["operation"], plan["hash"], True, True)
+        self.assertEqual(len(self.client.writes), 1)
+
+
+class AttachmentMailbox(EditMailbox):
+    def __init__(self):
+        super().__init__()
+        self.uploaded = {}; self.lose_upload = False; self.corrupt = False; self.edit_after_upload = False
+
+    def request(self, method, path, body=None, headers=None, output=None):
+        route = urlsplit(path).path
+        if method == "POST" and route.endswith("/attachments"):
+            self.writes.append((method, path, copy.deepcopy(body), headers))
+            if headers["If-Match"] != self.draft["@odata.etag"]: raise RuntimeError("412")
+            key = "upload-" + str(len(self.uploaded))
+            value = {**body, "id": key, "size": len(mod.base64.b64decode(body["contentBytes"]))}
+            self.uploaded[key] = value
+            self.attachments.append({k: value[k] for k in mod.ATTACHMENT_SELECT.split(",")})
+            self.draft["changeKey"] = key; self.draft["@odata.etag"] = 'W/"' + key + '"'
+            if self.edit_after_upload: self.draft["body"]["content"] += "User edit"
+            if self.lose_upload: raise RuntimeError("lost upload response")
+            return {"id": key}
+        if method == "GET" and "/attachments/" in route:
+            if urlsplit(path).query: raise RuntimeError("contentBytes is not a base attachment property")
+            value = copy.deepcopy(self.uploaded[route.rsplit("/", 1)[1]])
+            if self.corrupt: value["contentBytes"] = "eA=="
+            return value
+        return super().request(method, path, body, headers, output)
+
+
+class AttachDrafts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.store = mod.Store(Path(self.tmp.name) / "state", "example"); self.client = AttachmentMailbox()
+        self.files = [Path(self.tmp.name) / "statement.pdf", Path(self.tmp.name) / "resume.pdf"]
+        for i, path in enumerate(self.files): path.write_bytes(b"%PDF-synthetic-" + bytes([i]))
+
+    def plan(self): return mod.preview_attachments(self.client, self.store, "draft", self.files)
+    def apply(self, plan): return mod.apply(self.client, self.store, plan["operation"], plan["hash"], True, True)
+
+    def test_two_files_verified_by_bytes_preserving_body_audience_and_existing_attachment(self):
+        before = copy.deepcopy(self.client.draft); existing = copy.deepcopy(self.client.attachments)
+        plan = self.plan(); self.assertEqual(self.client.writes, [])
+        result = self.apply(plan)
+        self.assertEqual(result["status"], "draft_attachments_verified")
+        self.assertEqual(self.client.draft["body"], before["body"])
+        self.assertEqual(self.client.draft["toRecipients"], before["toRecipients"])
+        self.assertEqual(self.client.attachments[:1], existing)
+        self.assertEqual(len(self.client.writes), 2)
+        self.assertTrue(self.client.draft["isDraft"])
+
+    def test_file_or_draft_changes_stop_before_upload(self):
+        plan = self.plan(); self.files[0].write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "Local attachment changed"): self.apply(plan)
+        plan = self.plan(); self.client.draft["subject"] = "User edit"
+        with self.assertRaisesRegex(ValueError, "Draft changed"): self.apply(plan)
+        self.assertEqual(self.client.writes, [])
+
+    def test_lost_response_keeps_partial_upload_and_refuses_replay(self):
+        plan = self.plan(); self.client.lose_upload = True
+        self.assertEqual(self.apply(plan)["status"], "uncertain_after_dispatch")
+        self.assertEqual(len(self.client.writes), 1)
+        with self.assertRaisesRegex(ValueError, "Already dispatched"): self.apply(plan)
+        with self.assertRaisesRegex(ValueError, "incomplete"): mod.verify_attachments(self.client, plan)
+        reconciled = mod.reconcile_attachments(self.client, plan)
+        self.assertEqual(reconciled["status"], "draft_attachments_partial")
+        self.assertEqual(reconciled["missing"], ["resume.pdf"])
+
+    def test_corrupt_bytes_or_intervening_edit_stop_second_upload(self):
+        for flag in ("corrupt", "edit_after_upload"):
+            self.client = AttachmentMailbox(); setattr(self.client, flag, True)
+            plan = self.plan()
+            self.assertEqual(self.apply(plan)["status"], "uncertain_after_dispatch")
+            self.assertEqual(len(self.client.writes), 1)
+
+    def test_duplicate_names_size_sent_targets_and_partial_inventory_refused(self):
+        with self.assertRaisesRegex(ValueError, "unique"): mod.preview_attachments(self.client, self.store, "draft", self.files * 2)
+        self.client.attachments[0]["name"] = self.files[0].name
+        with self.assertRaisesRegex(ValueError, "already exists"): self.plan()
+        self.client = AttachmentMailbox(); self.client.draft["isDraft"] = False
+        with self.assertRaisesRegex(ValueError, "unsent"): self.plan()
+        self.client = AttachmentMailbox(); self.client.paged = True
+        with self.assertRaisesRegex(ValueError, "Incomplete"): self.plan()
+        self.client = AttachmentMailbox(); self.files[0].write_bytes(b"x" * 3_000_000)
+        with self.assertRaisesRegex(ValueError, "smaller"): self.plan()
+        self.assertEqual(self.client.writes, [])
+
+
 class EditDrafts(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
