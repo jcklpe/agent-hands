@@ -1,10 +1,12 @@
 ---
-attention: live
-status: ready-to-close
+attention: historical
+status: closed
 implementation: browser-read-save-and-submit
 reviewed: 2026-11-25
 ---
 # Workday capabilities
+Historical record. Closed 2026-11-25 under D1. Stable slug: `workday-capabilities`. Current operation, setup and verification limits belong to [use-workday](../../use-workday/SKILL.md), [setup-workday](../../setup-workday/SKILL.md) and its [transport reference](../../setup-workday/references/transport.md). Dispositions, task states and instructions below are as they stood at closure. No successor spike is open; a new one opens if the first real submission through the tool fails.
+
 [Investigation and implementation handoff](workday-capabilities.todo.md). This active spike was promoted from the existing scratch pair on 2026-11-16; the original investigation below was expanded on 2026-11-02. The user requested a plan for reducing the model overhead of recurring time entry through deterministic browser execution directed by an agent, and accepts the maintenance cost and fragility of a browser route. Reusable implementation is authorized. The offline contract is implemented; since 2026-11-23 a browser reader reads complete weeks from the user's signed-in Chrome, and since 2026-11-24 a Quick Add save path under the user's chosen re-read safeguard has saved a week of approved real work live. At the user's request on 2026-11-24, submission was added as its own preview-and-approve command. Before closing, the user also approved global skill links, starting a week from an earlier one, a multi-week overview and a separate Chrome with its own profile, all built by 2026-11-25. They decided on 2026-11-24 to close without waiting for a first submission through the tool, opening a new spike if that fails.
 
 ## Implemented boundary
@@ -36,7 +38,7 @@ Organization-specific worklogging conventions, tenant/account details, real sche
 ## Decisions and unresolved choices
 **User direction:** pursue a reusable tool rather than repeating a long model-directed sequence of clicks. Prefer reuse of an existing signed-in browser session, and evaluate a browser solution despite accepted fragility. Keep draft saving and final submission separate. These are requirements for the investigation, not evidence that a particular attachment or execution mechanism works.
 
-**Proposed structure:** optional `setup-workday` and `use-workday` capabilities consistent with the [setup/use contracts](../archive/setup-use-contracts.md). Setup owns selected software, account/tenant binding, supported authorization or browser connection, reconnect and recovery. Use owns the bounded operations below. A thin CLI or MCP facade should share the same operation logic; MCP alone does not imply an official Workday API or smaller model use.
+**Proposed structure:** optional `setup-workday` and `use-workday` capabilities consistent with the [setup/use contracts](setup-use-contracts.md). Setup owns selected software, account/tenant binding, supported authorization or browser connection, reconnect and recovery. Use owns the bounded operations below. A thin CLI or MCP facade should share the same operation logic; MCP alone does not imply an official Workday API or smaller model use.
 
 **Open:** supported transport, browser runtime availability outside an interactive agent REPL, session ownership, platform support, required permissions, layout variation, and the minimum scopes for time entry. Do not treat an empty authorized-client list or missing search result as proof that an account or tenant has no integration entitlement. Confirm official interface prerequisites against current vendor documentation before adopting claims about licensing, administrative setup or availability.
 

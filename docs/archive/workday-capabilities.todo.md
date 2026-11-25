@@ -1,10 +1,12 @@
 ---
-attention: live
-status: ready-to-close
+attention: historical
+status: closed
 implementation: browser-read-save-and-submit
 reviewed: 2026-11-25
 ---
 # Workday capabilities — investigation and implementation handoff
+Historical record. Closed 2026-11-25 under D1. Stable slug: `workday-capabilities`. Current operation, setup and verification limits belong to [use-workday](../../use-workday/SKILL.md), [setup-workday](../../setup-workday/SKILL.md) and its [transport reference](../../setup-workday/references/transport.md). Dispositions, task states and instructions below are as they stood at closure. No successor spike is open; a new one opens if the first real submission through the tool fails.
+
 [Concept, decisions and boundaries](workday-capabilities.md). Promoted from scratch on 2026-11-16 for authorized reusable CLI implementation. Each save and submission of real time needs its own approval; the dated sections below are newest first.
 
 ## Next implementation handoff - 2026-11-23
