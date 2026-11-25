@@ -34,3 +34,6 @@ Private audit defaults to `~/.agent-hands/microsoft/excel/workbook-writes.jsonl`
 The retained synthetic workbook checks cover supported reads/writes, null/formula preservation, races/stale previews, denied access, malformed/oversized payloads, partial outcomes, readback mismatch, and Bash/Zsh invocation. Isolated checks use only this skill and Microsoft authorization. No real workbook, credentials, or tenant consent was used; live account and fresh-platform validation remain separate.
 
 Private Microsoft defaults use `AGENT_HANDS_STATE_DIR` when explicitly set. Preserve existing recovery when relocating; see [provider storage migration](../setup-microsoft-services/references/account-access.md#explicit-legacy-storage-migration).
+
+## Experimental Office.js text runs
+For mixed colors within one cell, see the [Excel text-run adapter](live/README.md). It uses ExcelApi 1.18 through the owned Office browser, separate from the Graph commands above. It requires an explicitly prepared workbook, refuses formula/non-text/merged cells and distinguishes session readback from saved-file verification. This route is experimental; check its current live-test status before using it on a shared workbook.
